@@ -5,8 +5,7 @@ from . import uparam_dir
 
 
 class Parameter(object):
-    def __init__(self, name, value, learn):
-        self.name = name
+    def __init__(self, value, learn):
         self.value = value
         self.learn = learn
 
@@ -96,23 +95,19 @@ def loadparams(*args, **kwargs):
 
         if len(default) > 0:
             default_str = '[{0}]'.format(default)
+        else:
+            default_str = ''
 
         while True:
-
-            print value
-            # move on if this is supposed to be undefined
-            if str(value).upper() == 'INDEF':
-                value = None
-
-            # XXX: what if there is no input so default == ''
-
             # try to convert to the appropriate type
             try:
                 if value is None:
                     pass
                 # boolean data types
                 elif dtype == 'b':
-                    if value == 'y' or value == 'yes' or value is True:
+                    if len(value) == 0:
+                        value = None
+                    elif value == 'y' or value == 'yes' or value is True:
                         value = True
                     elif value == 'n' or value == 'no' or value is False:
                         value = False
@@ -121,7 +116,10 @@ def loadparams(*args, **kwargs):
                         prompt = True
                 # int data types
                 elif dtype == 'i':
-                    value = int(value)
+                    if len(value) == 0 or str(value).upper() == 'INDEF':
+                        value = None
+                    else:
+                        value = int(value)
                     # constrain by min/max values
                     if len(dmax) and len(dmin):
                         if not (int(dmin) <= value <= int(dmax)):
@@ -138,7 +136,10 @@ def loadparams(*args, **kwargs):
                                 prompt = True
                 # float data types
                 elif dtype == 'r':
-                    value = float(value)
+                    if len(value) == 0 or str(value).upper() == 'INDEF':
+                        value = None
+                    else:
+                        value = float(value)
 
                     if len(dmax) and len(dmin):
                         if not (float(dmin) <= value <= float(dmax)):
@@ -167,6 +168,22 @@ def loadparams(*args, **kwargs):
                                 prompt = True
                 # filename data types
                 elif dtype[0] == 'f':
+                    value = str(value)
+                    expanded = os.path.expanduser(value)
+
+                    # check for enumerated list of values
+                    if len(dmin):
+                        # more than one option available
+                        if len(dmin.split('|')) > 1:
+                            # make sure it's one of the options
+                            enums = [os.path.expanduser(x.strip()) for x in dmin.split('|')]
+                            if expanded not in enums:
+                                print 'Input not one of the available options. Try again.\n'
+                                prompt = True
+
+                    # XXX: documentation says that min/max field is valid
+                    #  for files?
+
                     readacc = False
                     writeacc = False
                     nonexistent = False
@@ -182,9 +199,18 @@ def loadparams(*args, **kwargs):
                         if 'e' in dtype[1:]:
                             exists = True
 
-                    # XXX: finish this
-
-                    # XXX: documentation says that min/max field is valid for files?
+                    if exists and not os.path.exists(expanded):
+                        print 'Input file must exist. Try again.\n'
+                        prompt = True
+                    if nonexistent and os.path.exists(expanded):
+                        print 'Input file can not already exist. Try again.\n'
+                        prompt = True
+                    if readacc and not os.access(expanded, os.R_OK):
+                        print 'Input file must have read access. Try again.\n'
+                        prompt = True
+                    if writeacc and not os.access(expanded, os.W_OK):
+                        print 'Input file must have write access. Try again.\n'
+                        prompt = True
 
             except ValueError:
                 print 'Could not interpret input. Try again.\n'
@@ -199,12 +225,67 @@ def loadparams(*args, **kwargs):
                 value = default
             prompt = False
 
-        print param
+        params[name] = Parameter(value, learn)
 
     return params
 
 
+# XXX: make a relatively simple file interpretation system.
+# so it can handle iraf things like @lists, wildcards, etc.
+# probably use it in loadparams() for the filetype thing (see imslice.par)
+# also allow for CSV separated lists of images? Also iterable Pythonic lists
+# as inputs
+
 def imstatistics(*args, **kwargs):
-    return loadparams(*args, **kwargs)
+    params = loadparams(*args, **kwargs)
+    images = params['images'].value
+    fields = params['fields'].value
+    lower = params['lower'].value
+    upper = params['upper'].value
+    nclip = params['nclip'].value
+    lsigma = params['lsigma'].value
+    usigma = params['usigma'].value
+    binwidth = params['binwidth'].value
+    print_format = params['format'].value
+    cache = params['cache'].value
+
+    possible_fields = "image|npix|min|max|mean|midpt|mode|stddev|skew|kurtosis".split('|')
+
+    fcol = '%10d'
+    fint = '%10d'
+    fflt = '%10.4f'
+    fstr = '%20s'
+
+    fields = [x.strip().lower() for x in fields.split(',')]
+    # retain the same order as possible_fields, but only the ones requested
+    combined = [x for x in possible_fields if x in fields]
+
+    if len(combined) == 0:
+        return
+
+    if print_format:
+        headerstrings = {'image': 'IMAGE', 'npix': 'NPIX', 'min': 'MIN',
+                         'max': 'MAX', 'mean': 'MEAN', 'midpt': 'MIDPT',
+                         'mode': 'MODE', 'stddev': 'STDDEV', 'skew': 'SKEW',
+                         'kurtosis': 'KURTOSIS'}
+        outstring = '#'
+        for ifield in combined:
+            if ifield == 'image':
+                slen = 20
+            else:
+                slen = 10
+            outstring += headerstrings[ifield].ljust(slen)
+        outstring += '\n'
+        print outstring
+
+
+
+
+
+    print combined
+
+
+
+    return params
 
 
