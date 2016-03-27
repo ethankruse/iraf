@@ -221,7 +221,7 @@ def loadparams(*args, **kwargs):
                 # some other kind of parameter type?
                 else:
                     print 'unrecognized parameter type: {0}'.format(dtype)
-
+                    value = None
             except ValueError:
                 print 'Could not interpret input. Try again.'
                 prompt = True
