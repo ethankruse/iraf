@@ -3,6 +3,10 @@ import os
 import csv
 from . import uparam_dir
 from glob import glob
+from astropy.io import fits
+import numpy as np
+import scipy.stats
+
 
 class Parameter(object):
     def __init__(self, value, learn):
@@ -105,18 +109,18 @@ def loadparams(*args, **kwargs):
                     pass
                 # boolean data types
                 elif dtype == 'b':
-                    if len(value) == 0:
-                        value = None
-                    elif value == 'y' or value == 'yes' or value is True:
+                    if value == 'y' or value == 'yes' or value is True:
                         value = True
                     elif value == 'n' or value == 'no' or value is False:
                         value = False
+                    elif len(str(value)) == 0:
+                        value = None
                     else:
                         print 'Boolean input must be [y/n]. Try again.\n'
                         prompt = True
                 # int data types
                 elif dtype == 'i':
-                    if len(value) == 0 or str(value).upper() == 'INDEF':
+                    if len(str(value)) == 0 or str(value).upper() == 'INDEF':
                         value = None
                     else:
                         value = int(value)
@@ -136,7 +140,7 @@ def loadparams(*args, **kwargs):
                                 prompt = True
                 # float data types
                 elif dtype == 'r':
-                    if len(value) == 0 or str(value).upper() == 'INDEF':
+                    if len(str(value)) == 0 or str(value).upper() == 'INDEF':
                         value = None
                     else:
                         value = float(value)
@@ -168,6 +172,7 @@ def loadparams(*args, **kwargs):
                                 prompt = True
                 # filename data types
                 elif dtype[0] == 'f':
+                    # XXX: do we want to call file_handler on this one?
                     value = str(value)
                     expanded = os.path.expanduser(value)
 
@@ -307,15 +312,30 @@ def file_handler(filelist):
 
 def imstatistics(*args, **kwargs):
     params = loadparams(*args, **kwargs)
+    # list of images to run on
     images = params['images'].value
+    images = file_handler(images)
+    # which statistics we want to calculate
     fields = params['fields'].value
+    # lower/upper limits for pixel values
     lower = params['lower'].value
+    if lower is None:
+        lower = -np.inf
     upper = params['upper'].value
+    if upper is None:
+        upper = np.inf
+    # number of clipping iterations
     nclip = params['nclip'].value
+    # lower and upper sigma clipping level
     lsigma = params['lsigma'].value
     usigma = params['usigma'].value
+    # bin width of histogram in sigma
+    # this is only used in the original IRAF method of defining mode.
+    # could now be eliminated.
     binwidth = params['binwidth'].value
+    # should the output be pretty formatted
     print_format = params['format'].value
+    # cache image in memory (obsolete)
     cache = params['cache'].value
 
     possible_fields = "image|npix|min|max|mean|midpt|mode|stddev|skew|kurtosis".split('|')
@@ -324,12 +344,15 @@ def imstatistics(*args, **kwargs):
     fint = '%10d'
     fflt = '%10.4f'
     fstr = '%20s'
+    filecollen = 20
+    collen = 10
+    floatprec = 4
 
-    fields = [x.strip().lower() for x in fields.split(',')]
-    # retain the same order as possible_fields, but only the ones requested
-    combined = [x for x in possible_fields if x in fields]
+    in_fields = [x.strip().lower() for x in fields.split(',')]
+    # retain the same order as in_fields, but only the valid ones
+    use_fields = [x for x in in_fields if x in possible_fields]
 
-    if len(combined) == 0:
+    if len(use_fields) == 0:
         return
 
     if print_format:
@@ -338,21 +361,158 @@ def imstatistics(*args, **kwargs):
                          'mode': 'MODE', 'stddev': 'STDDEV', 'skew': 'SKEW',
                          'kurtosis': 'KURTOSIS'}
         outstring = '#'
-        for ifield in combined:
+        for ifield in use_fields:
             if ifield == 'image':
-                slen = 20
+                slen = filecollen
             else:
-                slen = 10
-            outstring += headerstrings[ifield].ljust(slen)
-        outstring += '\n'
+                slen = collen
+            outstring += headerstrings[ifield].rjust(slen)
         print outstring
 
+    for image in images:
+        # open the image
+        try:
+            hdulist = fits.open(image)
+        except IOError:
+            print "Error reading image {0} ...\n".format(image)
+            continue
 
+        results = {'npix': 0, 'min': None,
+                   'max': None, 'mean': None, 'midpt': None,
+                   'mode': None, 'stddev': None, 'skew': None,
+                   'kurtosis': None}
 
+        # only use the first (primary) header for the statistics
+        data = hdulist[0].data
+        npix = 0
+        # if there's valid data to look at
+        if data is not None:
+            data = data.flatten()
+            valid = data[(data >= lower) & (data <= upper)]
+            npix = valid.size
 
+            for ii in np.arange(nclip):
+                if npix > 0:
+                    if lsigma > 0.:
+                        lowlim = valid.mean() - lsigma * valid.std()
+                    else:
+                        lowlim = -np.inf
+                    if usigma > 0.:
+                        upperlim = valid.mean() + usigma * valid.std()
+                    else:
+                        upperlim = np.inf
+                    lower = max(lower, lowlim)
+                    upper = min(upper, upperlim)
 
-    print combined
+                    valid = data[(data >= lower) & (data <= upper)]
+                    # no more changes, so stop the loop
+                    if valid.size == npix:
+                        break
+                    npix = valid.size
 
+        if npix > 0:
+            results['npix'] = npix
+
+            if 'min' in use_fields:
+                results['min'] = valid.min()
+
+            if 'max' in use_fields:
+                results['max'] = valid.max()
+
+            if 'mean' in use_fields:
+                results['mean'] = valid.mean()
+
+            if 'midpt' in use_fields:
+                results['midpt'] = np.median(valid)
+
+            if 'mode' in use_fields:
+                results['mode'] = scipy.stats.mstats.mode(valid)[0][0]
+                """
+                # the original IRAF calculation of mode. no clue what exactly
+                # it is doing.
+                mode = None
+                hwidth = binwidth * valid.std()
+                nbins = (valid.max() - valid.min()) / hwidth + 1
+                # does not allow bins < 3 (see ist_ihist)
+                if nbins >= 3:
+                    # create the histogram based on the binwidth
+                    bins = np.arange(valid.min(), valid.max(), hwidth)
+                    histo, _ = np.histogram(valid, bins=bins)
+                    # Find the bin containing the histogram maximum.
+                    bpeak = histo.argmax()
+                    # If the maximum is in the first bin return the midpoint of the bin.
+                    if bpeak == 0:
+                        mode = valid.min() + 0.5 * hwidth
+                    # If the maximum is in the last bin return the midpoint of the bin.
+                    elif bpeak == histo.size - 1:
+                        mode = valid.min() + (nbins - 0.5) * hwidth
+                    else:
+                        # Compute the lower limit of bpeak.
+                        bpeak -= 1
+                        # Do a parabolic interpolation to find the peak.
+                        dh1 = histo[bpeak + 1] - histo[bpeak]
+                        dh2 = histo[bpeak + 1] - histo[bpeak + 2]
+                        denom = dh1 + dh2
+                        if np.isclose(denom, 0.):
+                            mode = valid.min() + (bpeak + 0.5) * hwidth
+                        else:
+                            mode = bpeak + 1 + 0.5 * (dh1 - dh2) / denom
+                            mode = valid.min() + (mode - 0.5) * hwidth
+                results['mode'] = mode
+                """
+
+            if 'stddev' in use_fields:
+                results['stddev'] = valid.std()
+
+            if 'skew' in use_fields:
+                results['skew'] = scipy.stats.skew(valid)
+
+            if 'kurtosis' in use_fields:
+                results['kurtosis'] = scipy.stats.kurtosis(valid)
+
+        if print_format:
+            outstring = ' '
+        else:
+            outstring = ''
+
+        for ii, key in enumerate(use_fields):
+
+            if key != 'image' and results[key] is None:
+                tmpstr = 'INDEF'
+                if print_format:
+                    outstring += tmpstr.rjust(collen)
+                else:
+                    outstring += tmpstr
+                    if ii < len(use_fields)-1:
+                        outstring += '  '
+                continue
+
+            if key == 'image':
+                if print_format:
+                    outstring += image.rjust(filecollen)
+                else:
+                    outstring += image
+            elif key == 'npix':
+                if print_format:
+                    tmpstr = '{0:{1}d}'.format(results[key], collen)
+                else:
+                    tmpstr = '{0:d}'.format(results[key])
+
+                outstring += tmpstr.rjust(collen)
+            else:
+                if print_format:
+                    tmpstr = '{0:{1}.{2}g}'.format(results[key], collen, floatprec)
+                else:
+                    tmpstr = '{0:g}'.format(results[key])
+
+                outstring += tmpstr.rjust(collen)
+
+            if ii < len(use_fields) - 1:
+                outstring += '  '
+
+        print outstring
+
+        hdulist.close()
 
 
     return params
