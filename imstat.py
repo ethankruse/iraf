@@ -33,7 +33,8 @@ def loadparams(*args, **kwargs):
     reader = csv.reader(open(myparamfile, 'r'))
     for row in reader:
         # skip over blank lines and comment lines
-        if len(row) == 0 or len(row[0].strip()) == 0 or row[0].strip()[0] == '#':
+        if (len(row) == 0 or len(row[0].strip()) == 0 or
+                    row[0].strip()[0] == '#'):
             continue
         # make sure we have a complete row
         assert len(row) == 7
@@ -116,7 +117,7 @@ def loadparams(*args, **kwargs):
                     elif len(str(value)) == 0:
                         value = None
                     else:
-                        print 'Boolean input must be [y/n]. Try again.\n'
+                        print 'Boolean input must be [y/n]. Try again.'
                         prompt = True
                 # int data types
                 elif dtype == 'i':
@@ -127,7 +128,7 @@ def loadparams(*args, **kwargs):
                     # constrain by min/max values
                     if len(dmax) and len(dmin):
                         if not (int(dmin) <= value <= int(dmax)):
-                            print 'Input outside the bounds. Try again.\n'
+                            print 'Input outside the bounds. Try again.'
                             prompt = True
                     # check for enumerated list of values
                     elif len(dmin):
@@ -136,7 +137,7 @@ def loadparams(*args, **kwargs):
                             # make sure it's one of the options
                             enums = [int(x) for x in dmin.split('|')]
                             if value not in enums:
-                                print 'Input not one of the available options. Try again.\n'
+                                print 'Input not one of the available options. Try again.'
                                 prompt = True
                 # float data types
                 elif dtype == 'r':
@@ -147,7 +148,7 @@ def loadparams(*args, **kwargs):
 
                     if len(dmax) and len(dmin):
                         if not (float(dmin) <= value <= float(dmax)):
-                            print 'Input outside the bounds. Try again.\n'
+                            print 'Input outside the bounds. Try again.'
                             prompt = True
                     # check for enumerated list of values
                     elif len(dmin):
@@ -156,7 +157,7 @@ def loadparams(*args, **kwargs):
                             # make sure it's one of the options
                             enums = [float(x) for x in dmin.split('|')]
                             if value not in enums:
-                                print 'Input not one of the available options. Try again.\n'
+                                print 'Input not one of the available options. Try again.'
                                 prompt = True
                 # string data types
                 elif dtype == 's':
@@ -168,7 +169,7 @@ def loadparams(*args, **kwargs):
                             # make sure it's one of the options
                             enums = [x.strip().upper() for x in dmin.split('|')]
                             if value.upper() not in enums:
-                                print 'Input not one of the available options. Try again.\n'
+                                print 'Input not one of the available options. Try again.'
                                 prompt = True
                 # filename data types
                 elif dtype[0] == 'f':
@@ -181,9 +182,10 @@ def loadparams(*args, **kwargs):
                         # more than one option available
                         if len(dmin.split('|')) > 1:
                             # make sure it's one of the options
-                            enums = [os.path.expanduser(x.strip()) for x in dmin.split('|')]
+                            enums = [os.path.expanduser(x.strip()) for x in
+                                     dmin.split('|')]
                             if expanded not in enums:
-                                print 'Input not one of the available options. Try again.\n'
+                                print 'Input not one of the available options. Try again.'
                                 prompt = True
 
                     # XXX: documentation says that min/max field is valid
@@ -205,26 +207,27 @@ def loadparams(*args, **kwargs):
                             exists = True
 
                     if exists and not os.path.exists(expanded):
-                        print 'Input file must exist. Try again.\n'
+                        print 'Input file must exist. Try again.'
                         prompt = True
                     if nonexistent and os.path.exists(expanded):
-                        print 'Input file can not already exist. Try again.\n'
+                        print 'Input file can not already exist. Try again.'
                         prompt = True
                     if readacc and not os.access(expanded, os.R_OK):
-                        print 'Input file must have read access. Try again.\n'
+                        print 'Input file must have read access. Try again.'
                         prompt = True
                     if writeacc and not os.access(expanded, os.W_OK):
-                        print 'Input file must have write access. Try again.\n'
+                        print 'Input file must have write access. Try again.'
                         prompt = True
 
             except ValueError:
-                print 'Could not interpret input. Try again.\n'
+                print 'Could not interpret input. Try again.'
                 prompt = True
 
             if not prompt:
                 break
 
-            value = raw_input('{0} {1}{2}: '.format(prompt_str, allowrange, default_str))
+            value = raw_input('{0} {1}{2}: '.format(prompt_str, allowrange,
+                                                    default_str))
 
             if len(value.strip()) == 0:
                 value = default
@@ -237,7 +240,7 @@ def loadparams(*args, **kwargs):
 
 def is_iterable(obj):
     """
-    Returns True if the object is iterable, but not a string. Returns
+    Returns True if the input is iterable, but not a string. Returns
     False otherwise.
     """
     from collections import Iterable
@@ -265,7 +268,8 @@ def file_handler(filelist):
         List of file names matching all patterns.
     """
 
-    # XXX: this does not allow for image subsections, e.g. imagename[x1:x2,y1:y2]
+    # XXX: this does not allow for image subsections,
+    #  e.g. imagename[x1:x2,y1:y2]
     # How should that be handled?
 
     # see if the input is already a list
@@ -288,7 +292,8 @@ def file_handler(filelist):
             reader = csv.reader(open(fname, 'r'))
             for row in reader:
                 # skip over blank lines and comment lines
-                if len(row) == 0 or len(row[0].strip()) == 0 or row[0].strip()[0] == '#':
+                if (len(row) == 0 or len(row[0].strip()) == 0 or
+                            row[0].strip()[0] == '#'):
                     continue
 
                 files.append(os.path.expanduser(row[0].strip()))
@@ -311,6 +316,39 @@ def file_handler(filelist):
 
 
 def imstatistics(*args, **kwargs):
+    """
+    Get general statistics about the data in a file's (or list of files')
+    primary FITS HDU.
+
+    Parameters
+    ----------
+    images : IRAF file list
+        Any valid IRAF file descriptors to run statistics for.
+    fields : string
+        Which statistics to calculate and print. CSV list chosen amongst
+        "image,npix,min,max,mean,midpt,mode,stddev,skew,kurtosis".
+    lower : float
+        Lower limit for pixel values to include in the statistics
+    upper : float
+        Upper limit for pixel values to include in the statistics.
+    nclip : int
+        Number of times to run sigma clipping before calculating
+        the statistics.
+    lsigma : float
+        Lower clipping factor (in sigma). e.g. 3.0 would remove any pixels
+        with values 3.0 sigma below the mean.
+    usigma : float
+        Upper clipping factor (in sigma). e.g. 3.0 would remove any pixels
+        with values 3.0 sigma above the mean.
+    binwidth : float
+        Bin width of histogram (in sigma). Currently obsolete; was only used
+        in the original IRAF implementation to calculate the mode.
+    format : boolean
+        Whether or not to format the output and print column labels
+    cache : boolean
+        Obsolete. Was previously used to ask about caching the images
+        in memory.
+    """
     params = loadparams(*args, **kwargs)
     # list of images to run on
     images = params['images'].value
@@ -338,15 +376,8 @@ def imstatistics(*args, **kwargs):
     # cache image in memory (obsolete)
     cache = params['cache'].value
 
-    possible_fields = "image|npix|min|max|mean|midpt|mode|stddev|skew|kurtosis".split('|')
-
-    fcol = '%10d'
-    fint = '%10d'
-    fflt = '%10.4f'
-    fstr = '%20s'
-    filecollen = 20
-    collen = 10
-    floatprec = 4
+    possible_fields = "image|npix|min|max|mean|midpt|mode|stddev|skew|kurtosis"
+    possible_fields = possible_fields.split('|')
 
     in_fields = [x.strip().lower() for x in fields.split(',')]
     # retain the same order as in_fields, but only the valid ones
@@ -355,6 +386,14 @@ def imstatistics(*args, **kwargs):
     if len(use_fields) == 0:
         return
 
+    # how wide the images list column will be
+    filecollen = 20
+    # how wide all other output columns will be
+    collen = 10
+    # floating point printed precision
+    floatprec = 4
+
+    # print the column labels if desired
     if print_format:
         headerstrings = {'image': 'IMAGE', 'npix': 'NPIX', 'min': 'MIN',
                          'max': 'MAX', 'mean': 'MEAN', 'midpt': 'MIDPT',
@@ -374,7 +413,7 @@ def imstatistics(*args, **kwargs):
         try:
             hdulist = fits.open(image)
         except IOError:
-            print "Error reading image {0} ...\n".format(image)
+            print "Error reading image {0} ...".format(image)
             continue
 
         results = {'npix': 0, 'min': None,
@@ -388,9 +427,11 @@ def imstatistics(*args, **kwargs):
         # if there's valid data to look at
         if data is not None:
             data = data.flatten()
+            # only grab the points we want to look at
             valid = data[(data >= lower) & (data <= upper)]
             npix = valid.size
 
+            # do the sigma clipping
             for ii in np.arange(nclip):
                 if npix > 0:
                     if lsigma > 0.:
@@ -401,6 +442,7 @@ def imstatistics(*args, **kwargs):
                         upperlim = valid.mean() + usigma * valid.std()
                     else:
                         upperlim = np.inf
+                    # don't go below or above previously defined limits
                     lower = max(lower, lowlim)
                     upper = min(upper, upperlim)
 
@@ -410,6 +452,7 @@ def imstatistics(*args, **kwargs):
                         break
                     npix = valid.size
 
+        # calculate all the statistics for this file
         if npix > 0:
             results['npix'] = npix
 
@@ -424,12 +467,19 @@ def imstatistics(*args, **kwargs):
 
             if 'midpt' in use_fields:
                 results['midpt'] = np.median(valid)
+                # NOTE: the original IRAF definition of median was convoluted
+                # and inaccurate. It essentially involved finding the center
+                # of a histogram of pixel values. This is way better.
 
             if 'mode' in use_fields:
                 results['mode'] = scipy.stats.mstats.mode(valid)[0][0]
                 """
                 # the original IRAF calculation of mode. no clue what exactly
                 # it is doing.
+                # it does seem to have the benefit of returning something near
+                # a peak of a distribution in the case of floating point pixels,
+                # which are unlikely to have a mode of more than 1.
+
                 mode = None
                 hwidth = binwidth * valid.std()
                 nbins = (valid.max() - valid.min()) / hwidth + 1
@@ -440,10 +490,12 @@ def imstatistics(*args, **kwargs):
                     histo, _ = np.histogram(valid, bins=bins)
                     # Find the bin containing the histogram maximum.
                     bpeak = histo.argmax()
-                    # If the maximum is in the first bin return the midpoint of the bin.
+                    # If the maximum is in the first bin return the midpoint
+                    # of the bin.
                     if bpeak == 0:
                         mode = valid.min() + 0.5 * hwidth
-                    # If the maximum is in the last bin return the midpoint of the bin.
+                    # If the maximum is in the last bin return the midpoint
+                    # of the bin.
                     elif bpeak == histo.size - 1:
                         mode = valid.min() + (nbins - 0.5) * hwidth
                     else:
@@ -470,20 +522,22 @@ def imstatistics(*args, **kwargs):
             if 'kurtosis' in use_fields:
                 results['kurtosis'] = scipy.stats.kurtosis(valid)
 
+        # for some reason IRAF does this.
         if print_format:
             outstring = ' '
         else:
             outstring = ''
 
+        # print the statistics requested
         for ii, key in enumerate(use_fields):
-
+            # not enough data to calculate these
             if key != 'image' and results[key] is None:
                 tmpstr = 'INDEF'
                 if print_format:
                     outstring += tmpstr.rjust(collen)
                 else:
                     outstring += tmpstr
-                    if ii < len(use_fields)-1:
+                    if ii < len(use_fields) - 1:
                         outstring += '  '
                 continue
 
@@ -495,26 +549,23 @@ def imstatistics(*args, **kwargs):
             elif key == 'npix':
                 if print_format:
                     tmpstr = '{0:{1}d}'.format(results[key], collen)
+                    outstring += tmpstr.rjust(collen)
                 else:
-                    tmpstr = '{0:d}'.format(results[key])
-
-                outstring += tmpstr.rjust(collen)
+                    outstring += '{0:d}'.format(results[key])
             else:
                 if print_format:
-                    tmpstr = '{0:{1}.{2}g}'.format(results[key], collen, floatprec)
+                    tmpstr = '{0:{1}.{2}g}'.format(results[key], collen,
+                                                   floatprec)
+                    outstring += tmpstr.rjust(collen)
                 else:
-                    tmpstr = '{0:g}'.format(results[key])
-
-                outstring += tmpstr.rjust(collen)
+                    outstring += '{0:g}'.format(results[key])
 
             if ii < len(use_fields) - 1:
                 outstring += '  '
-
         print outstring
 
         hdulist.close()
 
-
-    return params
-
-
+    # XXX: need to deal with 'learning' some parameters
+    
+    return
