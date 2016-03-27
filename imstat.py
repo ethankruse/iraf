@@ -218,6 +218,9 @@ def loadparams(*args, **kwargs):
                     if writeacc and not os.access(expanded, os.W_OK):
                         print 'Input file must have write access. Try again.'
                         prompt = True
+                # some other kind of parameter type?
+                else:
+                    print 'unrecognized parameter type: {0}'.format(dtype)
 
             except ValueError:
                 print 'Could not interpret input. Try again.'
@@ -567,5 +570,5 @@ def imstatistics(*args, **kwargs):
         hdulist.close()
 
     # XXX: need to deal with 'learning' some parameters
-    
+
     return
