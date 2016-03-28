@@ -2,7 +2,8 @@ from .imstat import loadparams, file_handler
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
-from matplotlib.widgets import Button, CheckButtons
+from matplotlib.widgets import Button, CheckButtons, Slider
+import threading
 
 
 im_set = {'fig': None, 'ax': None, 'lineplot': True,
@@ -11,10 +12,10 @@ im_set = {'fig': None, 'ax': None, 'lineplot': True,
 
 
 def implot_redraw():
-    im_set['fig'].clf()
-    ax = im_set['fig'].add_subplot(111)
-    im_set['ax'] = ax
+    im_set['ax'].cla()
 
+
+# XXX: look into multi-threading with raw_input() to handle things!
 
 def implot_plot():
     if im_set['lineplot']:
@@ -71,6 +72,16 @@ def implot_plot():
 
     im_set['ax'].set_title(title)
 
+    im_set['fig'].canvas.draw_idle()
+
+
+def get_input(prompt, event):
+    import time
+    time.sleep(0.1)
+    raw_input(prompt)
+    event.set()
+
+
 
 def implot_keypress(event):
     print 'press', event.key
@@ -80,20 +91,47 @@ def implot_keypress(event):
         print 'q'
         im_set['ax'].set_xlim(np.random.randn() * 50,
                               np.random.randn() * 50 + 1500)
-    plt.draw()
+    #plt.draw()
+    im_set['fig'].canvas.draw_idle()
 
     if event.key == ':':
-        im_set['fig'].canvas.mpl_disconnect(im_set['cid'])
-        inp = raw_input('What do you want?')
-        print inp
-        im_set['cid'] = im_set['fig'].canvas.mpl_connect('key_press_event',
-                                               implot_keypress)
+        #im_set['fig'].canvas.mpl_disconnect(im_set['cid'])
+        #inp = raw_input('What do you want?')
+        #print inp
+        #im_set['cid'] = im_set['fig'].canvas.mpl_connect('key_press_event',
+        #                                       implot_keypress)
+
+        #im_set['fig'].canvas.stop_event_loop()
+        #inp = raw_input("What do you want?")
+        #print inp
+        #im_set['fig'].canvas.start_event_loop()
+        #ready = threading.Event()
+        #input_thread = threading.Thread(target=get_input, args=("What do you want?", ready))
+        #print 'waiting'
+        #input_thread.start()
+        #ready.wait()
+        pass
+        # XXX: make a global variable of 'previous inputs' that resets when
+        # you hit the enter key. Then interpret that.
+        # Also make use of the stdout manipulation to be printing what you're
+        # typing on the command line.
+
+
+    print 'made it through'
 
 
 def test(event):
     im_set['ax'].set_xlim(np.random.randn()*50, np.random.randn()*50 + 1500)
     im_set['ax'].plot(np.random.randn(50) * 500, np.random.randn(50) * 200)
-    plt.draw()
+    #plt.draw()
+    im_set['fig'].canvas.draw_idle()
+    print 'hi'
+
+
+def implot_change_line(value):
+    im_set['line'] = int(value)
+    implot_plot()
+    pass
 
 
 def implot(*args, **kwargs):
@@ -164,18 +202,32 @@ def implot(*args, **kwargs):
 
     implot_plot()
 
-    fig.subplots_adjust(right=0.8)
-
-    rax = plt.axes([0.85, 0.4, 0.15, 0.15])
-    bnext = Button(rax, 'Next')
-    nax = plt.axes([0.85, 0.6, 0.15, 0.15])
-    check = CheckButtons(nax, ('2 Hz', '4 Hz', '6 Hz'), (False, True, True))
-    check.on_clicked(test)
-    bnext.on_clicked(test)
     im_set['cid'] = fig.canvas.mpl_connect('key_press_event', implot_keypress)
 
-    ax._button = bnext
-    ax._radio = check
+    fig.subplots_adjust(top=0.8)
+
+    #rax = plt.axes([0.85, 0.4, 0.15, 0.15])
+    #bnext = Button(rax, 'Next')
+    #nax = plt.axes([0.85, 0.6, 0.15, 0.15])
+    #check = CheckButtons(nax, ('2 Hz', '4 Hz', '6 Hz'), (False, True, True))
+    #check.on_clicked(test)
+    #bnext.on_clicked(test)
+
+    #im_set['._check'] = check
+    # im_set['._button'] = bnext
+
+    if im_set['lineplot']:
+        txt = 'line'
+        smax = im_set['nlines']
+    else:
+        txt = 'column'
+        smax = im_set['ncols']
+    sax = plt.axes([0.2, 0.85, 0.15, 0.1])
+    slider = Slider(sax, 'Central {0}'.format(txt), 0, smax-1, valinit=im_set['line'], valfmt='%.0f')
+    slider.on_changed(implot_change_line)
+
+    im_set['_slider'] = slider
+
 
     overplot = False
 
