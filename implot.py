@@ -392,10 +392,19 @@ def implot_make_slider():
     else:
         smax = im_set['ncols'] - 1
     # smax = max(im_set['ncols'], im_set['nlines']) - 1
-    im_set['sax'] = plt.axes([0.83, 0.1, 0.15, 0.05])
-    slider = Slider(im_set['sax'], txt, 0, smax, valinit=im_set['line'], valfmt='%.0f')
+    im_set['sax'] = plt.axes([0.83, 0.6, 0.15, 0.05], zorder=1)
+    slider = Slider(im_set['sax'], txt, 0, smax, valinit=im_set['line'],
+                    valfmt='%.0f')
     im_set['sid'] = slider.on_changed(implot_change_line)
     slider.vline.set_visible(False)
+    im_set['sax'].legend(loc='top')
+    # slider.poly.set_fc('r')
+    slider.label.set_x(0.5)
+    slider.label.set_y(1.4)
+    slider.label.set_ha('center')
+    slider.valtext.set_x(0.5)
+    slider.valtext.set_y(-0.5)
+    slider.valtext.set_ha('center')
 
     im_set['_slider'] = slider
 
@@ -450,16 +459,16 @@ def implot(*args, **kwargs):
     inptxt = fig.text(0.02, 0.02, '')
     im_set['iax'] = inptxt
 
-    nax = plt.axes([0.85, 0.6, 0.15, 0.15])
+    nax = plt.axes([0.85, 0.65, 0.2, 0.25], zorder=-5)
     check = CheckButtons(nax, ('Overplot',), (im_set['overplot'], ))
     check.on_clicked(test)
 
     im_set['_check'] = check
-
+    nax.set_axis_off()
 
 
     plt.show(block=False)
 
 
 
-    return params
+    return nax
