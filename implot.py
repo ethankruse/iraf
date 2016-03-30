@@ -11,6 +11,7 @@ im_set = {'fig': None, 'ax': None, 'sax': None, 'lineplot': True,
           'input': '', 'iax': None, 'overplot': False, 'sid': None,
           '_slider': None, 'stat': None, 'xdata': None, 'ydata': None}
 
+bell = '\a'
 
 def implot_plot():
     if not im_set['overplot']:
@@ -75,6 +76,47 @@ def implot_plot():
     im_set['fig'].canvas.draw_idle()
 
 
+def implot_plot_line():
+    was_set = False
+    # we're currently plotting columns
+    if not im_set['lineplot']:
+        was_set = im_set['overplot']
+        # turn overplot off
+        if im_set['overplot']:
+            im_set['_check'].set_active(0)
+            im_set['overplot'] = False
+        im_set['lineplot'] = True
+        # redo the slider
+        implot_remove_slider()
+        implot_make_slider()
+
+    implot_plot()
+    if was_set:
+        im_set['_check'].set_active(0)
+        im_set['overplot'] = True
+
+
+def implot_plot_col():
+    was_set = False
+    # we're currently plotting lines
+    if im_set['lineplot']:
+        # turn overplot off
+        was_set = im_set['overplot']
+        if im_set['overplot']:
+            im_set['_check'].set_active(0)
+            im_set['overplot'] = False
+
+        im_set['lineplot'] = False
+        # redo the slider
+        implot_remove_slider()
+        implot_make_slider()
+
+    implot_plot()
+    if was_set:
+        im_set['_check'].set_active(0)
+        im_set['overplot'] = True
+
+
 def implot_keypress(event):
     # pressed for the second time
     if im_set['stat'] is not None:
@@ -83,12 +125,67 @@ def implot_keypress(event):
     # user input is complete and was one of the extended options
     if event.key == 'enter' and len(im_set['input']):
         full_inp = im_set['input']
-        print 'complete'
-        print full_inp
         im_set['input'] = ''
         im_set['iax'].set_text('')
         im_set['fig'].canvas.draw_idle()
-        # XXX: handle longer inputs
+        # nothing input
+        if len(full_inp.strip()) == 1:
+            return
+        # print out for the user's history
+        print full_inp
+        # ignore the leading :
+        full_inp = full_inp[1:]
+        pieces = full_inp.strip().split()
+        try:
+            # change the number of lines/columns to average together
+            if pieces[0] == 'a' and len(pieces) > 1:
+                im_set['navg'] = int(pieces[1])
+                if im_set['navg'] <= 0:
+                    im_set['navg'] = 1
+            elif pieces[0] == 'i' and len(pieces) > 1:
+                infile = file_handler(pieces[1])
+                if len(infile) > 0:
+                    implot_open_image(infile[0])
+            elif pieces[0] == 'w' and len(pieces) > 1:
+                pass
+                # XXX: Change wcs type.
+            elif pieces[0] == 'f' and len(pieces) > 1:
+                pass
+                # XXX: Change label format.
+            # plot a selected line/column or average between 2 lines/columns
+            elif (pieces[0] == 'l' or pieces[0] == 'c') and len(pieces) > 1:
+                if len(pieces) == 2:
+                    if int(pieces[1]) >= 0:
+                        im_set['line'] = int(pieces[1])
+                        if pieces[0] == 'l':
+                            implot_plot_line()
+                        else:
+                            implot_plot_col()
+                    else:
+                        print bell
+                else:
+                    if int(pieces[1]) >= 0 and int(pieces[2]) >= 0:
+                        im_set['line'] = min(int(pieces[1]), int(pieces[2]))
+                        im_set['navg'] = np.abs(int(pieces[1]) - int(pieces[2])) - 1
+                        if pieces[0] == 'l':
+                            implot_plot_line()
+                        else:
+                            implot_plot_col()
+                    else:
+                        print bell
+            # toggle log y scale on or off
+            elif pieces[0] == 'log+':
+                im_set['ax'].set_yscale('log')
+            elif pieces[0] == 'log-':
+                im_set['ax'].set_yscale('linear')
+
+            else:
+                print bell
+
+
+        except ValueError:
+            print bell
+
         return
 
     # user is continuing their long input
@@ -111,51 +208,27 @@ def implot_keypress(event):
 
     # wants to plot lines
     if event.key == 'l':
-        # but we're currently plotting columns
+        # we're currently plotting columns
         if not im_set['lineplot']:
-            was_set = im_set['overplot']
-            # turn overplot off
-            if im_set['overplot']:
-                im_set['_check'].set_active(0)
-                im_set['overplot'] = False
             # which column to plot
             fracthru = im_set['line'] * 1. / im_set['ncols']
             im_set['line'] = int(im_set['nlines'] * fracthru)
-            im_set['lineplot'] = True
-            # redo the slider
-            implot_remove_slider()
-            implot_make_slider()
 
-            implot_plot()
-            if was_set:
-                im_set['_check'].set_active(0)
-                im_set['overplot'] = True
+            implot_plot_line()
 
     # wants to plot columns
     if event.key == 'c':
-        # but we're currently plotting lines
+        # we're currently plotting lines
         if im_set['lineplot']:
             if im_set['nlines'] == 1:
-                print '\007'
+                print bell
                 return
 
-            # turn overplot off
-            was_set = im_set['overplot']
-            if im_set['overplot']:
-                im_set['_check'].set_active(0)
-                im_set['overplot'] = False
             # which line to plot
-            fracthru = im_set['line']*1. / im_set['nlines']
+            fracthru = im_set['line'] * 1. / im_set['nlines']
             im_set['line'] = int(im_set['ncols'] * fracthru)
-            im_set['lineplot'] = False
-            # redo the slider
-            implot_remove_slider()
-            implot_make_slider()
 
-            implot_plot()
-            if was_set:
-                im_set['_check'].set_active(0)
-                im_set['overplot'] = True
+            implot_plot_col()
 
     # go to previous image in list
     if event.key == 'm':
@@ -216,15 +289,26 @@ def implot_keypress(event):
         median = np.median(im_set['ydata'][region])
         outstr = "Median={0:g}, mean={1:g}, rms={2:g}, sum={3:g}, npix={4:d}"
         print outstr.format(median, mean, std, sum, len(region))
+        im_set['stat'] = None
 
+    if event.key == ' ':
+        if event.xdata is not None:
+            pixel = np.abs(event.xdata - im_set['xdata']).argmin()
+            txt = 'Pixel = [{0}, {1}] Value = {2}'
+            if im_set['lineplot']:
+                txt = txt.format(im_set['line'], pixel, im_set['ydata'][pixel])
+            else:
+                txt = txt.format(pixel, im_set['line'], im_set['ydata'][pixel])
+            print txt
 
-    # test for other letter shortcuts
-    if event.key == 'x':
-        im_set['ax'].plot(np.random.randn(50) * 500, np.random.randn(50) * 200)
-    if event.key == 'q':
-        print 'q'
-        im_set['ax'].set_xlim(np.random.randn() * 50,
-                              np.random.randn() * 50 + 1500)
+    if event.key == '?':
+        # XXX: implement pagefiles
+        """
+        # Print command summary.
+        call
+        gpagefile(gp, KEYSFILE, "implot cursor commands")
+        """
+        pass
 
     im_set['fig'].canvas.draw_idle()
 
@@ -243,13 +327,17 @@ def implot_change_line(value):
     pass
 
 
-def implot_open_image():
+def implot_open_image(infile=None):
+    if infile is None:
+        infile = im_set['image'][im_set['index']]
+
     # open the image
     try:
-        hdulist = fits.open(im_set['image'][im_set['index']])
+        hdulist = fits.open(infile)
     except IOError:
         print "Error reading image {0} ...".format(
             im_set['image'][im_set['index']])
+        return
         # XXX: go to next image
 
     im_set['im'] = hdulist[0].data
