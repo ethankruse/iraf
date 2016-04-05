@@ -37,6 +37,8 @@ def loadparams(*args, **kwargs):
                     row[0].strip()[0] == '#'):
             continue
         # make sure we have a complete row
+        if len(row) != 7:
+            print row
         assert len(row) == 7
         defaultparams.append([x.strip() for x in row])
 
@@ -161,7 +163,7 @@ def loadparams(*args, **kwargs):
                                 prompt = True
                 # string data types
                 elif dtype == 's':
-                    value = str(value)
+                    value = str(value).strip()
                     # check for enumerated list of values
                     if len(dmin):
                         # more than one option available
@@ -171,6 +173,9 @@ def loadparams(*args, **kwargs):
                             if value.upper() not in enums:
                                 print 'Input not one of the available options. Try again.'
                                 prompt = True
+                    if len(value) == 0:
+                        value = None
+
                 # filename data types
                 elif dtype[0] == 'f':
                     # XXX: do we want to call file_handler on this one?
@@ -270,6 +275,10 @@ def file_handler(filelist):
     outlist : list
         List of file names matching all patterns.
     """
+
+    # XXX: should we return None or an empty list?
+    if filelist is None:
+        return []
 
     # XXX: this does not allow for image subsections,
     #  e.g. imagename[x1:x2,y1:y2]
