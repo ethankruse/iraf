@@ -30,17 +30,18 @@ def loadparams(*args, **kwargs):
 
     # read in the default parameters for the function
     defaultparams = []
-    reader = csv.reader(open(myparamfile, 'r'))
-    for row in reader:
-        # skip over blank lines and comment lines
-        if (len(row) == 0 or len(row[0].strip()) == 0 or
-                    row[0].strip()[0] == '#'):
-            continue
-        # make sure we have a complete row
-        if len(row) != 7:
-            print row
-        assert len(row) == 7
-        defaultparams.append([x.strip() for x in row])
+    with open(myparamfile, 'r') as ff:
+        reader = csv.reader(ff)
+        for row in reader:
+            # skip over blank lines and comment lines
+            if (len(row) == 0 or len(row[0].strip()) == 0 or
+                        row[0].strip()[0] == '#'):
+                continue
+            # make sure we have a complete row
+            if len(row) != 7:
+                print row
+            assert len(row) == 7
+            defaultparams.append([x.strip() for x in row])
 
     automode = 'h'
     for param in defaultparams:
@@ -301,14 +302,15 @@ def file_handler(filelist):
         if istr[0] == '@':
             fname = os.path.expanduser(istr[1:])
 
-            reader = csv.reader(open(fname, 'r'))
-            for row in reader:
-                # skip over blank lines and comment lines
-                if (len(row) == 0 or len(row[0].strip()) == 0 or
-                            row[0].strip()[0] == '#'):
-                    continue
+            with open(fname, 'r') as ff:
+                reader = csv.reader(ff)
+                for row in reader:
+                    # skip over blank lines and comment lines
+                    if (len(row) == 0 or len(row[0].strip()) == 0 or
+                                row[0].strip()[0] == '#'):
+                        continue
 
-                files.append(os.path.expanduser(row[0].strip()))
+                    files.append(os.path.expanduser(row[0].strip()))
         else:
             # this is either a single file or a CSV list of files
             tmp = istr.split(',')

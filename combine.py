@@ -1,10 +1,15 @@
 from .imstat import loadparams, file_handler
-from . import instrument, logfile
+from . import instrument, logfile, ssfile
 import numpy as np
 from astropy.io import fits
+import os
+import csv
 
+
+# XXX: how do I "search up the tree" for cl.par mode etc?
 
 def ccdtypes(header):
+    # XXX: this needs to have the instrument file header conversions
     options = "object|zero|dark|flat|illum|fringe|other|comp".split('|')
     try:
         typ = header['imagetyp'].lower()
@@ -13,6 +18,73 @@ def ccdtypes(header):
     except KeyError:
         typ = 'none'
     return typ
+
+
+def ccdsubset(im):
+    # XXX: this needs to have the instrument file header conversions
+    try:
+        # XXX: change back to subset
+        subsetstr = im[0].header['subset']
+        # The default subset identifier is the first word of the subset string.
+        subset1 = subsetstr.strip().split()
+        if len(subset1) > 0:
+            subset1 = subset1[0]
+        else:
+            subset1 = None
+    except KeyError:
+        subsetstr = None
+        subset1 = None
+
+    # A null subset string is ok.  If not null check for conflict
+    # with previous subset IDs.
+    if subset1 is not None:
+        orig = subset1
+        # whether or not to append this to the subsets file
+        append = True
+        # Search the subset record file for the same subset string.
+        # If found use the ID string.  If the subset ID has been
+        # used for another subset string then increment an integer
+        # suffix to the default ID and check the list again.
+        if os.path.exists(ssfile):
+            subsetstrs = []
+            subsetids = []
+            with open(ssfile, 'r') as ff:
+                reader = csv.reader(ff, delimiter='\t')
+                for row in reader:
+                    # skip over blank lines and comment lines
+                    if (len(row) == 0 or len(row[0].strip()) == 0 or
+                                row[0].strip()[0] == '#'):
+                        continue
+                    # make sure we have a complete row
+                    assert len(row) > 1
+                    subsetstrs.append(row[0])
+                    subsetids.append(row[1])
+
+            ii = 1
+            while True:
+                if subsetstr in subsetstrs:
+                    append = False
+                    subset1 = subsetids[subsetstrs.index(subsetstr)]
+                    break
+                else:
+                    if subset1 in subsetids:
+                        subset1 = '{0}{1:d}'.format(orig, ii)
+                        ii += 1
+                    else:
+                        break
+
+        if append:
+            with open(ssfile, 'a') as ff:
+                writer = csv.writer(ff, delimiter='\t')
+                writer.writerow([subsetstr, subset1])
+
+        # Set the subset ID string and replace magic characters by '_'
+        # since the subset ID is used in forming image names.
+        for ii, ichar in enumerate(subset1):
+            if not ichar.isalnum() and ichar != '.':
+                subset1[ii] = '_'
+
+    return subset1
 
 
 def combine(*args, **kwargs):
@@ -29,15 +101,24 @@ def combine(*args, **kwargs):
 
     # Determine whether to divide images into subsets and append extensions.
     dosubsets = params['subsets'].value
-
+    print dosubsets
     # Go through the input list and eliminate images not satisfying the
     # CCD image type.  Separate into subsets if desired.  Create image
     # and subset lists.
 
-    ccdtype = 0
     ccdtypestr = params['ccdtype'].value
-
+    """
+    pointer	images		# Pointer to lists of subsets (allocated)
+    pointer	extns		# Image extensions for each subset (allocated)
+    pointer	subsets		# Subset names (allocated)
+    pointer	nimages		# Number of images in subset (allocated)
+    int	nsubsets	# Number of subsets
+    """
+    # lists of images in each subset
     images = []
+    # subset names
+    subset = []
+
     for image in inputs:
         # open the image
         try:
@@ -47,14 +128,21 @@ def combine(*args, **kwargs):
             continue
 
         thistype = ccdtypes(hdulist[0].header)
+
         if ccdtypestr is not None and thistype != ccdtypestr:
+            hdulist.close()
             continue
 
         if dosubsets:
-            # XXX: implement this
-            print "Subsets not implemented yet."
+            subsetstr = ccdsubset(hdulist)
+        else:
+            subsetstr = None
 
-        images.append(image)
+        if subsetstr not in subset:
+            subset.append(subsetstr)
+            images.append([image])
+        else:
+            images[subset.index(subsetstr)].append(image)
 
         hdulist.close()
 
@@ -109,12 +197,59 @@ def combine(*args, **kwargs):
         if hthresh is None:
             hthresh = np.inf
 
+    # Combine each input subset.
+    for ii, iset in enumerate(subset):
+        if subset[ii] is not None:
+            outroot = '{0}{1}'.format(output, subset[ii])
+        else:
+            outroot = output
+
+    """
+    # Combine each input subset.
+    do i = 1, nsubsets {
+        # Set the output, pl, and sigma image names with subset extension.
+
+        call strcpy (Memc[outroot], Memc[output], SZ_FNAME)
+        call sprintf (Memc[output], SZ_FNAME, "%s%s")
+        call pargstr (Memc[outroot])
+        call pargstr (Memc[Memi[extns+i-1]])
+
+        call strcpy (Memc[plroot], Memc[plfile], SZ_FNAME)
+        if (Memc[plfile] != EOS) {
+        call sprintf (Memc[plfile], SZ_FNAME, "%s%s")
+            call pargstr (Memc[plroot])
+            # Use this if we can append pl files.
+            #call pargstr (Memc[Memi[extns+i-1]])
+            call pargstr (Memc[Memi[subsets+i-1]])
+        }
+
+        call strcpy (Memc[sigroot], Memc[sigma], SZ_FNAME)
+        if (Memc[sigma] != EOS) {
+        call sprintf (Memc[sigma], SZ_FNAME, "%s%s")
+            call pargstr (Memc[sigroot])
+            call pargstr (Memc[Memi[extns+i-1]])
+        }
+
+        # Combine all images from the (subset) list.
+        iferr (call icombine (Memc[Memi[images+i-1]], Memi[nimages+i-1],
+        Memc[output], Memc[plfile], Memc[sigma],
+        Memc[logfile], NO, delete)) {
+        call erract (EA_WARN)
+        }
+        call mfree (Memi[images+i-1], TY_CHAR)
+        call mfree (Memi[extns+i-1], TY_CHAR)
+        call mfree (Memi[subsets+i-1], TY_CHAR)
+    }
+
+    """
+
     if project:
         if len(images) > 1:
             print "Cannot project combine a list of images"
             return
         hdulist = fits.open(images[0])
         shp = hdulist[0].data.shape
+        hdulist.close()
         if len(shp) == 1 or shp[-1] == 1:
             print "Can't project one dimensional images"
             return
@@ -165,15 +300,38 @@ def combine(*args, **kwargs):
             print "Bad minmax rejection parameters"
             return
 
+    # Map the input image(s).
+    out = []
+    if project:
+        tmp = fits.open(images[0])
+        out.append(tmp)
+    else:
+        for iimage in images:
+            tmp = fits.open(iimage)
+            out.append(tmp)
+
 
     """
-
+    # Map the output image and set dimensions and offsets.
+    tmp = immap (output, NEW_COPY, Memi[in]); out[1] = tmp
+    if (stack1 == YES) {
+    call salloc (key, SZ_FNAME, TY_CHAR)
+    do i = 1, nimages {
+        call sprintf (Memc[key], SZ_FNAME, "stck%04d")
+        call pargi (i)
+        call imdelf (out[1], Memc[key])
+    }
+    }
+    call salloc (offsets, nimages*IM_NDIM(out[1]), TY_INT)
+    call ic_setout (Memi[in], out, Memi[offsets], nimages)
     """
 
+    # close the input images
+    for ifile in out:
+        ifile.close()
 
 
-
-
-
+    # XXX: does not giving any default value (even '' for a string) mean
+    # that you get prompted no matter what? see the first 4 parameters here.
 
     return params
