@@ -174,6 +174,7 @@ def loadparams(*args, **kwargs):
                             if value.upper() not in enums:
                                 print 'Input not one of the available options. Try again.'
                                 prompt = True
+                    # XXX: should we just return an empty string?
                     if len(value) == 0:
                         value = None
 

@@ -6,7 +6,14 @@ import os
 import csv
 
 
+def make_fits(path):
+    splits = path.split('.')
+    if splits[-1] not in ['fits', 'fit']:
+        path += '.fits'
+    return path
+
 # XXX: how do I "search up the tree" for cl.par mode etc?
+
 
 def ccdtypes(header):
     # XXX: this needs to have the instrument file header conversions
@@ -151,9 +158,12 @@ def combine(*args, **kwargs):
         return
 
     # Get task parameters.  Some additional parameters are obtained later.
-    output = file_handler(params['output'].value)
-    plfile = file_handler(params['plfile'].value)
-    sigma = file_handler(params['sigma'].value)
+    outroot = params['output'].value
+    if len(outroot) == 0:
+        print "Must give an output base name"
+        return
+    plroot = params['plfile'].value
+    sigroot = params['sigma'].value
 
     project = params['project'].value
     combine = params['combine'].value
@@ -198,140 +208,124 @@ def combine(*args, **kwargs):
             hthresh = np.inf
 
     # Combine each input subset.
-    for ii, iset in enumerate(subset):
-        if subset[ii] is not None:
-            outroot = '{0}{1}'.format(output, subset[ii])
+    for zz, iset in enumerate(subset):
+        iimages = images[zz]
+
+        sstring = subset[zz]
+        if sstring is None:
+            sstring = ''
+
+        output = '{0}{1}'.format(outroot, sstring)
+        output = make_fits(output)
+
+        plfile = None
+        sigma = None
+
+        if plroot is not None:
+            plfile = '{0}{1}'.format(plroot, sstring)
+
+        if sigroot is not None:
+            sigma = '{0}{1}'.format(sigroot, sstring)
+
+        """
+            # Combine all images from the (subset) list.
+            iferr (call icombine (Memc[Memi[images+i-1]], Memi[nimages+i-1],
+            Memc[output], Memc[plfile], Memc[sigma],
+            Memc[logfile], NO, delete))
+        """
+        # Set number of images to combine.
+        if project:
+            if len(iimages) > 1:
+                print "Cannot project combine a list of images"
+                return
+            hdulist = fits.open(iimages[0])
+            shp = hdulist[0].data.shape
+            hdulist.close()
+            if len(shp) == 1 or shp[-1] == 1:
+                print "Can't project one dimensional images"
+                return
+            nimages = shp[-1]
         else:
-            outroot = output
+            nimages = len(iimages)
 
-    """
-    # Combine each input subset.
-    do i = 1, nsubsets {
-        # Set the output, pl, and sigma image names with subset extension.
+        # Convert the nkeep parameter if needed.
+        if nkeep < 0:
+            nkeep = max(0, nimages + nkeep)
 
-        call strcpy (Memc[outroot], Memc[output], SZ_FNAME)
-        call sprintf (Memc[output], SZ_FNAME, "%s%s")
-        call pargstr (Memc[outroot])
-        call pargstr (Memc[Memi[extns+i-1]])
+        # Convert the pclip parameter to a number of pixels rather than
+        # a fraction.  This number stays constant even if pixels are
+        # rejected.  The number of low and high pixel rejected, however,
+        # are converted to a fraction of the valid pixels.
 
-        call strcpy (Memc[plroot], Memc[plfile], SZ_FNAME)
-        if (Memc[plfile] != EOS) {
-        call sprintf (Memc[plfile], SZ_FNAME, "%s%s")
-            call pargstr (Memc[plroot])
-            # Use this if we can append pl files.
-            #call pargstr (Memc[Memi[extns+i-1]])
-            call pargstr (Memc[Memi[subsets+i-1]])
-        }
+        if reject.lower() == 'pclip':
+            if pclip == 0.:
+                print "Pclip parameter may not be zero"
+                return
+            if pclip is None:
+                pclip = -0.5
 
-        call strcpy (Memc[sigroot], Memc[sigma], SZ_FNAME)
-        if (Memc[sigma] != EOS) {
-        call sprintf (Memc[sigma], SZ_FNAME, "%s%s")
-            call pargstr (Memc[sigroot])
-            call pargstr (Memc[Memi[extns+i-1]])
-        }
+            ii = nimages / 2.
+            if np.abs(pclip) < 1.:
+                pclip *= ii
+            if pclip < 0.:
+                pclip = min(-1, max(-ii, int(pclip)))
+            else:
+                pclip = max(1, min(ii, int(pclip)))
 
-        # Combine all images from the (subset) list.
-        iferr (call icombine (Memc[Memi[images+i-1]], Memi[nimages+i-1],
-        Memc[output], Memc[plfile], Memc[sigma],
-        Memc[logfile], NO, delete)) {
-        call erract (EA_WARN)
-        }
-        call mfree (Memi[images+i-1], TY_CHAR)
-        call mfree (Memi[extns+i-1], TY_CHAR)
-        call mfree (Memi[subsets+i-1], TY_CHAR)
-    }
+        if reject.lower() == 'minmax':
+            if nlow is None:
+                nlow = 0.
+            if nhigh is None:
+                nhigh = 0.
 
-    """
+            if nlow >= 1.:
+                nlow /= nimages
+            if nhigh >= 1.:
+                nhigh /= nimages
 
-    if project:
-        if len(images) > 1:
-            print "Cannot project combine a list of images"
-            return
-        hdulist = fits.open(images[0])
-        shp = hdulist[0].data.shape
-        hdulist.close()
-        if len(shp) == 1 or shp[-1] == 1:
-            print "Can't project one dimensional images"
-            return
-        nimages = shp[-1]
-    else:
-        nimages = len(images)
+            ii = nlow * nimages
+            jj = nhigh * nimages
+            if ii + jj == 0:
+                reject = 'none'
+            elif ii + jj >= nimages:
+                print "Bad minmax rejection parameters"
+                return
 
-    # Convert the nkeep parameter if needed.
-    if nkeep < 0:
-        nkeep = max(0, nimages + nkeep)
-
-    # Convert the pclip parameter to a number of pixels rather than
-    # a fraction.  This number stays constant even if pixels are
-    # rejected.  The number of low and high pixel rejected, however,
-    # are converted to a fraction of the valid pixels.
-
-    if reject.lower() == 'pclip':
-        if pclip == 0.:
-            print "Pclip parameter may not be zero"
-            return
-        if pclip is None:
-            pclip = -0.5
-
-        ii = nimages / 2.
-        if np.abs(pclip) < 1.:
-            pclip *= ii
-        if pclip < 0.:
-            pclip = min(-1, max(-ii, int(pclip)))
-        else:
-            pclip = max(1, min(ii, int(pclip)))
-
-    if reject.lower() == 'minmax':
-        if nlow is None:
-            nlow = 0.
-        if nhigh is None:
-            nhigh = 0.
-
-        if nlow >= 1.:
-            nlow /= nimages
-        if nhigh >= 1.:
-            nhigh /= nimages
-
-        ii = nlow * nimages
-        jj = nhigh * nimages
-        if ii + jj == 0:
-            reject = 'none'
-        elif ii + jj >= nimages:
-            print "Bad minmax rejection parameters"
-            return
-
-    # Map the input image(s).
-    out = []
-    if project:
-        tmp = fits.open(images[0])
-        out.append(tmp)
-    else:
-        for iimage in images:
-            tmp = fits.open(iimage)
+        out = []
+        if project:
+            tmp = fits.open(images[0])
             out.append(tmp)
+        else:
+            for im in iimages:
+                tmp = fits.open(im)
+                out.append(tmp)
+
+        # Map the output image and set dimensions and offsets.
+        imout = out[0]
+        # XXX: check this function. Need to add lines to history files, etc.
+        imout.writeto(output)
 
 
-    """
-    # Map the output image and set dimensions and offsets.
-    tmp = immap (output, NEW_COPY, Memi[in]); out[1] = tmp
-    if (stack1 == YES) {
-    call salloc (key, SZ_FNAME, TY_CHAR)
-    do i = 1, nimages {
-        call sprintf (Memc[key], SZ_FNAME, "stck%04d")
-        call pargi (i)
-        call imdelf (out[1], Memc[key])
-    }
-    }
-    call salloc (offsets, nimages*IM_NDIM(out[1]), TY_INT)
-    call ic_setout (Memi[in], out, Memi[offsets], nimages)
-    """
-
-    # close the input images
-    for ifile in out:
-        ifile.close()
 
 
-    # XXX: does not giving any default value (even '' for a string) mean
-    # that you get prompted no matter what? see the first 4 parameters here.
+        # stack1 = stack = NO = False
+        """
+        # Map the output image and set dimensions and offsets.
+        tmp = immap (output, NEW_COPY, Memi[in]); out[1] = tmp
+        if (stack1 == YES) {
+        call salloc (key, SZ_FNAME, TY_CHAR)
+        do i = 1, nimages {
+            call sprintf (Memc[key], SZ_FNAME, "stck%04d")
+            call pargi (i)
+            call imdelf (out[1], Memc[key])
+        }
+        }
+        call salloc (offsets, nimages*IM_NDIM(out[1]), TY_INT)
+        call ic_setout (Memi[in], out, Memi[offsets], nimages)
+        """
+
+        # close the input images
+        for ifile in out:
+            ifile.close()
 
     return params
