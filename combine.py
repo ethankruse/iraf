@@ -4,6 +4,7 @@ import numpy as np
 from astropy.io import fits
 import os
 import csv
+from astropy.wcs import WCS
 
 
 def make_fits(path):
@@ -94,6 +95,77 @@ def ccdsubset(im):
     return subset1
 
 
+def ic_setout(inputs, output, nimages, project, offsets):
+    indim = len(inputs[0][0].data.shape)
+    outdim = len(output[0][0].data.shape)
+
+    if project:
+        outdim = indim - 1
+        # also do? IM_NDIM(out[1]) = outdim
+    else:
+        for im in inputs:
+            if len(im[0].data.shape) != outdim:
+                print "Image dimensions are not the same"
+                sys.exit(1)
+
+    """
+    # Set the reference point to that of the first image.
+    mw = mw_openim (in[1])
+    mwdim = mw_stati (mw, MW_NPHYSDIM)
+    call mw_gwtermd (mw, Memd[lref], Memd[wref], Memd[cd], mwdim)
+    ct = mw_sctran (mw, "world", "logical", 0)
+    call mw_ctrand (ct, Memd[wref], Memd[lref], mwdim)
+    call mw_ctfree (ct)
+    if (project)
+        Memd[lref+outdim] = 1
+    """
+
+    # Parse the user offset string.  If "none" then there are no offsets.
+    # If "wcs" then set the offsets based on the image WCS.
+    # If "grid" then set the offsets based on the input grid parameters.
+    # If a file scan it.
+    if offsets is None or offsets.lower() == 'none':
+        offsetsarr = np.zeros((nimages, outdim))
+        reloff = True
+    # XXX: implement these
+    elif offsets.lower() == 'wcs':
+        print 'WCS offsets not implemented yet.'
+        sys.exit(1)
+    elif offsets.lower() == 'grid':
+        print 'grid offsets not implemented yet.'
+        sys.exit(1)
+    else:
+        print 'Manual file offsets not implemented yet.'
+        sys.exit(1)
+
+    aligned = True
+
+    for jj in np.arange(outdim):
+        aa = offsetsarr[0, jj]
+        bb = inputs[0][0].data.shape[jj] + aa
+        amin = aa
+        bmax = bb
+        for ii in np.arange(nimages-1) + 1:
+            aa = offsetsarr[ii, jj]
+            bb = inputs[ii][0].data.shape[jj] + aa
+            if aa != amin or bb != bmax or not reloff:
+                aligned = False
+            amin = min(aa, amin)
+            bmax = max(bb, bmax)
+        # also do? IM_LEN(out[1],j) = bmax
+        if reloff or amin < 0:
+            offsetsarr[:, jj] -= amin
+
+        # also d? IM_LEN(out[1],j) = IM_LEN(out[1],j) - amin
+
+    # Update the WCS.
+    # XXX: do this
+    if project or not aligned or not reloff:
+        print "WCS updates to output files not implemented yet!"
+
+    return offsetsarr
+
+
 def combine(*args, **kwargs):
     params = loadparams(*args, **kwargs)
 
@@ -176,6 +248,7 @@ def combine(*args, **kwargs):
     hthresh = params['hthreshold'].value
     lsigma = params['lsigma'].value
     hsigma = params['hsigma'].value
+    offsets = params['offsets'].value
 
     grow = params['grow'].value
     mclip = params['mclip'].value
@@ -292,21 +365,22 @@ def combine(*args, **kwargs):
                 return
 
         out = []
+        imin = []
         if project:
             tmp = fits.open(images[0])
-            out.append(tmp)
+            imin.append(tmp)
         else:
             for im in iimages:
                 tmp = fits.open(im)
-                out.append(tmp)
+                imin.append(tmp)
 
         # Map the output image and set dimensions and offsets.
-        imout = out[0]
-        # XXX: check this function. Need to add lines to history files, etc.
-        imout.writeto(output)
+        imout = imin[0]
+        # XXX: check this part. Need to add lines to history files, etc.
+        imout.writeto(output, clobber=True)
+        out.append(fits.open(output))
 
-
-
+        offarr = ic_setout(imin, out, nimages, project, offsets)
 
         # stack1 = stack = NO = False
         """
@@ -325,7 +399,9 @@ def combine(*args, **kwargs):
         """
 
         # close the input images
+        for ifile in imin:
+            ifile.close()
+        # close the output images
         for ifile in out:
             ifile.close()
-
     return params
