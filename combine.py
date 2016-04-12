@@ -5,6 +5,7 @@ from astropy.io import fits
 import os
 import csv
 from astropy.wcs import WCS
+import sys
 
 
 def make_fits(path):
@@ -166,6 +167,105 @@ def ic_setout(inputs, output, nimages, project, offsets):
     return offsetsarr
 
 
+# this is meant to be equivalent to immap (output, NEW_COPY, Memi[in]) in IRAF
+def file_new_copy(outstr, in_header, mode='NEW_COPY', clobber=True):
+    if mode != 'NEW_COPY':
+        print 'other modes of file_new_copy not supported.'
+        return
+
+    # XXX: check this part. Need to add lines to history files, etc.
+    in_header.writeto(outstr, clobber=clobber)
+    return
+
+
+def ic_mopen(in_images, out_images, nimages, mtype, mvalue):
+    # MASKTYPES	"|none|goodvalue|badvalue|goodbits|badbits|"
+    npix = out_images[0][0].data.shape[0]
+    """
+    # pointer to pms and bufs for each input image
+    # pms are the pointers to each image's pixel masks
+    call calloc (pms, nimages, TY_POINTER)
+    # bufs is just an array of 1s of length npix?
+    call calloc (bufs, nimages, TY_POINTER)
+    # for every input image, create an array of ones of length npix
+    do i = 1, nimages {
+        call malloc (Memi[bufs+i-1], npix, TY_INT)
+        call amovki (1, Memi[Memi[bufs+i-1]], npix)
+    }
+    """
+
+    # Check for special cases.  The BOOLEAN type is used when only
+    # zero and nonzero are significant; i.e. the actual mask values are
+    # not important.  The invert flag is used to indicate that
+    # empty masks are all bad rather the all good.
+    if mtype.lower() == 'badbits' and mvalue == 0:
+        mtype = 'none'
+    if mvalue == 0 and mtype.lower() in ['goodvalue', 'goodbits']:
+        mtype = 'boolean'
+    if ((mvalue == 0 and mtype.lower() in ['badvalue', 'goodbits']) or
+            (mvalue != 0 and mtype.lower() == 'goodvalue')):
+        invert = True
+    else:
+        invert = False
+
+    # If mask images are to be used, get the mask name from the image
+    # header and open it saving the descriptor in the pms array.
+    # Empty masks (all good) are treated as if there was no mask image.
+    npms = 0
+    if mtype.lower() != 'none':
+        for im in in_images:
+            try:
+                fname = im[0].header['bpm']
+                # XXX: implement this
+                print 'pixel maps not yet implemented.'
+                sys.exit(1)
+            except KeyError:
+                continue
+
+    # If no mask images are found and the mask parameters imply that
+    # good values are 0 then use the special case of no masks.
+    if npms == 0 and not invert:
+        mtype = 'none'
+
+    """
+    # Set up mask structure.
+    call calloc (icm, ICM_LEN, TY_STRUCT)
+    ICM_TYPE(icm) = mtype
+    ICM_VALUE(icm) = mvalue
+    ICM_BUFS(icm) = bufs
+    ICM_PMS(icm) = pms
+
+    """
+    return mtype
+
+
+def type_max(type1, type2):
+    right = np.can_cast(type1, type2, casting='safe')
+    left = np.can_cast(type2, type1, casting='safe')
+
+    if left:
+        return type1
+    if right:
+        return type2
+
+    # likely case of an unsigned int and signed int of same size
+    ints = [np.int8, np.int16, np.int32, np.int64]
+    if (np.issubdtype(type1.type, np.unsignedinteger) and
+            np.issubdtype(type2.type, np.integer)):
+        for iint in ints:
+            if np.can_cast(type1, iint, casting='safe'):
+                return np.dtype(iint)
+
+    elif (np.issubdtype(type2.type, np.unsignedinteger) and
+              np.issubdtype(type1.type, np.integer)):
+        for iint in ints:
+            if np.can_cast(type2, iint, casting='safe'):
+                return np.dtype(iint)
+
+    print "Unrecognized dtype or cannot safely cast between {0} and {1}.".format(type1, type2)
+    sys.exit(1)
+
+
 def combine(*args, **kwargs):
     params = loadparams(*args, **kwargs)
 
@@ -249,6 +349,8 @@ def combine(*args, **kwargs):
     lsigma = params['lsigma'].value
     hsigma = params['hsigma'].value
     offsets = params['offsets'].value
+    masktype = params['masktype'].value
+    maskvalue = params['maskvalue'].value
 
     grow = params['grow'].value
     mclip = params['mclip'].value
@@ -258,6 +360,21 @@ def combine(*args, **kwargs):
     pclip = params['pclip'].value
     nlow = params['nlow'].value
     nhigh = params['nhigh'].value
+    otype = params['outtype'].value
+    outtype = None
+    # "short|ushort|integer|long|real|double"
+    if otype.lower() == 'short':
+        outtype = np.short
+    elif otype.lower() == 'ushort':
+        outtype = np.ushort
+    elif otype.lower() == 'integer':
+        outtype = np.intc
+    elif otype.lower() == 'long':
+        outtype = np.long
+    elif otype.lower() == 'real':
+        outtype = np.float
+    elif otype.lower() == 'double':
+        outtype = np.double
 
     # Check parameters, map INDEFs, and set threshold flag
     if blank is None:
@@ -375,27 +492,61 @@ def combine(*args, **kwargs):
                 imin.append(tmp)
 
         # Map the output image and set dimensions and offsets.
-        imout = imin[0]
-        # XXX: check this part. Need to add lines to history files, etc.
-        imout.writeto(output, clobber=True)
+        file_new_copy(output, imin[0], mode='NEW_COPY', clobber=True)
         out.append(fits.open(output))
 
         offarr = ic_setout(imin, out, nimages, project, offsets)
 
+        # Determine the highest precedence datatype and set output datatype.
+        intype = imin[0][0].data.dtype
+        for im in imin:
+            intype = type_max(intype, im[0].data.dtype)
+        print intype
+
+        if outtype is None:
+            outtype = intype
+        # set this? IM_PIXTYPE(out[1]) = getdatatype (clgetc ("outtype"))
+
+        # XXX: this won't work if we're introducing 'sections' of files too
+        # need to have a 'return the file without the sections' function
+        # e.g. imgimage in IRAF
+        # Open pixel list file if given.
+        if plfile is not None:
+            # make sure it is a .pl file
+            base, tail = os.path.split(plfile)
+            if len(tail) > 3:
+                if len(tail.split('.')) > 1:
+                    tail = '.'.join(tail.split('.')[:-1])
+                tail += '.pl'
+            plfile = os.path.join(base, tail)
+            file_new_copy(plfile, out[0], mode='NEW_COPY', clobber=True)
+            out.append(fits.open(plfile))
+        else:
+            out.append(None)
+
+        # Open the sigma image if given.
+        if sigma is not None:
+            file_new_copy(sigma, out[0], mode='NEW_COPY', clobber=True)
+            out.append(fits.open(sigma))
+            # XXX: add this?
+            # IM_PIXTYPE(out[3]) = ty_max (TY_REAL, IM_PIXTYPE(out[1]))
+            # call sprintf (IM_TITLE(out[3]), SZ_IMTITLE,
+            # "Combine sigma images for %s")
+            # call pargstr (output)
+        else:
+            out.append(None)
+
+        # XXX: this currently is useless except to make sure masktype == 'none'
+        # Open masks.
+        masktype = ic_mopen(imin, out, nimages, masktype, maskvalue)
+
+        # Open the log file.
+        if logfile is not None:
+            logfd = open(logfile, 'a')
+
         # stack1 = stack = NO = False
         """
-        # Map the output image and set dimensions and offsets.
-        tmp = immap (output, NEW_COPY, Memi[in]); out[1] = tmp
-        if (stack1 == YES) {
-        call salloc (key, SZ_FNAME, TY_CHAR)
-        do i = 1, nimages {
-            call sprintf (Memc[key], SZ_FNAME, "stck%04d")
-            call pargi (i)
-            call imdelf (out[1], Memc[key])
-        }
-        }
-        call salloc (offsets, nimages*IM_NDIM(out[1]), TY_INT)
-        call ic_setout (Memi[in], out, Memi[offsets], nimages)
+
         """
 
         # close the input images
@@ -403,5 +554,8 @@ def combine(*args, **kwargs):
             ifile.close()
         # close the output images
         for ifile in out:
-            ifile.close()
+            if ifile is not None:
+                ifile.close()
+        logfd.close()
+
     return params
