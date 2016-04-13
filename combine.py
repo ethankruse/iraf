@@ -280,7 +280,7 @@ def combine(*args, **kwargs):
 
     # Determine whether to divide images into subsets and append extensions.
     dosubsets = params['subsets'].value
-    print dosubsets
+
     # Go through the input list and eliminate images not satisfying the
     # CCD image type.  Separate into subsets if desired.  Create image
     # and subset lists.
@@ -504,7 +504,6 @@ def combine(*args, **kwargs):
         intype = imin[0][0].data.dtype
         for im in imin:
             intype = type_max(intype, im[0].data.dtype)
-        print intype
 
         if outtype is None:
             outtype = intype
@@ -594,21 +593,28 @@ def combine(*args, **kwargs):
             except KeyError:
                 pass
 
-        #ic_gscale(scale)
-        """
         # Set scaling factors.
-        define	STYPES		"|none|mode|median|mean|exposure|"
-        define	ZTYPES		"|none|mode|median|mean|"
-        define	WTYPES		"|none|mode|median|mean|exposure|"
+        stypes = "none|mode|median|mean|exposure".split('|')
+        ztypes = "none|mode|median|mean".split('|')
+        wtypes = "none|mode|median|mean|exposure".split('|')
 
-        stype = ic_gscale ("scale", Memc[sname], STYPES, in, Memr[exptime],
-            scales, nimages)
-        ztype = ic_gscale ("zero", Memc[zname], ZTYPES, in, Memr[exptime],
-            zeros, nimages)
-        wtype = ic_gscale ("weight", Memc[wname], WTYPES, in, Memr[exptime],
-            wts, nimages)
+        stype = ic_gscale(params['scale'], stypes, imin, exptime, scales, nimages)
+        ztype = ic_gscale(params['zero'], ztypes, imin, exptime, zeros, nimages)
+        wtype = ic_gscale(params['weight'], wtypes, imin, exptime, wts, nimages)
+
+        # Get image statistics only if needed.
+        domode = 'mode' in [stype, ztype, wtype]
+        domedian = 'median' in [stype, ztype, wtype]
+        domean = 'mean' in [stype, ztype, wtype]
+
+        if domode or domedian or domean:
+            pass
         """
-
+        domode = ((stype==S_MODE)||(ztype==S_MODE)||(wtype==S_MODE))
+            domedian = ((stype==S_MEDIAN)||(ztype==S_MEDIAN)||(wtype==S_MEDIAN))
+            domean = ((stype==S_MEAN)||(ztype==S_MEAN)||(wtype==S_MEAN))
+            if (domode || domedian || domean) {
+        """
 
         # XXX: this is where the icombine function ends
 
@@ -629,15 +635,16 @@ def ic_gscale(param, dic, inp, exptime, values, nimages):
         stype = 'none'
     elif param.value[0] == '@':
         stype = 'file'
-        values = np.loadtxt(param.value[1:])
-        if len(values.shape) != 1:
+        tmp = np.loadtxt(param.value[1:])
+        if len(tmp.shape) != 1:
             print "Could not understand {0} values in {1}".format(param.name, param.value[1:])
             sys.exit(1)
-        if values.size < nimages:
+        if tmp.size < nimages:
             print "Insufficient {0} values in {1}".format(param.name, param.value[1:])
             sys.exit(1)
-        if values.size > nimages:
+        if tmp.size > nimages:
             print "Warning: Ignoring additional {0} values in {1}".format(param.name, param.value[1:])
+        values[:] = tmp[:nimages]
     elif param.value[0] == '!':
         stype = 'keyword'
         for ii, im in enumerate(inp):
@@ -646,7 +653,7 @@ def ic_gscale(param, dic, inp, exptime, values, nimages):
         if param.value in dic:
             stype = param.value
             if stype == 'exposure':
-                tmp = np.where(exptime < 0.001)[0]
+                tmp = np.where(exptime > 0.001)[0]
                 values[tmp] = 0.001
         else:
             print "Unknown {0} type".format(param.name)
