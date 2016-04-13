@@ -164,7 +164,7 @@ def ic_setout(inputs, output, nimages, project, offsets):
     if project or not aligned or not reloff:
         print "WCS updates to output files not implemented yet!"
 
-    return offsetsarr
+    return offsetsarr, aligned
 
 
 # this is meant to be equivalent to immap (output, NEW_COPY, Memi[in]) in IRAF
@@ -351,6 +351,9 @@ def combine(*args, **kwargs):
     offsets = params['offsets'].value
     masktype = params['masktype'].value
     maskvalue = params['maskvalue'].value
+    scale = params['scale'].value
+    zero = params['zero'].value
+    weight = params['weight'].value
 
     grow = params['grow'].value
     mclip = params['mclip'].value
@@ -495,7 +498,7 @@ def combine(*args, **kwargs):
         file_new_copy(output, imin[0], mode='NEW_COPY', clobber=True)
         out.append(fits.open(output))
 
-        offarr = ic_setout(imin, out, nimages, project, offsets)
+        offarr, aligned = ic_setout(imin, out, nimages, project, offsets)
 
         # Determine the highest precedence datatype and set output datatype.
         intype = imin[0][0].data.dtype
@@ -544,10 +547,70 @@ def combine(*args, **kwargs):
         if logfile is not None:
             logfd = open(logfile, 'a')
 
-        # stack1 = stack = NO = False
-        """
+        # Memi[in], out, Memi[offsets], nimages
+        # icombine(imin, out, offsets, nimages)
+        # XXX: this is where the icombine function starts
+
+        # icombine seems to just be a bunch of memory handling to see if the
+        # computer will run out of memory. We're skipping this and assuming
+        # memory management will be taken care of behind the scenes
 
         """
+        # If aligned use the IMIO buffer otherwise we need vectors of
+        # output length.
+
+        if (!aligned) {
+            call salloc (dbuf, nimages, TY_POINTER)
+            do i = 1, nimages
+            call salloc (Memi[dbuf+i-1], npts, TY_REAL)
+        }
+        """
+
+        # thus, we skip ahead and are now in the ic_combine function
+        # call ic_scale (in, out, offsets, scales, zeros, wts, nimages)
+
+        # Set the defaults.
+        ncombine = np.ones(nimages)
+        exptime = np.zeros(nimages)
+        means = np.zeros(nimages)
+        medians = np.zeros(nimages)
+        modes = np.zeros(nimages)
+        means.fill(np.nan)
+        medians.fill(np.nan)
+        modes.fill(np.nan)
+        scales = np.ones(nimages)
+        zeros = np.zeros(nimages)
+        wts = np.ones(nimages)
+
+        # Get the number of images previously combined and the exposure times.
+        # The default combine number is 1 and the default exposure is 0.
+        for ii, im in enumerate(imin):
+            try:
+                ncombine[ii] = im[0].header['ncombine']
+            except KeyError:
+                pass
+            try:
+                exptime[ii] = im[0].header['exptime']
+            except KeyError:
+                pass
+
+        #ic_gscale(scale)
+        """
+        # Set scaling factors.
+        define	STYPES		"|none|mode|median|mean|exposure|"
+        define	ZTYPES		"|none|mode|median|mean|"
+        define	WTYPES		"|none|mode|median|mean|exposure|"
+
+        stype = ic_gscale ("scale", Memc[sname], STYPES, in, Memr[exptime],
+            scales, nimages)
+        ztype = ic_gscale ("zero", Memc[zname], ZTYPES, in, Memr[exptime],
+            zeros, nimages)
+        wtype = ic_gscale ("weight", Memc[wname], WTYPES, in, Memr[exptime],
+            wts, nimages)
+        """
+
+
+        # XXX: this is where the icombine function ends
 
         # close the input images
         for ifile in imin:
@@ -559,3 +622,37 @@ def combine(*args, **kwargs):
         logfd.close()
 
     return params
+
+
+def ic_gscale(param, dic, inp, exptime, values, nimages):
+    if param.value is None:
+        stype = 'none'
+    elif param.value[0] == '@':
+        stype = 'file'
+        values = np.loadtxt(param.value[1:])
+        if len(values.shape) != 1:
+            print "Could not understand {0} values in {1}".format(param.name, param.value[1:])
+            sys.exit(1)
+        if values.size < nimages:
+            print "Insufficient {0} values in {1}".format(param.name, param.value[1:])
+            sys.exit(1)
+        if values.size > nimages:
+            print "Warning: Ignoring additional {0} values in {1}".format(param.name, param.value[1:])
+    elif param.value[0] == '!':
+        stype = 'keyword'
+        for ii, im in enumerate(inp):
+            values[ii] = im[0].header[param.value[1:]]
+    else:
+        if param.value in dic:
+            stype = param.value
+            if stype == 'exposure':
+                tmp = np.where(exptime < 0.001)[0]
+                values[tmp] = 0.001
+        else:
+            print "Unknown {0} type".format(param.name)
+            sys.exit(1)
+    return stype
+
+
+def icombine(ins, out, offsets, nimages):
+    return

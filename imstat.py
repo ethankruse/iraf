@@ -9,9 +9,10 @@ import scipy.stats
 
 
 class Parameter(object):
-    def __init__(self, value, learn):
+    def __init__(self, value, learn, name):
         self.value = value
         self.learn = learn
+        self.name = name
 
 
 def loadparams(*args, **kwargs):
@@ -243,7 +244,7 @@ def loadparams(*args, **kwargs):
                 value = default
             prompt = False
 
-        params[name] = Parameter(value, learn)
+        params[name] = Parameter(value, learn, name)
 
     return params
 
