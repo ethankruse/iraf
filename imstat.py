@@ -8,6 +8,22 @@ import numpy as np
 import scipy.stats
 
 
+# XXX: handle package level CL handling by creating some kind of CL object.
+# it'll look like CL (param_list; sub_tasks; parent?). Then loading a package
+# will have the same structure with its own sub_tasks. So just work your way
+# up the chain for each task. Somehow need to work out how the parent thing
+# will work. Just pass in the parent object to init() when creating a new
+# object? That should work.
+# That could even let me create my own __print__ so it'll print out the CL
+# parameters and loaded sub-tasks for a package.
+# need to figure out how to be able to index though. e.g.
+# iraf.cl.noao.imred.ccdred should print out that CL object, but you need
+# to go through the list somehow instead and have tab complete do things right.
+# which means adding a __dir__ function? see:
+# http://stackoverflow.com/questions/13870241/ipython-tab-completion-for-custom-dict-class
+# then I can just wrap everything in my version of the IRAF
+# clgstr clgwrd clgeti clgetr clgetb etc
+
 class Parameter(object):
     def __init__(self, value, learn, name):
         self.value = value

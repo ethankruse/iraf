@@ -690,6 +690,9 @@ def combine(*args, **kwargs):
 
 def ic_stat(imin, imref, section, offarr):
     pass
+    """
+
+    """
 
 
 def ic_gscale(param, dic, inp, exptime, values, nimages):
