@@ -126,7 +126,7 @@ def ic_setout(inputs, output, nimages, project, offsets):
     # If "grid" then set the offsets based on the input grid parameters.
     # If a file scan it.
     if offsets is None or offsets.lower() == 'none':
-        offsetsarr = np.zeros((nimages, outdim))
+        offsetsarr = np.zeros((nimages, outdim), dtype=int)
         reloff = True
     # XXX: implement these
     elif offsets.lower() == 'wcs':
@@ -354,6 +354,7 @@ def combine(*args, **kwargs):
     scale = params['scale'].value
     zero = params['zero'].value
     weight = params['weight'].value
+    statsec = params['statsec'].value
 
     grow = params['grow'].value
     mclip = params['mclip'].value
@@ -608,12 +609,69 @@ def combine(*args, **kwargs):
         domean = 'mean' in [stype, ztype, wtype]
 
         if domode or domedian or domean:
-            pass
+            # statsec options: "|input|output|overlap|"
+            section = None
+            oref = None
+            if statsec == 'input':
+                pass
+            elif statsec == 'output':
+                oref = out[0]
+            elif statsec == 'overlap':
+                section = '['
+                for ii in np.arange(out[0][0].data.ndim):
+                    kk = offarr[0,ii]
+                    ll = offarr[0,ii] + imin[0][0].data.shape[ii]
+                    for jj in np.arange(1, nimages):
+                        kk = max(kk, offarr[jj, ii])
+                        ll = min(ll, offarr[jj, ii] + imin[jj][0].data.shape[ii])
+                    section += '{0:d}:{1:d},'.format(kk, ll)
+                section = section[:-1]
+                section += ']'
+                oref = out[0]
+            else:
+                pass
+
+            for ii in np.arange(nimages):
+                if oref is None:
+                    imref = imin[ii]
+                else:
+                    imref = oref
+
+                # ic_stat(imin[ii], imref, section, offarr)
         """
-        domode = ((stype==S_MODE)||(ztype==S_MODE)||(wtype==S_MODE))
-            domedian = ((stype==S_MEDIAN)||(ztype==S_MEDIAN)||(wtype==S_MEDIAN))
-            domean = ((stype==S_MEAN)||(ztype==S_MEAN)||(wtype==S_MEAN))
-            if (domode || domedian || domean) {
+        do i = 1, nimages {
+        if (imref != out[1])
+            imref = in[i]
+        call ic_statr (in[i], imref, Memc[section], offsets,
+            i, nimages, domode, domedian, domean, mode, median, mean)
+        if (domode) {
+            Memr[modes+i-1] = mode
+            if (stype == S_MODE)
+            scales[i] = mode
+            if (ztype == S_MODE)
+            zeros[i] = mode
+            if (wtype == S_MODE)
+            wts[i] = mode
+        }
+        if (domedian) {
+            Memr[medians+i-1] = median
+            if (stype == S_MEDIAN)
+            scales[i] = median
+            if (ztype == S_MEDIAN)
+            zeros[i] = median
+            if (wtype == S_MEDIAN)
+            wts[i] = median
+        }
+        if (domean) {
+            Memr[means+i-1] = mean
+            if (stype == S_MEAN)
+            scales[i] = mean
+            if (ztype == S_MEAN)
+            zeros[i] = mean
+            if (wtype == S_MEAN)
+            wts[i] = mean
+        }
+        }
         """
 
         # XXX: this is where the icombine function ends
@@ -628,6 +686,10 @@ def combine(*args, **kwargs):
         logfd.close()
 
     return params
+
+
+def ic_stat(imin, imref, section, offarr):
+    pass
 
 
 def ic_gscale(param, dic, inp, exptime, values, nimages):
