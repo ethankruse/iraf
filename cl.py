@@ -53,13 +53,11 @@ class Parameter(object):
         self.name = name
 
 
-def loadparams(*args, **kwargs):
-    # name of the function that is loading parameters
-    myname = inspect.stack()[1][3]
-    # and its source file
-    myfile = inspect.stack()[1][1]
+def loadparams(func, *args, **kwargs):
+    # path to the function's module
+    myfile = eval(func.__module__).__file__
     # base of the parameter file name
-    parname = '{0}.par'.format(myname)
+    parname = '{0}.par'.format(func.__name__)
     # assume for now that the parameter file is in the same directory
     # as the function's source file
     myparamfile = os.path.join(os.path.dirname(myfile), parname)
