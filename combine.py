@@ -688,10 +688,25 @@ def combine(*args, **kwargs):
     return params
 
 
-def ic_stat(imin, imref, section, offarr):
-    pass
-    """
+def ic_stat(imin, imref, section, offarr, project):
+    # Determine the image section parameters.  This must be in terms of
+    # the data image pixel coordinates though the section may be specified
+    # in terms of the reference image coordinates.  Limit the number of
+    # pixels in each dimension to a maximum.
+    ndim = imin[0].data.ndim
+    if project:
+        ndim -= 1
 
+    """
+	# Determine the image section parameters.  This must be in terms of
+	# the data image pixel coordinates though the section may be specified
+	# in terms of the reference image coordinates.  Limit the number of
+	# pixels in each dimension to a maximum.
+	call amovki (1, Memi[v1], IM_MAXDIM)
+	call amovki (1, Memi[va], IM_MAXDIM)
+	call amovki (1, Memi[dv], IM_MAXDIM)
+	call amovi (IM_LEN(imref,1), Memi[vb], ndim)
+	call ic_section (section, Memi[va], Memi[vb], Memi[dv], ndim)
     """
 
 
