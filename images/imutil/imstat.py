@@ -1,4 +1,4 @@
-from . import loadparams, file_handler
+from iraf import loadparams, file_handler
 from astropy.io import fits
 import numpy as np
 import scipy.stats

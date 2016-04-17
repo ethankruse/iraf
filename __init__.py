@@ -1,7 +1,8 @@
 import os
-from cl import *
 
 uparam_dir = os.path.join(os.getcwd(), '/.uparam')
+
+from cl import *
 
 # this should be iraf.ccdred.instrument
 instrument = None

@@ -1,5 +1,5 @@
-from . import loadparams, file_handler
-from . import instrument, logfile, ssfile
+from iraf import loadparams, file_handler
+from iraf import instrument, logfile, ssfile
 import numpy as np
 from astropy.io import fits
 import os
