@@ -1,4 +1,4 @@
-from .imstat import loadparams, file_handler
+from . import loadparams, file_handler
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits

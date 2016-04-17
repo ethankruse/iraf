@@ -1,4 +1,4 @@
-from .imstat import loadparams, file_handler
+from . import loadparams, file_handler
 from . import instrument, logfile, ssfile
 import numpy as np
 from astropy.io import fits

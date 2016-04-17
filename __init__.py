@@ -1,4 +1,5 @@
 import os
+from cl import *
 
 uparam_dir = os.path.join(os.getcwd(), '/.uparam')
 
@@ -6,3 +7,5 @@ uparam_dir = os.path.join(os.getcwd(), '/.uparam')
 instrument = None
 logfile = os.path.join(os.getcwd(), 'logfile')
 ssfile = os.path.join(os.getcwd(), 'subsets')
+
+del os
