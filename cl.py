@@ -31,10 +31,6 @@ __all__ = ['Package', 'Parameter', 'loadparams', 'is_iterable', 'file_handler']
 # package and then use eval() to get them.
 
 
-def cl():
-    return
-
-
 class Package(dict):
     def __init__(self):
         dict.__init__(self)
@@ -47,23 +43,202 @@ class Package(dict):
 
 
 class Parameter(object):
-    def __init__(self, value, learn, name):
+    def __init__(self, value, learn, name, order, mode, default, dmin,
+                 dmax, prompt_str):
         self.value = value
         self.learn = learn
         self.name = name
+        self.order = order
+        self.mode = mode
+        self.default = default
+        self.min = dmin
+        self.max = dmax
+        self.prompt = prompt_str
+
+"""
+def startfunc(func, *args, **kwargs):
+    # kwargs take precedent over positional args
+    if name in kwargs:
+        value = kwargs[name]
+        prompt = False
+    elif ii < len(args):
+        value = args[ii]
+        prompt = False
+    else:
+        value = default
+
+    if len(prompt_str) == 0:
+        prompt_str = name
+
+    allowrange = ''
+    if len(dmax) and len(dmin):
+        allowrange = '<{0} to {1}>'.format(dmin, dmax)
+    elif len(dmin) and len(dmin.split('|')) > 1:
+        allowrange = '<{0}>'.format(dmin)
+
+    if len(default) > 0:
+        default_str = '[{0}]'.format(default)
+    else:
+        default_str = ''
+
+    while True:
+        # try to convert to the appropriate type
+        try:
+            if value is None:
+                pass
+            # boolean data types
+            elif dtype == 'b':
+                if value == 'y' or value == 'yes' or value is True:
+                    value = True
+                elif value == 'n' or value == 'no' or value is False:
+                    value = False
+                elif len(str(value)) == 0:
+                    value = None
+                else:
+                    print 'Boolean input must be [y/n]. Try again.'
+                    prompt = True
+            # int data types
+            elif dtype == 'i':
+                if len(str(value)) == 0 or str(value).upper() == 'INDEF':
+                    value = None
+                else:
+                    value = int(value)
+                # constrain by min/max values
+                if len(dmax) and len(dmin):
+                    if not (int(dmin) <= value <= int(dmax)):
+                        print 'Input outside the bounds. Try again.'
+                        prompt = True
+                # check for enumerated list of values
+                elif len(dmin):
+                    # more than one option available
+                    if len(dmin.split('|')) > 1:
+                        # make sure it's one of the options
+                        enums = [int(x) for x in dmin.split('|')]
+                        if value not in enums:
+                            print 'Input not one of the available options. Try again.'
+                            prompt = True
+            # float data types
+            elif dtype == 'r':
+                if len(str(value)) == 0 or str(value).upper() == 'INDEF':
+                    value = None
+                else:
+                    value = float(value)
+
+                if len(dmax) and len(dmin):
+                    if not (float(dmin) <= value <= float(dmax)):
+                        print 'Input outside the bounds. Try again.'
+                        prompt = True
+                # check for enumerated list of values
+                elif len(dmin):
+                    # more than one option available
+                    if len(dmin.split('|')) > 1:
+                        # make sure it's one of the options
+                        enums = [float(x) for x in dmin.split('|')]
+                        if value not in enums:
+                            print 'Input not one of the available options. Try again.'
+                            prompt = True
+            # string data types
+            elif dtype == 's':
+                value = str(value).strip()
+                # check for enumerated list of values
+                if len(dmin):
+                    # more than one option available
+                    if len(dmin.split('|')) > 1:
+                        # make sure it's one of the options
+                        enums = [x.strip().upper() for x in dmin.split('|')]
+                        if value.upper() not in enums:
+                            print 'Input not one of the available options. Try again.'
+                            prompt = True
+                # XXX: should we just return an empty string?
+                if len(value) == 0:
+                    value = None
+
+            # filename data types
+            elif dtype[0] == 'f':
+                # XXX: do we want to call file_handler on this one?
+                value = str(value)
+                expanded = os.path.expanduser(value)
+
+                # check for enumerated list of values
+                if len(dmin):
+                    # more than one option available
+                    if len(dmin.split('|')) > 1:
+                        # make sure it's one of the options
+                        enums = [os.path.expanduser(x.strip()) for x in
+                                 dmin.split('|')]
+                        if expanded not in enums:
+                            print 'Input not one of the available options. Try again.'
+                            prompt = True
+
+                # XXX: documentation says that min/max field is valid
+                #  for files?
+
+                readacc = False
+                writeacc = False
+                nonexistent = False
+                exists = False
+                # should we check for these categories
+                if len(dtype) > 1:
+                    if 'r' in dtype[1:]:
+                        readacc = True
+                    if 'w' in dtype[1:]:
+                        writeacc = True
+                    if 'n' in dtype[1:]:
+                        nonexistent = True
+                    if 'e' in dtype[1:]:
+                        exists = True
+
+                if exists and not os.path.exists(expanded):
+                    print 'Input file must exist. Try again.'
+                    prompt = True
+                if nonexistent and os.path.exists(expanded):
+                    print 'Input file can not already exist. Try again.'
+                    prompt = True
+                if readacc and not os.access(expanded, os.R_OK):
+                    print 'Input file must have read access. Try again.'
+                    prompt = True
+                if writeacc and not os.access(expanded, os.W_OK):
+                    print 'Input file must have write access. Try again.'
+                    prompt = True
+            # some other kind of parameter type?
+            else:
+                print 'unrecognized parameter type: {0}'.format(dtype)
+                value = None
+        except ValueError:
+            print 'Could not interpret input. Try again.'
+            prompt = True
+
+        if not prompt:
+            break
+
+        value = raw_input('{0} {1}{2}: '.format(prompt_str, allowrange,
+                                                default_str))
+
+        if len(value.strip()) == 0:
+            value = default
+        prompt = False
+"""
 
 
-def loadparams(func, *args, **kwargs):
-    # path to the function's module
-    myfile = eval(func.__module__).__file__
+def loadparams(func):
+    # path to the function's implementation
+    myfile = inspect.getabsfile(func)
+    print myfile
     # base of the parameter file name
     parname = '{0}.par'.format(func.__name__)
+    print parname
+    userparname = func.__module__
+    userparname = '.'.join(userparname.split('.')[1:-1])
+    userparname += '.' + func.__name__ + '.par'
+    print userparname
     # assume for now that the parameter file is in the same directory
     # as the function's source file
+    uparamfile = os.path.join(uparam_dir, userparname)
     myparamfile = os.path.join(os.path.dirname(myfile), parname)
+    print myparamfile
     # if a user parameter file exists, use that instead
-    if os.path.exists(os.path.join(uparam_dir, parname)):
-        myparamfile = os.path.join(uparam_dir, parname)
+    if os.path.exists(uparamfile):
+        myparamfile = uparamfile
 
     # read in the default parameters for the function
     defaultparams = []
@@ -75,11 +250,10 @@ def loadparams(func, *args, **kwargs):
                         row[0].strip()[0] == '#'):
                 continue
             # make sure we have a complete row
-            if len(row) != 7:
-                print row
             assert len(row) == 7
             defaultparams.append([x.strip() for x in row])
 
+    # XXX: this needs to change now
     automode = 'h'
     for param in defaultparams:
         if param[0] == 'mode':
@@ -96,7 +270,7 @@ def loadparams(func, *args, **kwargs):
             else:
                 automode = 'h'
 
-    params = {}
+    newpack = Package()
     for ii, param in enumerate(defaultparams):
         name, dtype, mode, default, dmin, dmax, prompt_str = param
 
@@ -115,174 +289,10 @@ def loadparams(func, *args, **kwargs):
         if mode in ['l', 'ql', 'hl', 'lh', 'lq']:
             learn = True
 
-        prompt = False
-        if mode in ['q', 'ql', 'lq']:
-            prompt = True
+        newpack[name] = Parameter(default, learn, name, ii, mode,
+                                  default, dmin, dmax, prompt_str)
 
-        # kwargs take precedent over positional args
-        if name in kwargs:
-            value = kwargs[name]
-            prompt = False
-        elif ii < len(args):
-            value = args[ii]
-            prompt = False
-        else:
-            value = default
-
-        if len(prompt_str) == 0:
-            prompt_str = name
-
-        allowrange = ''
-        if len(dmax) and len(dmin):
-            allowrange = '<{0} to {1}>'.format(dmin, dmax)
-        elif len(dmin) and len(dmin.split('|')) > 1:
-            allowrange = '<{0}>'.format(dmin)
-
-        if len(default) > 0:
-            default_str = '[{0}]'.format(default)
-        else:
-            default_str = ''
-
-        while True:
-            # try to convert to the appropriate type
-            try:
-                if value is None:
-                    pass
-                # boolean data types
-                elif dtype == 'b':
-                    if value == 'y' or value == 'yes' or value is True:
-                        value = True
-                    elif value == 'n' or value == 'no' or value is False:
-                        value = False
-                    elif len(str(value)) == 0:
-                        value = None
-                    else:
-                        print 'Boolean input must be [y/n]. Try again.'
-                        prompt = True
-                # int data types
-                elif dtype == 'i':
-                    if len(str(value)) == 0 or str(value).upper() == 'INDEF':
-                        value = None
-                    else:
-                        value = int(value)
-                    # constrain by min/max values
-                    if len(dmax) and len(dmin):
-                        if not (int(dmin) <= value <= int(dmax)):
-                            print 'Input outside the bounds. Try again.'
-                            prompt = True
-                    # check for enumerated list of values
-                    elif len(dmin):
-                        # more than one option available
-                        if len(dmin.split('|')) > 1:
-                            # make sure it's one of the options
-                            enums = [int(x) for x in dmin.split('|')]
-                            if value not in enums:
-                                print 'Input not one of the available options. Try again.'
-                                prompt = True
-                # float data types
-                elif dtype == 'r':
-                    if len(str(value)) == 0 or str(value).upper() == 'INDEF':
-                        value = None
-                    else:
-                        value = float(value)
-
-                    if len(dmax) and len(dmin):
-                        if not (float(dmin) <= value <= float(dmax)):
-                            print 'Input outside the bounds. Try again.'
-                            prompt = True
-                    # check for enumerated list of values
-                    elif len(dmin):
-                        # more than one option available
-                        if len(dmin.split('|')) > 1:
-                            # make sure it's one of the options
-                            enums = [float(x) for x in dmin.split('|')]
-                            if value not in enums:
-                                print 'Input not one of the available options. Try again.'
-                                prompt = True
-                # string data types
-                elif dtype == 's':
-                    value = str(value).strip()
-                    # check for enumerated list of values
-                    if len(dmin):
-                        # more than one option available
-                        if len(dmin.split('|')) > 1:
-                            # make sure it's one of the options
-                            enums = [x.strip().upper() for x in dmin.split('|')]
-                            if value.upper() not in enums:
-                                print 'Input not one of the available options. Try again.'
-                                prompt = True
-                    # XXX: should we just return an empty string?
-                    if len(value) == 0:
-                        value = None
-
-                # filename data types
-                elif dtype[0] == 'f':
-                    # XXX: do we want to call file_handler on this one?
-                    value = str(value)
-                    expanded = os.path.expanduser(value)
-
-                    # check for enumerated list of values
-                    if len(dmin):
-                        # more than one option available
-                        if len(dmin.split('|')) > 1:
-                            # make sure it's one of the options
-                            enums = [os.path.expanduser(x.strip()) for x in
-                                     dmin.split('|')]
-                            if expanded not in enums:
-                                print 'Input not one of the available options. Try again.'
-                                prompt = True
-
-                    # XXX: documentation says that min/max field is valid
-                    #  for files?
-
-                    readacc = False
-                    writeacc = False
-                    nonexistent = False
-                    exists = False
-                    # should we check for these categories
-                    if len(dtype) > 1:
-                        if 'r' in dtype[1:]:
-                            readacc = True
-                        if 'w' in dtype[1:]:
-                            writeacc = True
-                        if 'n' in dtype[1:]:
-                            nonexistent = True
-                        if 'e' in dtype[1:]:
-                            exists = True
-
-                    if exists and not os.path.exists(expanded):
-                        print 'Input file must exist. Try again.'
-                        prompt = True
-                    if nonexistent and os.path.exists(expanded):
-                        print 'Input file can not already exist. Try again.'
-                        prompt = True
-                    if readacc and not os.access(expanded, os.R_OK):
-                        print 'Input file must have read access. Try again.'
-                        prompt = True
-                    if writeacc and not os.access(expanded, os.W_OK):
-                        print 'Input file must have write access. Try again.'
-                        prompt = True
-                # some other kind of parameter type?
-                else:
-                    print 'unrecognized parameter type: {0}'.format(dtype)
-                    value = None
-            except ValueError:
-                print 'Could not interpret input. Try again.'
-                prompt = True
-
-            if not prompt:
-                break
-
-            value = raw_input('{0} {1}{2}: '.format(prompt_str, allowrange,
-                                                    default_str))
-
-            if len(value.strip()) == 0:
-                value = default
-            prompt = False
-
-        params[name] = Parameter(value, learn, name)
-
-    return params
+    return newpack
 
 
 def is_iterable(obj):
@@ -365,3 +375,9 @@ def file_handler(filelist):
                 outlist.append(jfile)
 
     return outlist
+
+
+def cl():
+    return
+
+cl = loadparams(cl)
