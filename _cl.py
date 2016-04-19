@@ -6,7 +6,7 @@ from glob import glob
 import sys
 
 __all__ = ['Package', 'Parameter', 'loadparams', 'is_iterable', 'file_handler',
-           'cl']
+           'cl', 'clget']
 
 # XXX: handle package level CL handling by creating some kind of CL object.
 # it'll look like CL (param_list; sub_tasks; parent?). Then loading a package
@@ -36,7 +36,7 @@ __all__ = ['Package', 'Parameter', 'loadparams', 'is_iterable', 'file_handler',
 class Package(dict):
     def __init__(self, name):
         dict.__init__(self)
-        self['name'] = name
+        self.__name__ = name
 
     def __dir__(self):
         return self.keys()
@@ -224,6 +224,75 @@ def startfunc(func, *args, **kwargs):
 """
 
 
+def startfunc(func):
+    # XXX: need to deal with 'menu' mode somehow.
+
+    pass
+
+
+
+def clget(func, param):
+    modname = func.__module__
+    # remove the iraf. and the name of the .py file the code is in
+    modname = '.'.join(modname.split('.')[1:-1])
+    if len(modname) > 0:
+        modname += '.'
+    modname += func.__name__
+
+    tree = modname.split('.')
+    pkgs = [cl]
+    leaf = cl
+    try:
+        for branch in tree:
+            pkgs.append(leaf[branch])
+            leaf = leaf[branch]
+    except KeyError:
+        print 'Function/package {0} not found.'.format(modname)
+        sys.exit(1)
+
+    pkgs.reverse()
+
+    automode = None
+    autofound = False
+    obj = None
+    found = False
+    for pkg in pkgs:
+        if param in pkg.keys() and not found:
+            obj = pkg[param]
+            found = True
+        if 'mode' in pkg.keys() and not autofound:
+            if 'a' not in pkg['mode'].value:
+                automode = pkg['mode'].value
+                autofound = True
+        if found and ('a' not in obj.mode or autofound):
+            break
+
+    if not found:
+        print 'Could not find parameter {0} in {1}'.format(param, modname)
+        sys.exit(1)
+
+    if automode is None:
+        automode = 'h'
+
+    mode = ''
+
+    for char in obj.mode:
+        if char == 'a':
+            mode += automode
+        else:
+            mode += char
+
+
+
+        #if mode in ['h', 'l', 'q', 'ql', 'hl', 'lh', 'lq', 'a', 'al', 'la']:
+        #    automode = mode
+        #else:
+        #    automode = 'h'
+        # ['h', 'l', 'q', 'ql', 'hl', 'lh', 'lq']
+
+    return obj
+
+
 def loadparams(func):
     # path to the function's implementation
     myfile = inspect.getabsfile(func)
@@ -257,22 +326,22 @@ def loadparams(func):
                 assert len(row) == 7
                 defaultparams.append([x.strip() for x in row])
 
-    # XXX: this needs to change now
-    automode = 'h'
+    # if we're setting the mode, get it in the right format
     for param in defaultparams:
         if param[0] == 'mode':
             mode = param[3]
             # get modes into the single letter categories
-            if mode == 'hidden':
+            if mode == 'auto':
+                mode = 'a'
+            elif mode == 'hidden':
                 mode = 'h'
             elif mode == 'learn':
                 mode = 'l'
             elif mode == 'query':
                 mode = 'q'
-            if mode in ['h', 'l', 'q', 'ql', 'hl', 'lh', 'lq']:
-                automode = mode
-            else:
-                automode = 'h'
+            elif mode == 'menu':
+                mode = 'm'
+            param[3] = mode
 
     newpack = False
     # if cl has already been initialized
@@ -311,9 +380,11 @@ def loadparams(func):
             mode = 'l'
         elif mode == 'query':
             mode = 'q'
+        elif mode == 'menu':
+            mode = 'm'
 
         learn = False
-        if mode in ['l', 'ql', 'hl', 'lh', 'lq']:
+        if 'l' in mode:
             learn = True
 
         curpack[name] = Parameter(default, learn, name, ii, mode,
