@@ -224,9 +224,40 @@ def startfunc(func, *args, **kwargs):
 """
 
 
-def startfunc(func):
+def startfunc(func, *args, **kwargs):
+    modname = func.__module__
+    # remove the iraf. and the name of the .py file the code is in
+    modname = '.'.join(modname.split('.')[1:-1])
+    if len(modname) > 0:
+        modname += '.'
+    modname += func.__name__
+
+    tree = modname.split('.')
+    pkgs = [cl]
+    leaf = cl
+    try:
+        for branch in tree:
+            pkgs.append(leaf[branch])
+            leaf = leaf[branch]
+    except KeyError:
+        print 'Function/package {0} not found.'.format(modname)
+        sys.exit(1)
+
+    pkgs.reverse()
+
+    # need to figure out 'automod' value and set it maybe as a hidden _automod
+    # parameter?
+
+    # then go through every parameter, set them based on args/kwargs, do prompts,
+    # etc. this modifies the 'values' for all the parameters in the function
+    # so that they should be good to go. then you can later call clget()
+    # on them all.
+    # finally write a separate endfunc() to reset to default values, learn the
+    # correct parameters, etc.
+    paramlist = []
     # XXX: need to deal with 'menu' mode somehow.
 
+    # validate all parameters for the function here.
     pass
 
 
@@ -260,7 +291,8 @@ def clget(func, param):
         if param in pkg.keys() and not found:
             obj = pkg[param]
             found = True
-        if 'mode' in pkg.keys() and not autofound:
+        # don't use automod values in a package below the actual parameter
+        if found and 'mode' in pkg.keys() and not autofound:
             if 'a' not in pkg['mode'].value:
                 automode = pkg['mode'].value
                 autofound = True
