@@ -3,8 +3,10 @@ import os
 import csv
 from . import uparam_dir
 from glob import glob
+import sys
 
-__all__ = ['Package', 'Parameter', 'loadparams', 'is_iterable', 'file_handler']
+__all__ = ['Package', 'Parameter', 'loadparams', 'is_iterable', 'file_handler',
+           'cl']
 
 # XXX: handle package level CL handling by creating some kind of CL object.
 # it'll look like CL (param_list; sub_tasks; parent?). Then loading a package
@@ -32,8 +34,9 @@ __all__ = ['Package', 'Parameter', 'loadparams', 'is_iterable', 'file_handler']
 
 
 class Package(dict):
-    def __init__(self):
+    def __init__(self, name):
         dict.__init__(self)
+        self['name'] = name
 
     def __dir__(self):
         return self.keys()
@@ -54,6 +57,7 @@ class Parameter(object):
         self.min = dmin
         self.max = dmax
         self.prompt = prompt_str
+    # XXX: implement a pretty print function
 
 """
 def startfunc(func, *args, **kwargs):
@@ -223,35 +227,35 @@ def startfunc(func, *args, **kwargs):
 def loadparams(func):
     # path to the function's implementation
     myfile = inspect.getabsfile(func)
-    print myfile
     # base of the parameter file name
     parname = '{0}.par'.format(func.__name__)
-    print parname
     userparname = func.__module__
     userparname = '.'.join(userparname.split('.')[1:-1])
-    userparname += '.' + func.__name__ + '.par'
-    print userparname
+    if len(userparname) > 0:
+        userparname += '.'
+    funcpath = userparname + func.__name__
+    userparname += func.__name__ + '.par'
     # assume for now that the parameter file is in the same directory
     # as the function's source file
     uparamfile = os.path.join(uparam_dir, userparname)
     myparamfile = os.path.join(os.path.dirname(myfile), parname)
-    print myparamfile
     # if a user parameter file exists, use that instead
     if os.path.exists(uparamfile):
         myparamfile = uparamfile
 
     # read in the default parameters for the function
     defaultparams = []
-    with open(myparamfile, 'r') as ff:
-        reader = csv.reader(ff)
-        for row in reader:
-            # skip over blank lines and comment lines
-            if (len(row) == 0 or len(row[0].strip()) == 0 or
-                        row[0].strip()[0] == '#'):
-                continue
-            # make sure we have a complete row
-            assert len(row) == 7
-            defaultparams.append([x.strip() for x in row])
+    if os.path.exists(myparamfile):
+        with open(myparamfile, 'r') as ff:
+            reader = csv.reader(ff)
+            for row in reader:
+                # skip over blank lines and comment lines
+                if (len(row) == 0 or len(row[0].strip()) == 0 or
+                            row[0].strip()[0] == '#'):
+                    continue
+                # make sure we have a complete row
+                assert len(row) == 7
+                defaultparams.append([x.strip() for x in row])
 
     # XXX: this needs to change now
     automode = 'h'
@@ -270,15 +274,38 @@ def loadparams(func):
             else:
                 automode = 'h'
 
-    newpack = Package()
+    newpack = False
+    # if cl has already been initialized
+    if isinstance(cl, Package):
+        try:
+            curpack = cl
+            for ifunc in funcpath.split('.'):
+                curpack = curpack[ifunc]
+        except KeyError:
+            newpack = True
+    else:
+        newpack = True
+
+    if newpack:
+        curpack = Package(func.__name__)
+        addloc = cl
+        try:
+            for ifunc in funcpath.split('.')[:-1]:
+                addloc = addloc[ifunc]
+            addloc[func.__name__] = curpack
+        except KeyError:
+            print 'Trying to import function or package out of order.'
+            sys.exit(1)
+        except TypeError:
+            pass
+
     for ii, param in enumerate(defaultparams):
         name, dtype, mode, default, dmin, dmax, prompt_str = param
 
-        # first switch auto into the appropriate bin
-        if mode == 'auto' or mode == 'a':
-            mode = automode
         # get modes into the single letter categories
-        if mode == 'hidden':
+        if mode == 'auto':
+            mode = 'a'
+        elif mode == 'hidden':
             mode = 'h'
         elif mode == 'learn':
             mode = 'l'
@@ -289,10 +316,10 @@ def loadparams(func):
         if mode in ['l', 'ql', 'hl', 'lh', 'lq']:
             learn = True
 
-        newpack[name] = Parameter(default, learn, name, ii, mode,
+        curpack[name] = Parameter(default, learn, name, ii, mode,
                                   default, dmin, dmax, prompt_str)
 
-    return newpack
+    return curpack
 
 
 def is_iterable(obj):

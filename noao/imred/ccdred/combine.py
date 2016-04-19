@@ -7,6 +7,8 @@ import csv
 from astropy.wcs import WCS
 import sys
 
+__all__ = ['combine']
+
 
 def make_fits(path):
     splits = path.split('.')

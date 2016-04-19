@@ -3,6 +3,7 @@ from astropy.io import fits
 import numpy as np
 import scipy.stats
 
+__all__ = ['imstatistics']
 
 def imstatistics(*args, **kwargs):
     """

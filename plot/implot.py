@@ -6,6 +6,7 @@ from matplotlib.widgets import Button, CheckButtons, Slider
 import copy
 import functools
 
+__all__ = ['implot']
 
 im_set_init = {'fig': None, 'ax': None, 'sax': None, 'lineplot': True,
           'line': None, 'im': None, 'ndim': None, 'navg': None, 'ncols': None,
