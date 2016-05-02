@@ -1,3 +1,4 @@
+from __future__ import print_function
 import inspect
 import os
 import csv
@@ -6,37 +7,15 @@ from glob import glob
 import sys
 
 __all__ = ['Package', 'Parameter', 'loadparams', 'is_iterable', 'file_handler',
-           'cl', 'clget']
-
-# XXX: handle package level CL handling by creating some kind of CL object.
-# it'll look like CL (param_list; sub_tasks; parent?). Then loading a package
-# will have the same structure with its own sub_tasks. So just work your way
-# up the chain for each task. Somehow need to work out how the parent thing
-# will work. Just pass in the parent object to init() when creating a new
-# object? That should work.
-# That could even let me create my own __print__ so it'll print out the CL
-# parameters and loaded sub-tasks for a package.
-# need to figure out how to be able to index though. e.g.
-# iraf.cl.noao.imred.ccdred should print out that CL object, but you need
-# to go through the list somehow instead and have tab complete do things right.
-# which means adding a __dir__ function? see:
-# http://stackoverflow.com/questions/13870241/ipython-tab-completion-for-custom-dict-class
-# then I can just wrap everything in my version of the IRAF
-# clgstr clgwrd clgeti clgetr clgetb etc
-
-# __init__ makes the original CL Package. Each package needs to have a path
-# to it. Then when you import a new package you can figure out where to
-# add it along the tree based on the paths.
-# also assume that the .par files are in the package's directory.
-
-# need a file with the list of functions that should be contained within a
-# package and then use eval() to get them.
+           'cl', 'clget', 'startfunc']
 
 
 class Package(dict):
     def __init__(self, name):
         dict.__init__(self)
         self.__name__ = name
+        self.__parent__ = None
+        self.__nparam__ = 0
 
     def __dir__(self):
         return self.keys()
@@ -44,10 +23,12 @@ class Package(dict):
     def __getattr__(self, attr):
         return self[attr]
 
+    # XXX: implement a print tree type function
+
 
 class Parameter(object):
     def __init__(self, value, learn, name, order, mode, default, dmin,
-                 dmax, prompt_str):
+                 dmax, prompt_str, dtype):
         self.value = value
         self.learn = learn
         self.name = name
@@ -57,171 +38,9 @@ class Parameter(object):
         self.min = dmin
         self.max = dmax
         self.prompt = prompt_str
+        self.dtype = dtype
+        self.changed = False
     # XXX: implement a pretty print function
-
-"""
-def startfunc(func, *args, **kwargs):
-    # kwargs take precedent over positional args
-    if name in kwargs:
-        value = kwargs[name]
-        prompt = False
-    elif ii < len(args):
-        value = args[ii]
-        prompt = False
-    else:
-        value = default
-
-    if len(prompt_str) == 0:
-        prompt_str = name
-
-    allowrange = ''
-    if len(dmax) and len(dmin):
-        allowrange = '<{0} to {1}>'.format(dmin, dmax)
-    elif len(dmin) and len(dmin.split('|')) > 1:
-        allowrange = '<{0}>'.format(dmin)
-
-    if len(default) > 0:
-        default_str = '[{0}]'.format(default)
-    else:
-        default_str = ''
-
-    while True:
-        # try to convert to the appropriate type
-        try:
-            if value is None:
-                pass
-            # boolean data types
-            elif dtype == 'b':
-                if value == 'y' or value == 'yes' or value is True:
-                    value = True
-                elif value == 'n' or value == 'no' or value is False:
-                    value = False
-                elif len(str(value)) == 0:
-                    value = None
-                else:
-                    print 'Boolean input must be [y/n]. Try again.'
-                    prompt = True
-            # int data types
-            elif dtype == 'i':
-                if len(str(value)) == 0 or str(value).upper() == 'INDEF':
-                    value = None
-                else:
-                    value = int(value)
-                # constrain by min/max values
-                if len(dmax) and len(dmin):
-                    if not (int(dmin) <= value <= int(dmax)):
-                        print 'Input outside the bounds. Try again.'
-                        prompt = True
-                # check for enumerated list of values
-                elif len(dmin):
-                    # more than one option available
-                    if len(dmin.split('|')) > 1:
-                        # make sure it's one of the options
-                        enums = [int(x) for x in dmin.split('|')]
-                        if value not in enums:
-                            print 'Input not one of the available options. Try again.'
-                            prompt = True
-            # float data types
-            elif dtype == 'r':
-                if len(str(value)) == 0 or str(value).upper() == 'INDEF':
-                    value = None
-                else:
-                    value = float(value)
-
-                if len(dmax) and len(dmin):
-                    if not (float(dmin) <= value <= float(dmax)):
-                        print 'Input outside the bounds. Try again.'
-                        prompt = True
-                # check for enumerated list of values
-                elif len(dmin):
-                    # more than one option available
-                    if len(dmin.split('|')) > 1:
-                        # make sure it's one of the options
-                        enums = [float(x) for x in dmin.split('|')]
-                        if value not in enums:
-                            print 'Input not one of the available options. Try again.'
-                            prompt = True
-            # string data types
-            elif dtype == 's':
-                value = str(value).strip()
-                # check for enumerated list of values
-                if len(dmin):
-                    # more than one option available
-                    if len(dmin.split('|')) > 1:
-                        # make sure it's one of the options
-                        enums = [x.strip().upper() for x in dmin.split('|')]
-                        if value.upper() not in enums:
-                            print 'Input not one of the available options. Try again.'
-                            prompt = True
-                # XXX: should we just return an empty string?
-                if len(value) == 0:
-                    value = None
-
-            # filename data types
-            elif dtype[0] == 'f':
-                # XXX: do we want to call file_handler on this one?
-                value = str(value)
-                expanded = os.path.expanduser(value)
-
-                # check for enumerated list of values
-                if len(dmin):
-                    # more than one option available
-                    if len(dmin.split('|')) > 1:
-                        # make sure it's one of the options
-                        enums = [os.path.expanduser(x.strip()) for x in
-                                 dmin.split('|')]
-                        if expanded not in enums:
-                            print 'Input not one of the available options. Try again.'
-                            prompt = True
-
-                # XXX: documentation says that min/max field is valid
-                #  for files?
-
-                readacc = False
-                writeacc = False
-                nonexistent = False
-                exists = False
-                # should we check for these categories
-                if len(dtype) > 1:
-                    if 'r' in dtype[1:]:
-                        readacc = True
-                    if 'w' in dtype[1:]:
-                        writeacc = True
-                    if 'n' in dtype[1:]:
-                        nonexistent = True
-                    if 'e' in dtype[1:]:
-                        exists = True
-
-                if exists and not os.path.exists(expanded):
-                    print 'Input file must exist. Try again.'
-                    prompt = True
-                if nonexistent and os.path.exists(expanded):
-                    print 'Input file can not already exist. Try again.'
-                    prompt = True
-                if readacc and not os.access(expanded, os.R_OK):
-                    print 'Input file must have read access. Try again.'
-                    prompt = True
-                if writeacc and not os.access(expanded, os.W_OK):
-                    print 'Input file must have write access. Try again.'
-                    prompt = True
-            # some other kind of parameter type?
-            else:
-                print 'unrecognized parameter type: {0}'.format(dtype)
-                value = None
-        except ValueError:
-            print 'Could not interpret input. Try again.'
-            prompt = True
-
-        if not prompt:
-            break
-
-        value = raw_input('{0} {1}{2}: '.format(prompt_str, allowrange,
-                                                default_str))
-
-        if len(value.strip()) == 0:
-            value = default
-        prompt = False
-"""
 
 
 def startfunc(func, *args, **kwargs):
@@ -232,34 +51,215 @@ def startfunc(func, *args, **kwargs):
         modname += '.'
     modname += func.__name__
 
+    curpack = cl
     tree = modname.split('.')
-    pkgs = [cl]
-    leaf = cl
     try:
         for branch in tree:
-            pkgs.append(leaf[branch])
-            leaf = leaf[branch]
+            curpack = curpack[branch]
     except KeyError:
-        print 'Function/package {0} not found.'.format(modname)
+        print('Function/package {0} not found.'.format(modname))
         sys.exit(1)
 
-    pkgs.reverse()
-
-    # need to figure out 'automod' value and set it maybe as a hidden _automod
-    # parameter?
-
-    # then go through every parameter, set them based on args/kwargs, do prompts,
-    # etc. this modifies the 'values' for all the parameters in the function
-    # so that they should be good to go. then you can later call clget()
-    # on them all.
-    # finally write a separate endfunc() to reset to default values, learn the
-    # correct parameters, etc.
-    paramlist = []
+    # get the appropriate automode parameter for this function
+    automode = clget(func, 'mode').value
     # XXX: need to deal with 'menu' mode somehow.
 
-    # validate all parameters for the function here.
-    pass
+    # set up the parameter list
+    plist = [None for _ in range(curpack.__nparam__)]
 
+    # fill in the empty list with the parameters in order
+    keylist = curpack.keys()
+    for key in keylist:
+        if isinstance(key, Parameter):
+            plist[curpack[key].order] = curpack[key]
+
+    for ii, iparam in enumerate(plist):
+        name = iparam.name
+        dmin = iparam.min
+        dmax = iparam.max
+        dtype = iparam.dtype
+        value = iparam.value
+        default = iparam.value
+        mode = ''
+        for char in iparam.mode:
+            if char == 'a':
+                mode += automode
+            else:
+                mode += char
+
+        prompt = False
+        if 'q' in mode:
+            prompt = True
+
+        # kwargs take precedent over positional args
+        if name in kwargs:
+            value = kwargs[name]
+            prompt = False
+        elif ii < len(args):
+            value = args[ii]
+            prompt = False
+
+        if len(prompt_str) == 0:
+            prompt_str = name
+
+        allowrange = ''
+        if len(dmax) and len(dmin):
+            allowrange = '<{0} to {1}>'.format(dmin, dmax)
+        elif len(dmin) and len(dmin.split('|')) > 1:
+            allowrange = '<{0}>'.format(dmin)
+
+        if len(default) > 0:
+            default_str = '[{0}]'.format(default)
+        else:
+            default_str = ''
+
+        while True:
+            # try to convert to the appropriate type
+            try:
+                if value is None:
+                    pass
+                # boolean data types
+                elif dtype == 'b':
+                    if value == 'y' or value == 'yes' or value is True:
+                        value = True
+                    elif value == 'n' or value == 'no' or value is False:
+                        value = False
+                    elif len(str(value)) == 0:
+                        value = None
+                    else:
+                        print('Boolean input must be [y/n]. Try again.')
+                        prompt = True
+                # int data types
+                elif dtype == 'i':
+                    if len(str(value)) == 0 or str(value).upper() == 'INDEF':
+                        value = None
+                    else:
+                        value = int(value)
+                    # constrain by min/max values
+                    if len(dmax) and len(dmin):
+                        if not (int(dmin) <= value <= int(dmax)):
+                            print('Input outside the bounds. Try again.')
+                            prompt = True
+                    # check for enumerated list of values
+                    elif len(dmin):
+                        # more than one option available
+                        if len(dmin.split('|')) > 1:
+                            # make sure it's one of the options
+                            enums = [int(x) for x in dmin.split('|')]
+                            if value not in enums:
+                                print(
+                                    'Input not one of the available options. Try again.')
+                                prompt = True
+                # float data types
+                elif dtype == 'r':
+                    if len(str(value)) == 0 or str(value).upper() == 'INDEF':
+                        value = None
+                    else:
+                        value = float(value)
+
+                    if len(dmax) and len(dmin):
+                        if not (float(dmin) <= value <= float(dmax)):
+                            print('Input outside the bounds. Try again.')
+                            prompt = True
+                    # check for enumerated list of values
+                    elif len(dmin):
+                        # more than one option available
+                        if len(dmin.split('|')) > 1:
+                            # make sure it's one of the options
+                            enums = [float(x) for x in dmin.split('|')]
+                            if value not in enums:
+                                print(
+                                    'Input not one of the available options. Try again.')
+                                prompt = True
+                # string data types
+                elif dtype == 's':
+                    value = str(value).strip()
+                    # check for enumerated list of values
+                    if len(dmin):
+                        # more than one option available
+                        if len(dmin.split('|')) > 1:
+                            # make sure it's one of the options
+                            enums = [x.strip().upper() for x in dmin.split('|')]
+                            if value.upper() not in enums:
+                                print(
+                                    'Input not one of the available options. Try again.')
+                                prompt = True
+                    # XXX: should we just return an empty string?
+                    if len(value) == 0:
+                        value = None
+
+                # filename data types
+                elif dtype[0] == 'f':
+                    # XXX: do we want to call file_handler on this one?
+                    value = str(value)
+                    expanded = os.path.expanduser(value)
+
+                    # check for enumerated list of values
+                    if len(dmin):
+                        # more than one option available
+                        if len(dmin.split('|')) > 1:
+                            # make sure it's one of the options
+                            enums = [os.path.expanduser(x.strip()) for x in
+                                     dmin.split('|')]
+                            if expanded not in enums:
+                                print(
+                                    'Input not one of the available options. Try again.')
+                                prompt = True
+
+                    # XXX: documentation says that min/max field is valid
+                    #  for files?
+
+                    readacc = False
+                    writeacc = False
+                    nonexistent = False
+                    exists = False
+                    # should we check for these categories
+                    if len(dtype) > 1:
+                        if 'r' in dtype[1:]:
+                            readacc = True
+                        if 'w' in dtype[1:]:
+                            writeacc = True
+                        if 'n' in dtype[1:]:
+                            nonexistent = True
+                        if 'e' in dtype[1:]:
+                            exists = True
+
+                    if exists and not os.path.exists(expanded):
+                        print('Input file must exist. Try again.')
+                        prompt = True
+                    if nonexistent and os.path.exists(expanded):
+                        print('Input file can not already exist. Try again.')
+                        prompt = True
+                    if readacc and not os.access(expanded, os.R_OK):
+                        print('Input file must have read access. Try again.')
+                        prompt = True
+                    if writeacc and not os.access(expanded, os.W_OK):
+                        print('Input file must have write access. Try again.')
+                        prompt = True
+                # some other kind of parameter type?
+                else:
+                    print('unrecognized parameter type: {0}'.format(dtype))
+                    value = None
+            except ValueError:
+                print('Could not interpret input. Try again.')
+                prompt = True
+
+            if not prompt:
+                break
+
+            value = raw_input('{0} {1}{2}: '.format(prompt_str, allowrange,
+                                                default_str))
+
+            if len(value.strip()) == 0:
+                value = default
+            prompt = False
+
+        iparam.value = value
+
+    return
+
+# XXX: write a separate endfunc() to reset to default values, learn the
+# correct parameters, etc.
 
 
 def clget(func, param):
@@ -271,56 +271,24 @@ def clget(func, param):
     modname += func.__name__
 
     tree = modname.split('.')
-    pkgs = [cl]
-    leaf = cl
+    pkg = cl
     try:
         for branch in tree:
-            pkgs.append(leaf[branch])
-            leaf = leaf[branch]
+            pkg = pkg[branch]
     except KeyError:
-        print 'Function/package {0} not found.'.format(modname)
+        print('Function/package {0} not found.'.format(modname))
         sys.exit(1)
 
-    pkgs.reverse()
-
-    automode = None
-    autofound = False
     obj = None
-    found = False
-    for pkg in pkgs:
-        if param in pkg.keys() and not found:
+    while pkg is not None:
+        if param in pkg.keys() and isinstance(pkg[param], Parameter):
             obj = pkg[param]
-            found = True
-        # don't use automod values in a package below the actual parameter
-        if found and 'mode' in pkg.keys() and not autofound:
-            if 'a' not in pkg['mode'].value:
-                automode = pkg['mode'].value
-                autofound = True
-        if found and ('a' not in obj.mode or autofound):
             break
+        pkg = pkg.__parent__
 
-    if not found:
-        print 'Could not find parameter {0} in {1}'.format(param, modname)
+    if obj is None:
+        print('Could not find parameter {0} in {1}'.format(param, modname))
         sys.exit(1)
-
-    if automode is None:
-        automode = 'h'
-
-    mode = ''
-
-    for char in obj.mode:
-        if char == 'a':
-            mode += automode
-        else:
-            mode += char
-
-
-
-        #if mode in ['h', 'l', 'q', 'ql', 'hl', 'lh', 'lq', 'a', 'al', 'la']:
-        #    automode = mode
-        #else:
-        #    automode = 'h'
-        # ['h', 'l', 'q', 'ql', 'hl', 'lh', 'lq']
 
     return obj
 
@@ -394,8 +362,9 @@ def loadparams(func):
             for ifunc in funcpath.split('.')[:-1]:
                 addloc = addloc[ifunc]
             addloc[func.__name__] = curpack
+            curpack.__parent__ = addloc
         except KeyError:
-            print 'Trying to import function or package out of order.'
+            print('Trying to import function or package out of order.')
             sys.exit(1)
         except TypeError:
             pass
@@ -420,7 +389,9 @@ def loadparams(func):
             learn = True
 
         curpack[name] = Parameter(default, learn, name, ii, mode,
-                                  default, dmin, dmax, prompt_str)
+                                  default, dmin, dmax, prompt_str, dtype)
+
+        curpack.__nparam__ += 1
 
     return curpack
 
@@ -509,5 +480,6 @@ def file_handler(filelist):
 
 def cl():
     return
+
 
 cl = loadparams(cl)

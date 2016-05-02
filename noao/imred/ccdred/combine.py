@@ -1,5 +1,5 @@
-from iraf import loadparams, file_handler
-from iraf import instrument, logfile, ssfile
+from iraf import startfunc, file_handler, clget
+# from iraf import instrument, logfile, ssfile
 import numpy as np
 from astropy.io import fits
 import os
@@ -269,7 +269,8 @@ def type_max(type1, type2):
 
 
 def combine(*args, **kwargs):
-    params = loadparams(*args, **kwargs)
+    # XXX: figure out if this works or not
+    startfunc(combine, *args, **kwargs)
 
     inputs = file_handler(params['input'].value)
 
