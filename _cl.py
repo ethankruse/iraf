@@ -26,10 +26,13 @@ class Package(dict):
     # XXX: implement a print tree type function
 
 
+
+# XXX: set it up so that setting iraf.cl.parameter = 5 will set the value to 5?
+# this could be done in the Package __setattr__ function!
 class Parameter(object):
     def __init__(self, value, learn, name, order, mode, default, dmin,
                  dmax, prompt_str, dtype):
-        self.value = value
+        object.__setattr__(self, 'value', convert_value(value, dtype, dmin, dmax)[0])
         self.learn = learn
         self.name = name
         self.order = order
@@ -40,7 +43,152 @@ class Parameter(object):
         self.prompt = prompt_str
         self.dtype = dtype
         self.changed = False
+
+    def __setattr__(self, key, value):
+        if key == 'value':
+            if self.value != value:
+                self.changed = True
+            # if we're changing it back to the default, no need to rewrite
+            else:
+                self.changed = False
+        object.__setattr__(self, key, value)
+
     # XXX: implement a pretty print function
+
+
+def convert_value(value, dtype, dmin, dmax):
+    valid = True
+    # try to convert to the appropriate type
+    try:
+        if value is None:
+            pass
+        # boolean data types
+        elif dtype == 'b':
+            if value == 'y' or value == 'yes' or value is True:
+                value = True
+            elif value == 'n' or value == 'no' or value is False:
+                value = False
+            elif len(str(value)) == 0:
+                value = None
+            else:
+                print('Boolean input must be [y/n]. Try again.')
+                valid = False
+        # int data types
+        elif dtype == 'i':
+            if len(str(value)) == 0 or str(value).upper() == 'INDEF':
+                value = None
+            else:
+                value = int(value)
+            # constrain by min/max values
+            if len(dmax) and len(dmin):
+                if not (int(dmin) <= value <= int(dmax)):
+                    print('Input outside the bounds. Try again.')
+                    valid = False
+            # check for enumerated list of values
+            elif len(dmin):
+                # more than one option available
+                if len(dmin.split('|')) > 1:
+                    # make sure it's one of the options
+                    enums = [int(x) for x in dmin.split('|')]
+                    if value not in enums:
+                        print(
+                            'Input not one of the available options. Try again.')
+                        valid = False
+        # float data types
+        elif dtype == 'r':
+            if len(str(value)) == 0 or str(value).upper() == 'INDEF':
+                value = None
+            else:
+                value = float(value)
+
+            if len(dmax) and len(dmin):
+                if not (float(dmin) <= value <= float(dmax)):
+                    print('Input outside the bounds. Try again.')
+                    valid = False
+            # check for enumerated list of values
+            elif len(dmin):
+                # more than one option available
+                if len(dmin.split('|')) > 1:
+                    # make sure it's one of the options
+                    enums = [float(x) for x in dmin.split('|')]
+                    if value not in enums:
+                        print(
+                            'Input not one of the available options. Try again.')
+                        valid = False
+        # string data types
+        elif dtype == 's':
+            value = str(value).strip()
+            # check for enumerated list of values
+            if len(dmin):
+                # more than one option available
+                if len(dmin.split('|')) > 1:
+                    # make sure it's one of the options
+                    enums = [x.strip().upper() for x in dmin.split('|')]
+                    if value.upper() not in enums:
+                        print(
+                            'Input not one of the available options. Try again.')
+                        valid = False
+            # XXX: should we just return an empty string?
+            if len(value) == 0:
+                value = None
+
+        # filename data types
+        elif dtype[0] == 'f':
+            # XXX: do we want to call file_handler on this one?
+            value = str(value)
+            expanded = os.path.expanduser(value)
+
+            # check for enumerated list of values
+            if len(dmin):
+                # more than one option available
+                if len(dmin.split('|')) > 1:
+                    # make sure it's one of the options
+                    enums = [os.path.expanduser(x.strip()) for x in
+                             dmin.split('|')]
+                    if expanded not in enums:
+                        print(
+                            'Input not one of the available options. Try again.')
+                        valid = False
+
+            # XXX: documentation says that min/max field is valid
+            #  for files?
+
+            readacc = False
+            writeacc = False
+            nonexistent = False
+            exists = False
+            # should we check for these categories
+            if len(dtype) > 1:
+                if 'r' in dtype[1:]:
+                    readacc = True
+                if 'w' in dtype[1:]:
+                    writeacc = True
+                if 'n' in dtype[1:]:
+                    nonexistent = True
+                if 'e' in dtype[1:]:
+                    exists = True
+
+            if exists and not os.path.exists(expanded):
+                print('Input file must exist. Try again.')
+                valid = False
+            if nonexistent and os.path.exists(expanded):
+                print('Input file can not already exist. Try again.')
+                valid = False
+            if readacc and not os.access(expanded, os.R_OK):
+                print('Input file must have read access. Try again.')
+                valid = False
+            if writeacc and not os.access(expanded, os.W_OK):
+                print('Input file must have write access. Try again.')
+                valid = False
+        # some other kind of parameter type?
+        else:
+            print('unrecognized parameter type: {0}'.format(dtype))
+            value = None
+    except ValueError:
+        print('Could not interpret input. Try again.')
+        valid = False
+
+    return value, valid
 
 
 def startfunc(func, *args, **kwargs):
@@ -82,6 +230,7 @@ def startfunc(func, *args, **kwargs):
         default = iparam.value
         prompt_str = iparam.prompt
         mode = ''
+
         for char in iparam.mode:
             if char == 'a':
                 mode += automode
@@ -109,140 +258,15 @@ def startfunc(func, *args, **kwargs):
         elif len(dmin) and len(dmin.split('|')) > 1:
             allowrange = '<{0}>'.format(dmin)
 
-        if len(default) > 0:
+        if len(str(default)) > 0 and default is not None:
             default_str = '[{0}]'.format(default)
         else:
             default_str = ''
 
         while True:
-            # try to convert to the appropriate type
-            try:
-                if value is None:
-                    pass
-                # boolean data types
-                elif dtype == 'b':
-                    if value == 'y' or value == 'yes' or value is True:
-                        value = True
-                    elif value == 'n' or value == 'no' or value is False:
-                        value = False
-                    elif len(str(value)) == 0:
-                        value = None
-                    else:
-                        print('Boolean input must be [y/n]. Try again.')
-                        prompt = True
-                # int data types
-                elif dtype == 'i':
-                    if len(str(value)) == 0 or str(value).upper() == 'INDEF':
-                        value = None
-                    else:
-                        value = int(value)
-                    # constrain by min/max values
-                    if len(dmax) and len(dmin):
-                        if not (int(dmin) <= value <= int(dmax)):
-                            print('Input outside the bounds. Try again.')
-                            prompt = True
-                    # check for enumerated list of values
-                    elif len(dmin):
-                        # more than one option available
-                        if len(dmin.split('|')) > 1:
-                            # make sure it's one of the options
-                            enums = [int(x) for x in dmin.split('|')]
-                            if value not in enums:
-                                print(
-                                    'Input not one of the available options. Try again.')
-                                prompt = True
-                # float data types
-                elif dtype == 'r':
-                    if len(str(value)) == 0 or str(value).upper() == 'INDEF':
-                        value = None
-                    else:
-                        value = float(value)
+            value, valid = convert_value(value, dtype, dmin, dmax)
 
-                    if len(dmax) and len(dmin):
-                        if not (float(dmin) <= value <= float(dmax)):
-                            print('Input outside the bounds. Try again.')
-                            prompt = True
-                    # check for enumerated list of values
-                    elif len(dmin):
-                        # more than one option available
-                        if len(dmin.split('|')) > 1:
-                            # make sure it's one of the options
-                            enums = [float(x) for x in dmin.split('|')]
-                            if value not in enums:
-                                print(
-                                    'Input not one of the available options. Try again.')
-                                prompt = True
-                # string data types
-                elif dtype == 's':
-                    value = str(value).strip()
-                    # check for enumerated list of values
-                    if len(dmin):
-                        # more than one option available
-                        if len(dmin.split('|')) > 1:
-                            # make sure it's one of the options
-                            enums = [x.strip().upper() for x in dmin.split('|')]
-                            if value.upper() not in enums:
-                                print(
-                                    'Input not one of the available options. Try again.')
-                                prompt = True
-                    # XXX: should we just return an empty string?
-                    if len(value) == 0:
-                        value = None
-
-                # filename data types
-                elif dtype[0] == 'f':
-                    # XXX: do we want to call file_handler on this one?
-                    value = str(value)
-                    expanded = os.path.expanduser(value)
-
-                    # check for enumerated list of values
-                    if len(dmin):
-                        # more than one option available
-                        if len(dmin.split('|')) > 1:
-                            # make sure it's one of the options
-                            enums = [os.path.expanduser(x.strip()) for x in
-                                     dmin.split('|')]
-                            if expanded not in enums:
-                                print(
-                                    'Input not one of the available options. Try again.')
-                                prompt = True
-
-                    # XXX: documentation says that min/max field is valid
-                    #  for files?
-
-                    readacc = False
-                    writeacc = False
-                    nonexistent = False
-                    exists = False
-                    # should we check for these categories
-                    if len(dtype) > 1:
-                        if 'r' in dtype[1:]:
-                            readacc = True
-                        if 'w' in dtype[1:]:
-                            writeacc = True
-                        if 'n' in dtype[1:]:
-                            nonexistent = True
-                        if 'e' in dtype[1:]:
-                            exists = True
-
-                    if exists and not os.path.exists(expanded):
-                        print('Input file must exist. Try again.')
-                        prompt = True
-                    if nonexistent and os.path.exists(expanded):
-                        print('Input file can not already exist. Try again.')
-                        prompt = True
-                    if readacc and not os.access(expanded, os.R_OK):
-                        print('Input file must have read access. Try again.')
-                        prompt = True
-                    if writeacc and not os.access(expanded, os.W_OK):
-                        print('Input file must have write access. Try again.')
-                        prompt = True
-                # some other kind of parameter type?
-                else:
-                    print('unrecognized parameter type: {0}'.format(dtype))
-                    value = None
-            except ValueError:
-                print('Could not interpret input. Try again.')
+            if not valid:
                 prompt = True
 
             if not prompt:

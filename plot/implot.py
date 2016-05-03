@@ -57,22 +57,22 @@ def implot_plot(fig):
                 txt = "lines"
                 i1 = y1
                 i2 = y2
-                sz = fig.im_set['nlines']
+                sz = fig.im_set['nlines'] - 1
             else:
                 txt = "columns"
                 i1 = x1
                 i2 = x2
-                sz = fig.im_set['ncols']
+                sz = fig.im_set['ncols'] - 1
             title = "Average of {0} {1:d} to {2:d} of {3} in\n{4}"
             title = title.format(txt, i1, i2 - 1, sz,
                                  fig.im_set['image'][fig.im_set['index']])
         else:
             if fig.im_set['lineplot']:
                 txt = "Line"
-                sz = fig.im_set['nlines']
+                sz = fig.im_set['nlines'] - 1
             else:
                 txt = "Column"
-                sz = fig.im_set['ncols']
+                sz = fig.im_set['ncols'] - 1
             title = "{0} {1:d} of {2} in\n{3}".format(txt, fig.im_set['line'],
                                                       sz,
                                                       fig.im_set['image'][
