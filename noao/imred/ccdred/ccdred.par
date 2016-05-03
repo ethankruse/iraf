@@ -9,4 +9,4 @@ instrument,s,h,"",,,CCD instrument file
 ssfile,s,h,"subsets",,,Subset translation file
 graphics,s,h,"stdgraph",,,Interactive graphics output device
 cursor,*gcur,h,"",,,Graphics cursor input
-version,s,h,"2: October 1987"
+version,s,h,"2: October 1987",,,
