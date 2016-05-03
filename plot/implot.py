@@ -1,4 +1,5 @@
-from iraf import loadparams, file_handler
+from __future__ import print_function
+from iraf import file_handler, clget, startfunc
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
@@ -9,10 +10,11 @@ import functools
 __all__ = ['implot']
 
 im_set_init = {'fig': None, 'ax': None, 'sax': None, 'lineplot': True,
-          'line': None, 'im': None, 'ndim': None, 'navg': None, 'ncols': None,
-          'nlines': None, 'image': None, 'index': None, 'cid': None,
-          'input': '', 'iax': None, 'overplot': False, 'sid': None,
-          '_slider': None, 'stat': None, 'xdata': None, 'ydata': None}
+               'line': None, 'im': None, 'ndim': None, 'navg': None,
+               'ncols': None,
+               'nlines': None, 'image': None, 'index': None, 'cid': None,
+               'input': '', 'iax': None, 'overplot': False, 'sid': None,
+               '_slider': None, 'stat': None, 'xdata': None, 'ydata': None}
 
 bell = '\a'
 
@@ -23,7 +25,8 @@ def implot_plot(fig):
 
     if fig.im_set['lineplot']:
         y1 = max(0, min(fig.im_set['nlines'] - 1, fig.im_set['line']))
-        y2 = max(1, min(fig.im_set['nlines'], fig.im_set['line'] + fig.im_set['navg']))
+        y2 = max(1, min(fig.im_set['nlines'],
+                        fig.im_set['line'] + fig.im_set['navg']))
         if fig.im_set['ndim'] == 1:
             yplot = fig.im_set['im']
         else:
@@ -32,7 +35,8 @@ def implot_plot(fig):
         xplot = np.arange(fig.im_set['ncols'])
     else:
         x1 = max(0, min(fig.im_set['ncols'] - 1, fig.im_set['line']))
-        x2 = max(1, min(fig.im_set['ncols'], fig.im_set['line'] + fig.im_set['navg']))
+        x2 = max(1, min(fig.im_set['ncols'],
+                        fig.im_set['line'] + fig.im_set['navg']))
         if fig.im_set['ndim'] == 1:
             yplot = fig.im_set['im'][x1:x2]
         else:
@@ -60,7 +64,7 @@ def implot_plot(fig):
                 i2 = x2
                 sz = fig.im_set['ncols']
             title = "Average of {0} {1:d} to {2:d} of {3} in\n{4}"
-            title = title.format(txt, i1, i2-1, sz,
+            title = title.format(txt, i1, i2 - 1, sz,
                                  fig.im_set['image'][fig.im_set['index']])
         else:
             if fig.im_set['lineplot']:
@@ -69,7 +73,8 @@ def implot_plot(fig):
             else:
                 txt = "Column"
                 sz = fig.im_set['ncols']
-            title = "{0} {1:d} of {2} in\n{3}".format(txt, fig.im_set['line'], sz,
+            title = "{0} {1:d} of {2} in\n{3}".format(txt, fig.im_set['line'],
+                                                      sz,
                                                       fig.im_set['image'][
                                                           fig.im_set['index']])
     else:
@@ -136,7 +141,7 @@ def implot_keypress(event, fig=None):
         if len(full_inp.strip()) == 1:
             return
         # print out for the user's history
-        print full_inp
+        print(full_inp)
         # ignore the leading :
         full_inp = full_inp[1:]
         pieces = full_inp.strip().split()
@@ -166,19 +171,20 @@ def implot_keypress(event, fig=None):
                         else:
                             implot_plot_col(fig)
                     else:
-                        print bell
+                        print(bell)
                 else:
                     if int(pieces[1]) >= 0 and int(pieces[2]) >= 0:
                         fig.im_set['line'] = min(int(pieces[1]), int(pieces[2]))
                         oldavg = fig.im_set['navg']
-                        fig.im_set['navg'] = np.abs(int(pieces[1]) - int(pieces[2])) - 1
+                        fig.im_set['navg'] = np.abs(
+                            int(pieces[1]) - int(pieces[2])) - 1
                         if pieces[0] == 'l':
                             implot_plot_line(fig)
                         else:
                             implot_plot_col(fig)
                         fig.im_set['navg'] = oldavg
                     else:
-                        print bell
+                        print(bell)
             # toggle log y scale on or off
             elif pieces[0] == 'log+':
                 fig.im_set['ax'].set_yscale('log')
@@ -186,11 +192,11 @@ def implot_keypress(event, fig=None):
                 fig.im_set['ax'].set_yscale('linear')
 
             else:
-                print bell
+                print(bell)
 
 
         except ValueError:
-            print bell
+            print(bell)
 
         return
 
@@ -227,7 +233,7 @@ def implot_keypress(event, fig=None):
         # we're currently plotting lines
         if fig.im_set['lineplot']:
             if fig.im_set['nlines'] == 1:
-                print bell
+                print(bell)
                 return
 
             # which line to plot
@@ -275,18 +281,19 @@ def implot_keypress(event, fig=None):
 
         if fig.im_set['stat'] is None:
             fig.im_set['stat'] = (event.xdata, event.ydata)
-            print 'Again'
+            print('Again')
             return
 
         # have 2 successive presses, calculate the statistics
         x1 = min(fig.im_set['stat'][0], event.xdata)
         x2 = max(fig.im_set['stat'][0], event.xdata)
 
-        region = np.where((fig.im_set['xdata'] >= x1) & (fig.im_set['xdata'] <= x2))[0]
+        region = \
+        np.where((fig.im_set['xdata'] >= x1) & (fig.im_set['xdata'] <= x2))[0]
         if len(region) == 0:
             ind1 = np.abs(fig.im_set['xdata'] - x1).argmin()
             if ind1 != len(fig.im_set['xdata']):
-                region = np.array([ind1, ind1+1])
+                region = np.array([ind1, ind1 + 1])
             else:
                 region = np.array([ind1, ind1 - 1])
         mean = fig.im_set['ydata'][region].mean()
@@ -294,7 +301,7 @@ def implot_keypress(event, fig=None):
         sum = fig.im_set['ydata'][region].sum()
         median = np.median(fig.im_set['ydata'][region])
         outstr = "Median={0:g}, mean={1:g}, rms={2:g}, sum={3:g}, npix={4:d}"
-        print outstr.format(median, mean, std, sum, len(region))
+        print(outstr.format(median, mean, std, sum, len(region)))
         fig.im_set['stat'] = None
 
     if event.key == ' ':
@@ -302,10 +309,12 @@ def implot_keypress(event, fig=None):
             pixel = np.abs(event.xdata - fig.im_set['xdata']).argmin()
             txt = 'Pixel = [{0}, {1}] Value = {2}'
             if fig.im_set['lineplot']:
-                txt = txt.format(fig.im_set['line'], pixel, fig.im_set['ydata'][pixel])
+                txt = txt.format(fig.im_set['line'], pixel,
+                                 fig.im_set['ydata'][pixel])
             else:
-                txt = txt.format(pixel, fig.im_set['line'], fig.im_set['ydata'][pixel])
-            print txt
+                txt = txt.format(pixel, fig.im_set['line'],
+                                 fig.im_set['ydata'][pixel])
+            print(txt)
 
     if event.key == '?':
         # XXX: implement pagefiles
@@ -341,8 +350,8 @@ def implot_open_image(fig, infile=None):
     try:
         hdulist = fits.open(infile)
     except IOError:
-        print "Error reading image {0} ...".format(
-            fig.im_set['image'][fig.im_set['index']])
+        print("Error reading image {0} ...".format(
+            fig.im_set['image'][fig.im_set['index']]))
         return
         # XXX: go to next image
 
@@ -363,10 +372,11 @@ def implot_open_image(fig, infile=None):
 
     if fig.im_set['line'] is None:
         fig.im_set['line'] = max(0, min(fig.im_set['nlines'],
-                                    (fig.im_set['nlines'] + 1) / 2) - 1)
+                                        (fig.im_set['nlines'] + 1) / 2) - 1)
         fig.im_set['lineinit'] = fig.im_set['line']
         fig.im_set['colinit'] = max(0,
-                                min(fig.im_set['ncols'], (fig.im_set['ncols'] + 1) / 2) - 1)
+                                    min(fig.im_set['ncols'],
+                                        (fig.im_set['ncols'] + 1) / 2) - 1)
     # redo the slider
     implot_remove_slider(fig)
     implot_make_slider(fig)
@@ -417,14 +427,15 @@ def implot_make_slider(fig):
 
 
 def implot(*args, **kwargs):
+    startfunc(implot, *args, **kwargs)
     # XXX: where does this go?
     # Disable default Matplotlib shortcut keys:
     keymaps = [param for param in plt.rcParams if param.find('keymap') >= 0]
     for key in keymaps:
         plt.rcParams[key] = ''
 
-    params = loadparams(*args, **kwargs)
-    images = file_handler(params['image'].value)
+    # params = loadparams(*args, **kwargs)
+    images = file_handler(clget(implot, 'image').value)
 
     # we couldn't find any images to plot
     if len(images) == 0:
@@ -439,11 +450,11 @@ def implot(*args, **kwargs):
     fig.im_set['ax'] = ax
 
     fig.im_set['image'] = images
-    fig.im_set['line'] = params['line'].value
-    wcs = params['wcs'].value
-    step = params['step'].value
-    coords = params['coords'].value
-    device = params['device'].value
+    fig.im_set['line'] = clget(implot, 'line').value
+    wcs = clget(implot, 'wcs').value
+    step = clget(implot, 'step').value
+    coords = clget(implot, 'coords').value
+    device = clget(implot, 'device').value
 
     logscale = False
     erase = False
@@ -473,7 +484,7 @@ def implot(*args, **kwargs):
     fig.im_set['iax'] = inptxt
 
     nax = plt.axes([0.85, 0.65, 0.2, 0.25], zorder=-1)
-    check = CheckButtons(nax, ('Overplot',), (fig.im_set['overplot'], ))
+    check = CheckButtons(nax, ('Overplot',), (fig.im_set['overplot'],))
     partial = functools.partial(button_click, fig=fig)
     check.on_clicked(partial)
 

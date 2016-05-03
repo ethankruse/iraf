@@ -1,9 +1,11 @@
-from iraf import loadparams, file_handler
+from __future__ import print_function
+from iraf import file_handler, clget, startfunc
 from astropy.io import fits
 import numpy as np
 import scipy.stats
 
 __all__ = ['imstatistics']
+
 
 def imstatistics(*args, **kwargs):
     """
@@ -39,32 +41,33 @@ def imstatistics(*args, **kwargs):
         Obsolete. Was previously used to ask about caching the images
         in memory.
     """
-    params = loadparams(*args, **kwargs)
+    startfunc(imstatistics, *args, **kwargs)
+
     # list of images to run on
-    images = params['images'].value
+    images = clget(imstatistics, 'images').value
     images = file_handler(images)
     # which statistics we want to calculate
-    fields = params['fields'].value
+    fields = clget(imstatistics, 'fields').value
     # lower/upper limits for pixel values
-    lower = params['lower'].value
+    lower = clget(imstatistics, 'lower').value
     if lower is None:
         lower = -np.inf
-    upper = params['upper'].value
+    upper = clget(imstatistics, 'upper').value
     if upper is None:
         upper = np.inf
     # number of clipping iterations
-    nclip = params['nclip'].value
+    nclip = clget(imstatistics, 'nclip').value
     # lower and upper sigma clipping level
-    lsigma = params['lsigma'].value
-    usigma = params['usigma'].value
+    lsigma = clget(imstatistics, 'lsigma').value
+    usigma = clget(imstatistics, 'usigma').value
     # bin width of histogram in sigma
     # this is only used in the original IRAF method of defining mode.
     # could now be eliminated.
-    binwidth = params['binwidth'].value
+    binwidth = clget(imstatistics, 'binwidth').value
     # should the output be pretty formatted
-    print_format = params['format'].value
+    print_format = clget(imstatistics, 'format').value
     # cache image in memory (obsolete)
-    cache = params['cache'].value
+    cache = clget(imstatistics, 'cache').value
 
     possible_fields = "image|npix|min|max|mean|midpt|mode|stddev|skew|kurtosis"
     possible_fields = possible_fields.split('|')
@@ -96,14 +99,14 @@ def imstatistics(*args, **kwargs):
             else:
                 slen = collen
             outstring += headerstrings[ifield].rjust(slen)
-        print outstring
+        print(outstring)
 
     for image in images:
         # open the image
         try:
             hdulist = fits.open(image)
         except IOError:
-            print "Error reading image {0} ...".format(image)
+            print("Error reading image {0} ...".format(image))
             continue
 
         results = {'npix': 0, 'min': None,
@@ -252,7 +255,7 @@ def imstatistics(*args, **kwargs):
 
             if ii < len(use_fields) - 1:
                 outstring += '  '
-        print outstring
+        print(outstring)
 
         hdulist.close()
 

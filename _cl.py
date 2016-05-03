@@ -70,7 +70,7 @@ def startfunc(func, *args, **kwargs):
     # fill in the empty list with the parameters in order
     keylist = curpack.keys()
     for key in keylist:
-        if isinstance(key, Parameter):
+        if isinstance(curpack[key], Parameter):
             plist[curpack[key].order] = curpack[key]
 
     for ii, iparam in enumerate(plist):
@@ -80,6 +80,7 @@ def startfunc(func, *args, **kwargs):
         dtype = iparam.dtype
         value = iparam.value
         default = iparam.value
+        prompt_str = iparam.prompt
         mode = ''
         for char in iparam.mode:
             if char == 'a':
