@@ -23,21 +23,21 @@ class Package(dict):
     def __getattr__(self, attr):
         return self[attr]
 
-    # XXX: implement a print tree type function
-
+        # XXX: implement a print tree type function
 
 
 # XXX: set it up so that setting iraf.cl.parameter = 5 will set the value to 5?
 # this could be done in the Package __setattr__ function!
 class Parameter(object):
     def __init__(self, value, learn, name, order, mode, default, dmin,
-                 dmax, prompt_str, dtype):
-        object.__setattr__(self, 'value', convert_value(value, dtype, dmin, dmax)[0])
+                 dmax, prompt_str, dtype, default_str):
+        object.__setattr__(self, 'value', value)
         self.learn = learn
         self.name = name
         self.order = order
         self.mode = mode
         self.default = default
+        self.default_str = default_str
         self.min = dmin
         self.max = dmax
         self.prompt = prompt_str
@@ -53,7 +53,24 @@ class Parameter(object):
                 self.changed = False
         object.__setattr__(self, key, value)
 
-    # XXX: implement a pretty print function
+    def __repr__(self):
+        return 'Parameter(name={0!r}, value={1!r}, default={2!r})'.format(
+            self.name, self.value, self.default)
+
+    def __str__(self):
+        allowrange = ''
+        if len(self.max) and len(self.min):
+            allowrange = '<{0} to {1}>'.format(self.min, self.max)
+        elif len(self.min) and len(self.min.split('|')) > 1:
+            allowrange = '<{0}>'.format(self.min)
+        if self.changed:
+            default_str = '[{0}]'.format(self.value)
+        elif len(self.default_str) > 0:
+            default_str = '[{0}]'.format(self.default_str)
+        else:
+            default_str = ''
+        return '{0}|{1} {2}{3}'.format(self.name, self.prompt, allowrange,
+                                       default_str)
 
 
 def convert_value(value, dtype, dmin, dmax):
@@ -228,7 +245,6 @@ def startfunc(func, *args, **kwargs):
         dtype = iparam.dtype
         value = iparam.value
         default = iparam.value
-        prompt_str = iparam.prompt
         mode = ''
 
         for char in iparam.mode:
@@ -249,20 +265,6 @@ def startfunc(func, *args, **kwargs):
             value = args[ii]
             prompt = False
 
-        if len(prompt_str) == 0:
-            prompt_str = name
-
-        allowrange = ''
-        if len(dmax) and len(dmin):
-            allowrange = '<{0} to {1}>'.format(dmin, dmax)
-        elif len(dmin) and len(dmin.split('|')) > 1:
-            allowrange = '<{0}>'.format(dmin)
-
-        if len(str(default)) > 0 and default is not None:
-            default_str = '[{0}]'.format(default)
-        else:
-            default_str = ''
-
         while True:
             value, valid = convert_value(value, dtype, dmin, dmax)
 
@@ -272,8 +274,7 @@ def startfunc(func, *args, **kwargs):
             if not prompt:
                 break
 
-            value = raw_input('{0} {1}{2}: '.format(prompt_str, allowrange,
-                                                default_str))
+            value = raw_input('{0}: '.format(iparam))
 
             if len(value.strip()) == 0:
                 value = default
@@ -282,6 +283,7 @@ def startfunc(func, *args, **kwargs):
         iparam.value = value
 
     return
+
 
 # XXX: write a separate endfunc() to reset to default values, learn the
 # correct parameters, etc.
@@ -395,8 +397,9 @@ def loadparams(func):
             pass
 
     for ii, param in enumerate(defaultparams):
-        name, dtype, mode, default, dmin, dmax, prompt_str = param
+        name, dtype, mode, default_str, dmin, dmax, prompt_str = param
 
+        default, valid = convert_value(default_str, dtype, dmin, dmax)
         # get modes into the single letter categories
         if mode == 'auto':
             mode = 'a'
@@ -414,7 +417,8 @@ def loadparams(func):
             learn = True
 
         curpack[name] = Parameter(default, learn, name, ii, mode,
-                                  default, dmin, dmax, prompt_str, dtype)
+                                  default, dmin, dmax, prompt_str, dtype,
+                                  default_str)
 
         curpack.__nparam__ += 1
 
