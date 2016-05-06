@@ -24,11 +24,22 @@ class Package(dict):
     def __getattr__(self, attr):
         return self[attr]
 
-        # XXX: implement a print tree type function
+    def __setattr__(self, key, value):
+        if hasattr(self, key) and isinstance(getattr(self, key), Parameter):
+            getattr(self, key).value = value
+        else:
+            super(Package, self).__setattr__(key, value)
+
+    def __repr__(self, level=0):
+        indent = '  ' * level
+        ret = indent + self.__name__ + '\n'
+        attribs = dir(self)
+        for attrib in attribs:
+            if isinstance(getattr(self, attrib), Package):
+                ret += getattr(self, attrib).__repr__(level=level+1)
+        return ret
 
 
-# XXX: set it up so that setting iraf.cl.parameter = 5 will set the value to 5?
-# this could be done in the Package __setattr__ function!
 class Parameter(object):
     def __init__(self, value, learn, name, order, mode, default, dmin,
                  dmax, prompt_str, dtype, default_str):
@@ -53,7 +64,7 @@ class Parameter(object):
             # if we're changing it back to the default, no need to rewrite
             else:
                 self.changed = False
-        object.__setattr__(self, key, value)
+        super(Parameter, self).__setattr__(key, value)
 
     def __repr__(self):
         return 'Parameter(name={0!r}, value={1!r}, default={2!r})'.format(
