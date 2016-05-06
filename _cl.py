@@ -5,9 +5,10 @@ import csv
 from . import uparam_dir
 from glob import glob
 import sys
+import shutil
 
 __all__ = ['Package', 'Parameter', 'loadparams', 'is_iterable', 'file_handler',
-           'cl', 'clget', 'startfunc']
+           'cl', 'clget', 'startfunc', 'endfunc']
 
 
 class Package(dict):
@@ -31,22 +32,23 @@ class Package(dict):
 class Parameter(object):
     def __init__(self, value, learn, name, order, mode, default, dmin,
                  dmax, prompt_str, dtype, default_str):
-        object.__setattr__(self, 'value', value)
+        self.default = default
+        self.dtype = dtype
+        self.min = dmin
+        self.max = dmax
+        self.value = value
         self.learn = learn
         self.name = name
         self.order = order
         self.mode = mode
-        self.default = default
         self.default_str = default_str
-        self.min = dmin
-        self.max = dmax
         self.prompt = prompt_str
-        self.dtype = dtype
         self.changed = False
 
     def __setattr__(self, key, value):
         if key == 'value':
-            if self.value != value:
+            value, valid = convert_value(value, self.dtype, self.min, self.max)
+            if self.default != value:
                 self.changed = True
             # if we're changing it back to the default, no need to rewrite
             else:
@@ -257,6 +259,10 @@ def startfunc(func, *args, **kwargs):
         if 'q' in mode:
             prompt = True
 
+        learn = False
+        if 'l' in mode:
+            learn = True
+
         # kwargs take precedent over positional args
         if name in kwargs:
             value = kwargs[name]
@@ -281,12 +287,72 @@ def startfunc(func, *args, **kwargs):
             prompt = False
 
         iparam.value = value
+        iparam.learn = learn
 
     return
 
 
-# XXX: write a separate endfunc() to reset to default values, learn the
-# correct parameters, etc.
+def endfunc(func):
+    # path to the function's implementation
+    myfile = inspect.getabsfile(func)
+    # base of the parameter file name
+    parname = '{0}.par'.format(func.__name__)
+    userparname = func.__module__
+    userparname = '.'.join(userparname.split('.')[1:-1])
+    if len(userparname) > 0:
+        userparname += '.'
+    funcpath = userparname + func.__name__
+    userparname += func.__name__ + '.par'
+    # assume for now that the parameter file is in the same directory
+    # as the function's source file
+    myparamfile = os.path.join(os.path.dirname(myfile), parname)
+    uparamfile = os.path.join(uparam_dir, userparname)
+
+    try:
+        curpack = cl
+        for ifunc in funcpath.split('.'):
+            curpack = curpack[ifunc]
+    except KeyError:
+        print('Could not find function {0} in endfunc'.format(funcpath))
+        sys.exit(1)
+
+    possible = dir(curpack)
+    changed = []
+    for key in possible:
+        if isinstance(curpack[key], Parameter) and curpack[key].changed:
+            changed.append(key)
+
+    # need to check for the 'learn' parameter
+    learned = []
+    for key in changed:
+        if curpack[key].learn:
+            learned.append(key)
+        else:
+            curpack[key].value = curpack[key].default
+
+    if len(learned):
+        if not os.path.exists(uparamfile):
+            if not os.path.exists(uparam_dir):
+                os.mkdir(uparam_dir)
+            shutil.copy2(myparamfile, uparamfile)
+
+        tmp = uparamfile + 'tmp'
+        shutil.copy2(uparamfile, tmp)
+
+        wf = open(uparamfile, 'w')
+        writer = csv.writer(wf)
+        with open(tmp, 'r') as ff:
+            reader = csv.reader(ff)
+            for row in reader:
+                if (len(row) == 0 or len(row[0].strip()) == 0 or
+                        row[0].strip()[0] == '#'):
+                    pass
+                elif row[0].strip() in learned:
+                    row[3] = curpack[row[0].strip()].value
+                writer.writerow(row)
+        wf.close()
+        os.remove(tmp)
+    return
 
 
 def clget(func, param):

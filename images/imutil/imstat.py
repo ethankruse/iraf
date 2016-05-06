@@ -1,5 +1,5 @@
 from __future__ import print_function
-from iraf import file_handler, clget, startfunc
+from iraf import file_handler, clget, startfunc, endfunc
 from astropy.io import fits
 import numpy as np
 import scipy.stats
@@ -259,6 +259,5 @@ def imstatistics(*args, **kwargs):
 
         hdulist.close()
 
-    # XXX: need to deal with 'learning' some parameters
-
+    endfunc(imstatistics)
     return

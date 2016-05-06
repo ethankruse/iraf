@@ -1,5 +1,5 @@
 from __future__ import print_function
-from iraf import file_handler, clget, startfunc
+from iraf import file_handler, clget, startfunc, endfunc
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
@@ -493,4 +493,5 @@ def implot(*args, **kwargs):
 
     plt.show(block=False)
 
+    endfunc(implot)
     return nax

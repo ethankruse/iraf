@@ -1,5 +1,5 @@
 from __future__ import print_function
-from iraf import startfunc, file_handler, clget
+from iraf import startfunc, file_handler, clget, endfunc
 # from iraf import instrument, logfile, ssfile
 import numpy as np
 from astropy.io import fits
@@ -693,6 +693,7 @@ def combine(*args, **kwargs):
                 ifile.close()
         logfd.close()
 
+    endfunc(combine)
     return
 
 
