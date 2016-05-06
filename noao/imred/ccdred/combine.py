@@ -1,11 +1,14 @@
-from .imstat import loadparams, file_handler
-from . import instrument, logfile, ssfile
+from __future__ import print_function
+from iraf import startfunc, file_handler, clget, endfunc
+# from iraf import instrument, logfile, ssfile
 import numpy as np
 from astropy.io import fits
 import os
 import csv
 from astropy.wcs import WCS
 import sys
+
+__all__ = ['combine']
 
 
 def make_fits(path):
@@ -43,6 +46,8 @@ def ccdsubset(im):
     except KeyError:
         subsetstr = None
         subset1 = None
+
+    ssfile = clget(combine, 'ssfile')
 
     # A null subset string is ok.  If not null check for conflict
     # with previous subset IDs.
@@ -106,7 +111,7 @@ def ic_setout(inputs, output, nimages, project, offsets):
     else:
         for im in inputs:
             if len(im[0].data.shape) != outdim:
-                print "Image dimensions are not the same"
+                print("Image dimensions are not the same")
                 sys.exit(1)
 
     """
@@ -130,13 +135,13 @@ def ic_setout(inputs, output, nimages, project, offsets):
         reloff = True
     # XXX: implement these
     elif offsets.lower() == 'wcs':
-        print 'WCS offsets not implemented yet.'
+        print('WCS offsets not implemented yet.')
         sys.exit(1)
     elif offsets.lower() == 'grid':
-        print 'grid offsets not implemented yet.'
+        print('grid offsets not implemented yet.')
         sys.exit(1)
     else:
-        print 'Manual file offsets not implemented yet.'
+        print('Manual file offsets not implemented yet.')
         sys.exit(1)
 
     aligned = True
@@ -162,7 +167,7 @@ def ic_setout(inputs, output, nimages, project, offsets):
     # Update the WCS.
     # XXX: do this
     if project or not aligned or not reloff:
-        print "WCS updates to output files not implemented yet!"
+        print("WCS updates to output files not implemented yet!")
 
     return offsetsarr, aligned
 
@@ -170,7 +175,7 @@ def ic_setout(inputs, output, nimages, project, offsets):
 # this is meant to be equivalent to immap (output, NEW_COPY, Memi[in]) in IRAF
 def file_new_copy(outstr, in_header, mode='NEW_COPY', clobber=True):
     if mode != 'NEW_COPY':
-        print 'other modes of file_new_copy not supported.'
+        print('other modes of file_new_copy not supported.')
         return
 
     # XXX: check this part. Need to add lines to history files, etc.
@@ -217,7 +222,7 @@ def ic_mopen(in_images, out_images, nimages, mtype, mvalue):
             try:
                 fname = im[0].header['bpm']
                 # XXX: implement this
-                print 'pixel maps not yet implemented.'
+                print('pixel maps not yet implemented.')
                 sys.exit(1)
             except KeyError:
                 continue
@@ -262,30 +267,33 @@ def type_max(type1, type2):
             if np.can_cast(type2, iint, casting='safe'):
                 return np.dtype(iint)
 
-    print "Unrecognized dtype or cannot safely cast between {0} and {1}.".format(type1, type2)
+    print("Unrecognized dtype or cannot safely cast between {0} and {1}.".format(type1, type2))
     sys.exit(1)
 
 
 def combine(*args, **kwargs):
-    params = loadparams(*args, **kwargs)
+    # XXX: figure out if this works or not
+    startfunc(combine, *args, **kwargs)
 
-    inputs = file_handler(params['input'].value)
+    inputs = file_handler(clget(combine, 'input').value)
 
     if len(inputs) == 0:
         return
 
+    instrument = clget(combine, 'instrument').value
+    logfile = clget(combine, 'logfile').value
     if instrument is not None:
-        print "Instrument translation files not yet supported."
+        print("Instrument translation files not yet supported.")
         # XXX: need to implement this part
 
     # Determine whether to divide images into subsets and append extensions.
-    dosubsets = params['subsets'].value
+    dosubsets = clget(combine, 'subsets').value
 
     # Go through the input list and eliminate images not satisfying the
     # CCD image type.  Separate into subsets if desired.  Create image
     # and subset lists.
 
-    ccdtypestr = params['ccdtype'].value
+    ccdtypestr = clget(combine, 'ccdtype').value
     """
     pointer	images		# Pointer to lists of subsets (allocated)
     pointer	extns		# Image extensions for each subset (allocated)
@@ -303,7 +311,7 @@ def combine(*args, **kwargs):
         try:
             hdulist = fits.open(image)
         except IOError:
-            print "Error reading image {0} ...".format(image)
+            print("Error reading image {0} ...".format(image))
             continue
 
         thistype = ccdtypes(hdulist[0].header)
@@ -326,45 +334,45 @@ def combine(*args, **kwargs):
         hdulist.close()
 
     if len(images) == 0:
-        print "No images to combine."
+        print("No images to combine.")
         return
 
     # Get task parameters.  Some additional parameters are obtained later.
-    outroot = params['output'].value
+    outroot = clget(combine, 'output').value
     if len(outroot) == 0:
-        print "Must give an output base name"
+        print("Must give an output base name")
         return
-    plroot = params['plfile'].value
-    sigroot = params['sigma'].value
+    plroot = clget(combine, 'plfile').value
+    sigroot = clget(combine, 'sigma').value
 
-    project = params['project'].value
-    combine = params['combine'].value
-    reject = params['reject'].value
-    blank = params['blank'].value
-    gain = params['gain'].value
-    rdnoise = params['rdnoise'].value
-    snoise = params['snoise'].value
-    lthresh = params['lthreshold'].value
-    hthresh = params['hthreshold'].value
-    lsigma = params['lsigma'].value
-    hsigma = params['hsigma'].value
-    offsets = params['offsets'].value
-    masktype = params['masktype'].value
-    maskvalue = params['maskvalue'].value
-    scale = params['scale'].value
-    zero = params['zero'].value
-    weight = params['weight'].value
-    statsec = params['statsec'].value
+    project = clget(combine, 'project').value
+    combine = clget(combine, 'combine').value
+    reject = clget(combine, 'reject').value
+    blank = clget(combine, 'blank').value
+    gain = clget(combine, 'gain').value
+    rdnoise = clget(combine, 'rdnoise').value
+    snoise = clget(combine, 'snoise').value
+    lthresh = clget(combine, 'lthreshold').value
+    hthresh = clget(combine, 'hthreshold').value
+    lsigma = clget(combine, 'lsigma').value
+    hsigma = clget(combine, 'hsigma').value
+    offsets = clget(combine, 'offsets').value
+    masktype = clget(combine, 'masktype').value
+    maskvalue = clget(combine, 'maskvalue').value
+    scale = clget(combine, 'scale').value
+    zero = clget(combine, 'zero').value
+    weight = clget(combine, 'weight').value
+    statsec = clget(combine, 'statsec').value
 
-    grow = params['grow'].value
-    mclip = params['mclip'].value
-    sigscale = params['sigscale'].value
-    delete = params['delete'].value
-    nkeep = params['nkeep'].value
-    pclip = params['pclip'].value
-    nlow = params['nlow'].value
-    nhigh = params['nhigh'].value
-    otype = params['outtype'].value
+    grow = clget(combine, 'grow').value
+    mclip = clget(combine, 'mclip').value
+    sigscale = clget(combine, 'sigscale').value
+    delete = clget(combine, 'delete').value
+    nkeep = clget(combine, 'nkeep').value
+    pclip = clget(combine, 'pclip').value
+    nlow = clget(combine, 'nlow').value
+    nhigh = clget(combine, 'nhigh').value
+    otype = clget(combine, 'outtype').value
     outtype = None
     # "short|ushort|integer|long|real|double"
     if otype.lower() == 'short':
@@ -430,13 +438,13 @@ def combine(*args, **kwargs):
         # Set number of images to combine.
         if project:
             if len(iimages) > 1:
-                print "Cannot project combine a list of images"
+                print("Cannot project combine a list of images")
                 return
             hdulist = fits.open(iimages[0])
             shp = hdulist[0].data.shape
             hdulist.close()
             if len(shp) == 1 or shp[-1] == 1:
-                print "Can't project one dimensional images"
+                print("Can't project one dimensional images")
                 return
             nimages = shp[-1]
         else:
@@ -453,7 +461,7 @@ def combine(*args, **kwargs):
 
         if reject.lower() == 'pclip':
             if pclip == 0.:
-                print "Pclip parameter may not be zero"
+                print("Pclip parameter may not be zero")
                 return
             if pclip is None:
                 pclip = -0.5
@@ -482,7 +490,7 @@ def combine(*args, **kwargs):
             if ii + jj == 0:
                 reject = 'none'
             elif ii + jj >= nimages:
-                print "Bad minmax rejection parameters"
+                print("Bad minmax rejection parameters")
                 return
 
         out = []
@@ -599,9 +607,9 @@ def combine(*args, **kwargs):
         ztypes = "none|mode|median|mean".split('|')
         wtypes = "none|mode|median|mean|exposure".split('|')
 
-        stype = ic_gscale(params['scale'], stypes, imin, exptime, scales, nimages)
-        ztype = ic_gscale(params['zero'], ztypes, imin, exptime, zeros, nimages)
-        wtype = ic_gscale(params['weight'], wtypes, imin, exptime, wts, nimages)
+        stype = ic_gscale(clget(combine, 'scale'), stypes, imin, exptime, scales, nimages)
+        ztype = ic_gscale(clget(combine, 'zero'), ztypes, imin, exptime, zeros, nimages)
+        wtype = ic_gscale(clget(combine, 'weight'), wtypes, imin, exptime, wts, nimages)
 
         # Get image statistics only if needed.
         domode = 'mode' in [stype, ztype, wtype]
@@ -685,13 +693,29 @@ def combine(*args, **kwargs):
                 ifile.close()
         logfd.close()
 
-    return params
+    endfunc(combine)
+    return
 
 
-def ic_stat(imin, imref, section, offarr):
-    pass
+def ic_stat(imin, imref, section, offarr, project):
+    # Determine the image section parameters.  This must be in terms of
+    # the data image pixel coordinates though the section may be specified
+    # in terms of the reference image coordinates.  Limit the number of
+    # pixels in each dimension to a maximum.
+    ndim = imin[0].data.ndim
+    if project:
+        ndim -= 1
+
     """
-
+	# Determine the image section parameters.  This must be in terms of
+	# the data image pixel coordinates though the section may be specified
+	# in terms of the reference image coordinates.  Limit the number of
+	# pixels in each dimension to a maximum.
+	call amovki (1, Memi[v1], IM_MAXDIM)
+	call amovki (1, Memi[va], IM_MAXDIM)
+	call amovki (1, Memi[dv], IM_MAXDIM)
+	call amovi (IM_LEN(imref,1), Memi[vb], ndim)
+	call ic_section (section, Memi[va], Memi[vb], Memi[dv], ndim)
     """
 
 
@@ -702,13 +726,13 @@ def ic_gscale(param, dic, inp, exptime, values, nimages):
         stype = 'file'
         tmp = np.loadtxt(param.value[1:])
         if len(tmp.shape) != 1:
-            print "Could not understand {0} values in {1}".format(param.name, param.value[1:])
+            print("Could not understand {0} values in {1}".format(param.name, param.value[1:]))
             sys.exit(1)
         if tmp.size < nimages:
-            print "Insufficient {0} values in {1}".format(param.name, param.value[1:])
+            print("Insufficient {0} values in {1}".format(param.name, param.value[1:]))
             sys.exit(1)
         if tmp.size > nimages:
-            print "Warning: Ignoring additional {0} values in {1}".format(param.name, param.value[1:])
+            print("Warning: Ignoring additional {0} values in {1}".format(param.name, param.value[1:]))
         values[:] = tmp[:nimages]
     elif param.value[0] == '!':
         stype = 'keyword'
@@ -721,7 +745,7 @@ def ic_gscale(param, dic, inp, exptime, values, nimages):
                 tmp = np.where(exptime > 0.001)[0]
                 values[tmp] = 0.001
         else:
-            print "Unknown {0} type".format(param.name)
+            print("Unknown {0} type".format(param.name))
             sys.exit(1)
     return stype
 
