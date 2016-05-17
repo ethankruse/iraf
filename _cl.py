@@ -13,30 +13,39 @@ __all__ = ['Package', 'Parameter', 'loadparams', 'is_iterable', 'file_handler',
 
 class Package(dict):
     def __init__(self, name):
-        dict.__init__(self)
+        # necessary to allow packages/functions to have arbitrary parameters
+        # and be accessed via dot autocomplete
+        # See http://stackoverflow.com/questions/4984647/
+        # accessing-dict-keys-like-an-attribute-in-python
+        super(Package, self).__init__()
+        self.__dict__ = self
         self.__name__ = name
         self.__parent__ = None
         self.__nparam__ = 0
 
+    # again to allow parameters to be accessed via dot autocomplete
     def __dir__(self):
         return self.keys()
 
-    def __getattr__(self, attr):
-        return self[attr]
-
     def __setattr__(self, key, value):
+        # allow for self.param = 5 to set the parameter's value and not
+        # erase the parameter object with an int
         if hasattr(self, key) and isinstance(getattr(self, key), Parameter):
             getattr(self, key).value = value
         else:
+            # default action if we're not changing a parameter's value
             super(Package, self).__setattr__(key, value)
 
     def __repr__(self, level=0):
+        # print a tree of all packages below this one showing the structure
+        # of everything that is loaded
         indent = '  ' * level
         ret = indent + self.__name__ + '\n'
         attribs = dir(self)
         for attrib in attribs:
-            if isinstance(getattr(self, attrib), Package):
-                ret += getattr(self, attrib).__repr__(level=level+1)
+            if attrib != '__parent__' and isinstance(getattr(self, attrib),
+                                                     Package):
+                ret += getattr(self, attrib).__repr__(level=level + 1)
         return ret
 
 
@@ -57,14 +66,17 @@ class Parameter(object):
         self.changed = False
 
     def __setattr__(self, key, value):
+        valid = True
         if key == 'value':
             value, valid = convert_value(value, self.dtype, self.min, self.max)
-            if self.default != value:
+            if self.default != value and valid:
                 self.changed = True
             # if we're changing it back to the default, no need to rewrite
             else:
                 self.changed = False
-        super(Parameter, self).__setattr__(key, value)
+        if valid:
+            # actually set the attribute as normal
+            super(Parameter, self).__setattr__(key, value)
 
     def __repr__(self):
         return 'Parameter(name={0!r}, value={1!r}, default={2!r})'.format(
@@ -87,9 +99,39 @@ class Parameter(object):
 
 
 def convert_value(value, dtype, dmin, dmax):
+    """
+    Convert an input value (typically a string) to the appropriate type for
+    the parameter.
+
+    Also check to see if the input is valid (e.g. falls within min/max values).
+
+    Parameters
+    ----------
+    value : any type
+        Input value to set. Will be converted to the appropriate type.
+    dtype : {'b', 'i', 'r', 's', 'f'}
+        What type of parameter this is. Boolean, integer, real (float), string,
+        or file name (also a string, but expected to be a file path).
+    dmin : str
+        Can either be an enumerated list of legal values (in which case dmax
+        must be None) or the lower bounds for int/real data types. Can also be
+        None.
+    dmax : str
+        Upper bound for int/real data types.
+
+    Returns
+    -------
+    value : data type
+        The input value converted to the appropriate type.
+    valid : bool
+        Whether or not the input could be interpreted correctly and falls
+        within all bounds.
+
+    """
     valid = True
     # try to convert to the appropriate type
     try:
+        # None breaks things, so pass it on through
         if value is None:
             pass
         # boolean data types
@@ -112,7 +154,9 @@ def convert_value(value, dtype, dmin, dmax):
             # constrain by min/max values
             if len(dmax) and len(dmin):
                 if not (int(dmin) <= value <= int(dmax)):
-                    print('Input outside the bounds. Try again.')
+                    print(
+                        'Input outside the bounds ({0}-{1}). Try again.'.format(
+                            int(dmin), int(dmax)))
                     valid = False
             # check for enumerated list of values
             elif len(dmin):
@@ -130,7 +174,7 @@ def convert_value(value, dtype, dmin, dmax):
                 value = None
             else:
                 value = float(value)
-
+            # constrain by min/max values
             if len(dmax) and len(dmin):
                 if not (float(dmin) <= value <= float(dmax)):
                     print('Input outside the bounds. Try again.')
@@ -164,7 +208,6 @@ def convert_value(value, dtype, dmin, dmax):
 
         # filename data types
         elif dtype[0] == 'f':
-            # XXX: do we want to call file_handler on this one?
             value = str(value)
             expanded = os.path.expanduser(value)
 
@@ -183,11 +226,11 @@ def convert_value(value, dtype, dmin, dmax):
             # XXX: documentation says that min/max field is valid
             #  for files?
 
+            # check for these flags
             readacc = False
             writeacc = False
             nonexistent = False
             exists = False
-            # should we check for these categories
             if len(dtype) > 1:
                 if 'r' in dtype[1:]:
                     readacc = True
@@ -222,24 +265,32 @@ def convert_value(value, dtype, dmin, dmax):
 
 
 def startfunc(func, *args, **kwargs):
-    modname = func.__module__
-    # remove the iraf. and the name of the .py file the code is in
-    modname = '.'.join(modname.split('.')[1:-1])
-    if len(modname) > 0:
-        modname += '.'
-    modname += func.__name__
+    """
+    Initialize an IRAF task. Must be called at the beginning of any
+    IRAF package task's implementation.
 
-    curpack = cl
-    tree = modname.split('.')
-    try:
-        for branch in tree:
-            curpack = curpack[branch]
-    except KeyError:
-        print('Function/package {0} not found.'.format(modname))
-        sys.exit(1)
+    Run the checks to make sure all parameters have been properly initalized,
+    asking the user for input for any missing parameters.
+
+    Parameters
+    ----------
+    func : function
+        Function object of the task we're initalizing.
+    args : list
+        Arguments given to the function to be interpreted as parameter values.
+    kwargs : dict
+        Keyword arguments given to the function to be interpreted as
+         parameter values.
+
+    Returns
+    -------
+
+    """
+    curpack = func.cl
 
     # get the appropriate automode parameter for this function
     automode = clget(func, 'mode').value
+
     # XXX: need to deal with 'menu' mode somehow.
 
     # set up the parameter list
@@ -258,8 +309,8 @@ def startfunc(func, *args, **kwargs):
         dtype = iparam.dtype
         value = iparam.value
         default = iparam.value
-        mode = ''
 
+        mode = ''
         for char in iparam.mode:
             if char == 'a':
                 mode += automode
@@ -282,6 +333,7 @@ def startfunc(func, *args, **kwargs):
             value = args[ii]
             prompt = False
 
+        # prompt the user until valid input is given
         while True:
             value, valid = convert_value(value, dtype, dmin, dmax)
 
@@ -293,6 +345,7 @@ def startfunc(func, *args, **kwargs):
 
             value = raw_input('{0}: '.format(iparam))
 
+            # if the user just hit enter, accept the default value.
             if len(value.strip()) == 0:
                 value = default
             prompt = False
@@ -304,60 +357,83 @@ def startfunc(func, *args, **kwargs):
 
 
 def endfunc(func):
-    # path to the function's implementation
-    myfile = inspect.getabsfile(func)
+    """
+    Clean up parameter values after an IRAF task and learn any new parameter
+    values.
+
+    This must be the last function called in an IRAF task. Learn all changed
+    parameters with the learn flag set, and reset all those without the learn
+    flag. Save the parameter file if necessary.
+
+    Parameters
+    ----------
+    func : function
+        Function object of the task we're ending.
+
+    Returns
+    -------
+
+    """
     # base of the parameter file name
     parname = '{0}.par'.format(func.__name__)
+    # where the function is implemented
     userparname = func.__module__
+    # ignore the iraf. and name of the file the function is in
     userparname = '.'.join(userparname.split('.')[1:-1])
     if len(userparname) > 0:
         userparname += '.'
-    funcpath = userparname + func.__name__
-    userparname += func.__name__ + '.par'
+    # now have the full parameter file name, need to add the directories next
+    userparname += parname
     # assume for now that the parameter file is in the same directory
     # as the function's source file
-    myparamfile = os.path.join(os.path.dirname(myfile), parname)
+    fileloc = inspect.getabsfile(func)
+    # default parameter file location
+    paramfile = os.path.join(os.path.dirname(fileloc), parname)
+    # user parameter file location
     uparamfile = os.path.join(uparam_dir, userparname)
 
-    try:
-        curpack = cl
-        for ifunc in funcpath.split('.'):
-            curpack = curpack[ifunc]
-    except KeyError:
-        print('Could not find function {0} in endfunc'.format(funcpath))
-        sys.exit(1)
+    curpack = func.cl
 
     possible = dir(curpack)
+    # figure out which parameters have changed their values
     changed = []
     for key in possible:
         if isinstance(curpack[key], Parameter) and curpack[key].changed:
             changed.append(key)
 
-    # need to check for the 'learn' parameter
+    # which changed parameters do we need to learn?
     learned = []
     for key in changed:
         if curpack[key].learn:
             learned.append(key)
+            # change the default value in memory
+            curpack[key].default = curpack[key].value
         else:
+            # reset values we don't want to learn
             curpack[key].value = curpack[key].default
 
+    # change the default value on disk
     if len(learned):
+        # copy over the parameter file to the user directory if necessary
         if not os.path.exists(uparamfile):
             if not os.path.exists(uparam_dir):
                 os.mkdir(uparam_dir)
-            shutil.copy2(myparamfile, uparamfile)
+            shutil.copy2(paramfile, uparamfile)
 
         tmp = uparamfile + 'tmp'
         shutil.copy2(uparamfile, tmp)
 
         wf = open(uparamfile, 'w')
         writer = csv.writer(wf)
+        # read in the old version of the file
         with open(tmp, 'r') as ff:
             reader = csv.reader(ff)
             for row in reader:
+                # skip comment or blank rows
                 if (len(row) == 0 or len(row[0].strip()) == 0 or
-                        row[0].strip()[0] == '#'):
+                            row[0].strip()[0] == '#'):
                     pass
+                # if we are learning this parameter, replace the default value.
                 elif row[0].strip() in learned:
                     row[3] = curpack[row[0].strip()].value
                 writer.writerow(row)
@@ -367,22 +443,28 @@ def endfunc(func):
 
 
 def clget(func, param):
-    modname = func.__module__
-    # remove the iraf. and the name of the .py file the code is in
-    modname = '.'.join(modname.split('.')[1:-1])
-    if len(modname) > 0:
-        modname += '.'
-    modname += func.__name__
+    """
+    Retrieve a parameter from within the scope of the calling function.
 
-    tree = modname.split('.')
-    pkg = cl
-    try:
-        for branch in tree:
-            pkg = pkg[branch]
-    except KeyError:
-        print('Function/package {0} not found.'.format(modname))
-        sys.exit(1)
+    Search up the IRAF package tree until a package with the
+    parameter in question is found.
 
+    Parameters
+    ----------
+    func : function
+        The function object asking for a parameter.
+    param : str
+        Name of the parameter.
+
+    Returns
+    -------
+    Parameter
+        Parameter object with the name in question.
+
+    """
+    pkg = func.cl
+
+    # search up the tree for a parameter with the right name
     obj = None
     while pkg is not None:
         if param in pkg.keys() and isinstance(pkg[param], Parameter):
@@ -390,8 +472,11 @@ def clget(func, param):
             break
         pkg = pkg.__parent__
 
+    # XXX: replace all sys.exit() calls with exceptions
     if obj is None:
-        print('Could not find parameter {0} in {1}'.format(param, modname))
+        print('Could not find parameter {0} in {1}:{2}'.format(param,
+                                                               func.__module__,
+                                                               func.__name__))
         sys.exit(1)
 
     return obj
@@ -499,6 +584,8 @@ def loadparams(func):
 
         curpack.__nparam__ += 1
 
+    # provide a shortcut access to these parameters from the function itself
+    func.cl = curpack
     return curpack
 
 
