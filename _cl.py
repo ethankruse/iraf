@@ -12,16 +12,17 @@ __all__ = ['Package', 'Parameter', 'loadparams', 'is_iterable', 'file_handler',
 
 
 class Package(dict):
-    def __init__(self, name):
+    def __init__(self, func):
         # necessary to allow packages/functions to have arbitrary parameters
         # and be accessed via dot autocomplete
         # See http://stackoverflow.com/questions/4984647/
         # accessing-dict-keys-like-an-attribute-in-python
         super(Package, self).__init__()
         self.__dict__ = self
-        self.__name__ = name
+        self.__name__ = func.__name__
         self.__parent__ = None
         self.__nparam__ = 0
+        self.__function__ = func
 
     # again to allow parameters to be accessed via dot autocomplete
     def __dir__(self):
@@ -51,7 +52,7 @@ class Package(dict):
 
 class Parameter(object):
     def __init__(self, value, learn, name, order, mode, default, dmin,
-                 dmax, prompt_str, dtype, default_str):
+                 dmax, prompt_str, dtype, default_str, parent):
         self.default = default
         self.dtype = dtype
         self.min = dmin
@@ -64,6 +65,7 @@ class Parameter(object):
         self.default_str = default_str
         self.prompt = prompt_str
         self.changed = False
+        self.__package__ = parent
 
     def __setattr__(self, key, value):
         valid = True
@@ -96,6 +98,23 @@ class Parameter(object):
             default_str = ''
         return '{0}|{1} {2}{3}'.format(self.name, self.prompt, allowrange,
                                        default_str)
+
+    def update(self, value=None):
+        """
+        Update this parameter's value, prompting the user for input
+        if necessary.
+
+        Parameters
+        ----------
+        value : any type, optional
+            What to update the parameter to. If not supplied, the parameter
+            prompt will be displayed asking for user input.
+
+        Returns
+        -------
+
+        """
+        update_parameter(self, automode='q', value=value)
 
 
 def convert_value(value, dtype, dmin, dmax):
@@ -264,6 +283,71 @@ def convert_value(value, dtype, dmin, dmax):
     return value, valid
 
 
+def update_parameter(param, automode=None, value=None):
+    """
+    Update the value of a parameter, asking the user for input if necessary.
+
+    Parameters
+    ----------
+    param : Parameter
+        Which parameter to update.
+    automode : string, optional
+        What to replace mode 'a' with. If None, search to find the appropriate
+        mode.
+    value : any type, optional
+        What the assumed user input is by default.
+
+    Returns
+    -------
+
+    """
+    if automode is None:
+        # get the appropriate automode parameter for this function
+        automode = clget(param.__package__.__function__, 'mode').value
+
+    # fill in automode if necessary
+    mode = ''
+    for char in param.mode:
+        if char == 'a':
+            mode += automode
+        else:
+            mode += char
+
+    prompt = False
+    if 'q' in mode:
+        prompt = True
+
+    learn = False
+    if 'l' in mode:
+        learn = True
+
+    # if we're given a starting user input value, turn off the prompting
+    if value is not None:
+        prompt = False
+    else:
+        value = param.value
+
+    # prompt the user until valid input is given
+    while True:
+        value, valid = convert_value(value, param.dtype, param.min, param.max)
+
+        if not valid:
+            prompt = True
+
+        if not prompt:
+            break
+
+        value = raw_input('{0}: '.format(param))
+
+        # if the user just hit enter, accept the default value.
+        if len(value.strip()) == 0:
+            value = param.value
+        prompt = False
+
+    param.value = value
+    param.learn = learn
+
+
 def startfunc(func, *args, **kwargs):
     """
     Initialize an IRAF task. Must be called at the beginning of any
@@ -303,55 +387,14 @@ def startfunc(func, *args, **kwargs):
             plist[curpack[key].order] = curpack[key]
 
     for ii, iparam in enumerate(plist):
-        name = iparam.name
-        dmin = iparam.min
-        dmax = iparam.max
-        dtype = iparam.dtype
-        value = iparam.value
-        default = iparam.value
-
-        mode = ''
-        for char in iparam.mode:
-            if char == 'a':
-                mode += automode
-            else:
-                mode += char
-
-        prompt = False
-        if 'q' in mode:
-            prompt = True
-
-        learn = False
-        if 'l' in mode:
-            learn = True
-
+        value = None
         # kwargs take precedent over positional args
-        if name in kwargs:
-            value = kwargs[name]
-            prompt = False
+        if iparam.name in kwargs:
+            value = kwargs[iparam.name]
         elif ii < len(args):
             value = args[ii]
-            prompt = False
 
-        # prompt the user until valid input is given
-        while True:
-            value, valid = convert_value(value, dtype, dmin, dmax)
-
-            if not valid:
-                prompt = True
-
-            if not prompt:
-                break
-
-            value = raw_input('{0}: '.format(iparam))
-
-            # if the user just hit enter, accept the default value.
-            if len(value.strip()) == 0:
-                value = default
-            prompt = False
-
-        iparam.value = value
-        iparam.learn = learn
+        update_parameter(iparam, automode=automode, value=value)
 
     return
 
@@ -483,28 +526,43 @@ def clget(func, param):
 
 
 def loadparams(func):
+    """
+    Load a new function or package, including getting its parameters from
+    either the default parameter file or a user file.
+
+    Parameters
+    ----------
+    func : function
+        The function object we're loading.
+
+    Returns
+    -------
+    Package
+        The Package object for the function or package being loaded.
+    """
     # path to the function's implementation
     myfile = inspect.getabsfile(func)
     # base of the parameter file name
     parname = '{0}.par'.format(func.__name__)
+    # full package path, ignoring the leading iraf.
     userparname = func.__module__
     userparname = '.'.join(userparname.split('.')[1:-1])
     if len(userparname) > 0:
         userparname += '.'
     funcpath = userparname + func.__name__
     userparname += func.__name__ + '.par'
+    uparamfile = os.path.join(uparam_dir, userparname)
     # assume for now that the parameter file is in the same directory
     # as the function's source file
-    uparamfile = os.path.join(uparam_dir, userparname)
-    myparamfile = os.path.join(os.path.dirname(myfile), parname)
+    paramfile = os.path.join(os.path.dirname(myfile), parname)
     # if a user parameter file exists, use that instead
     if os.path.exists(uparamfile):
-        myparamfile = uparamfile
+        paramfile = uparamfile
 
     # read in the default parameters for the function
     defaultparams = []
-    if os.path.exists(myparamfile):
-        with open(myparamfile, 'r') as ff:
+    if os.path.exists(paramfile):
+        with open(paramfile, 'r') as ff:
             reader = csv.reader(ff)
             for row in reader:
                 # skip over blank lines and comment lines
@@ -518,7 +576,7 @@ def loadparams(func):
     # if we're setting the mode, get it in the right format
     for param in defaultparams:
         if param[0] == 'mode':
-            mode = param[3]
+            mode = param[3].lower()
             # get modes into the single letter categories
             if mode == 'auto':
                 mode = 'a'
@@ -533,8 +591,9 @@ def loadparams(func):
             param[3] = mode
 
     newpack = False
-    # if cl has already been initialized
+    # if we've already imported iraf
     if isinstance(cl, Package):
+        # see if this package has already been loaded
         try:
             curpack = cl
             for ifunc in funcpath.split('.'):
@@ -545,8 +604,9 @@ def loadparams(func):
         newpack = True
 
     if newpack:
-        curpack = Package(func.__name__)
+        curpack = Package(func)
         addloc = cl
+        # put the new package in the right place in the tree
         try:
             for ifunc in funcpath.split('.')[:-1]:
                 addloc = addloc[ifunc]
@@ -560,7 +620,8 @@ def loadparams(func):
 
     for ii, param in enumerate(defaultparams):
         name, dtype, mode, default_str, dmin, dmax, prompt_str = param
-
+        mode = mode.lower()
+        # get the parameter into the correct data type
         default, valid = convert_value(default_str, dtype, dmin, dmax)
         # get modes into the single letter categories
         if mode == 'auto':
@@ -577,10 +638,10 @@ def loadparams(func):
         learn = False
         if 'l' in mode:
             learn = True
-
+        # add the parameter to the package
         curpack[name] = Parameter(default, learn, name, ii, mode,
                                   default, dmin, dmax, prompt_str, dtype,
-                                  default_str)
+                                  default_str, curpack)
 
         curpack.__nparam__ += 1
 
@@ -639,7 +700,7 @@ def file_handler(filelist):
         istr = istr.strip()
         # every file here to look for
         files = []
-
+        # XXX: deal with wildcards here too?
         # we have an input file with a list of files to use.
         if istr[0] == '@':
             fname = os.path.expanduser(istr[1:])
@@ -654,6 +715,7 @@ def file_handler(filelist):
 
                     files.append(os.path.expanduser(row[0].strip()))
         else:
+            # XXX: deal with lists of '@' files?
             # this is either a single file or a CSV list of files
             tmp = istr.split(',')
             for ifile in tmp:
@@ -671,8 +733,9 @@ def file_handler(filelist):
     return outlist
 
 
+# dummy function to start the first import of IRAF
 def cl():
     return
 
-
+# start the initial IRAF package tree
 cl = loadparams(cl)
