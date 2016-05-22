@@ -1,7 +1,7 @@
 from iraf import loadparams
 
 
-def noao():
+def _noao():
     return
 
-loadparams(noao)
+noao = loadparams(_noao, 'noao')

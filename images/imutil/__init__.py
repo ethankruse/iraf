@@ -2,8 +2,8 @@ from iraf import loadparams
 from imstat import *
 
 
-def imutil():
+def _imutil():
     return
 
-loadparams(imutil)
-loadparams(imstatistics)
+imutil = loadparams(_imutil, 'imutil')
+imstatistics = loadparams(_imstatistics, 'imstatistics')

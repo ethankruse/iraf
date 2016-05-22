@@ -12,17 +12,18 @@ __all__ = ['Package', 'Parameter', 'loadparams', 'is_iterable', 'file_handler',
 
 
 class Package(dict):
-    def __init__(self, func):
+    def __init__(self, func, name):
         # necessary to allow packages/functions to have arbitrary parameters
         # and be accessed via dot autocomplete
         # See http://stackoverflow.com/questions/4984647/
         # accessing-dict-keys-like-an-attribute-in-python
         super(Package, self).__init__()
         self.__dict__ = self
-        self.__name__ = func.__name__
+        self.__name__ = name
         self.__parent__ = None
         self.__nparam__ = 0
         self.__function__ = func
+        self.__doc__ = func.__doc__
 
     # again to allow parameters to be accessed via dot autocomplete
     def __dir__(self):
@@ -48,6 +49,12 @@ class Package(dict):
                                                      Package):
                 ret += getattr(self, attrib).__repr__(level=level + 1)
         return ret
+
+    def __call__(self, *args, **kwargs):
+        startfunc(self.__function__, *args, **kwargs)
+        retval = self.__function__()
+        endfunc(self.__function__, self.__name__)
+        return retval
 
 
 class Parameter(object):
@@ -370,7 +377,7 @@ def startfunc(func, *args, **kwargs):
     -------
 
     """
-    curpack = func.cl
+    curpack = func.__package__
 
     # get the appropriate automode parameter for this function
     automode = clget(func, 'mode').value
@@ -399,7 +406,7 @@ def startfunc(func, *args, **kwargs):
     return
 
 
-def endfunc(func):
+def endfunc(func, name):
     """
     Clean up parameter values after an IRAF task and learn any new parameter
     values.
@@ -412,13 +419,14 @@ def endfunc(func):
     ----------
     func : function
         Function object of the task we're ending.
-
+    name : str
+        Name of the function we're ending.
     Returns
     -------
 
     """
     # base of the parameter file name
-    parname = '{0}.par'.format(func.__name__)
+    parname = '{0}.par'.format(name)
     # where the function is implemented
     userparname = func.__module__
     # ignore the iraf. and name of the file the function is in
@@ -435,7 +443,7 @@ def endfunc(func):
     # user parameter file location
     uparamfile = os.path.join(uparam_dir, userparname)
 
-    curpack = func.cl
+    curpack = func.__package__
 
     possible = dir(curpack)
     # figure out which parameters have changed their values
@@ -505,7 +513,7 @@ def clget(func, param):
         Parameter object with the name in question.
 
     """
-    pkg = func.cl
+    pkg = func.__package__
 
     # search up the tree for a parameter with the right name
     obj = None
@@ -519,13 +527,13 @@ def clget(func, param):
     if obj is None:
         print('Could not find parameter {0} in {1}:{2}'.format(param,
                                                                func.__module__,
-                                                               func.__name__))
+                                                               pkg.__name__))
         sys.exit(1)
 
     return obj
 
 
-def loadparams(func):
+def loadparams(func, name):
     """
     Load a new function or package, including getting its parameters from
     either the default parameter file or a user file.
@@ -533,7 +541,9 @@ def loadparams(func):
     Parameters
     ----------
     func : function
-        The function object we're loading.
+        The function object that will be executed when the Package is called.
+    name : str
+        What the name of the package or function will be.
 
     Returns
     -------
@@ -543,14 +553,14 @@ def loadparams(func):
     # path to the function's implementation
     myfile = inspect.getabsfile(func)
     # base of the parameter file name
-    parname = '{0}.par'.format(func.__name__)
+    parname = '{0}.par'.format(name)
     # full package path, ignoring the leading iraf.
     userparname = func.__module__
     userparname = '.'.join(userparname.split('.')[1:-1])
     if len(userparname) > 0:
         userparname += '.'
-    funcpath = userparname + func.__name__
-    userparname += func.__name__ + '.par'
+    funcpath = userparname + name
+    userparname += name + '.par'
     uparamfile = os.path.join(uparam_dir, userparname)
     # assume for now that the parameter file is in the same directory
     # as the function's source file
@@ -604,13 +614,13 @@ def loadparams(func):
         newpack = True
 
     if newpack:
-        curpack = Package(func)
+        curpack = Package(func, name)
         addloc = cl
         # put the new package in the right place in the tree
         try:
             for ifunc in funcpath.split('.')[:-1]:
                 addloc = addloc[ifunc]
-            addloc[func.__name__] = curpack
+            addloc[name] = curpack
             curpack.__parent__ = addloc
         except KeyError:
             print('Trying to import function or package out of order.')
@@ -619,7 +629,7 @@ def loadparams(func):
             pass
 
     for ii, param in enumerate(defaultparams):
-        name, dtype, mode, default_str, dmin, dmax, prompt_str = param
+        pname, dtype, mode, default_str, dmin, dmax, prompt_str = param
         mode = mode.lower()
         # get the parameter into the correct data type
         default, valid = convert_value(default_str, dtype, dmin, dmax)
@@ -639,14 +649,14 @@ def loadparams(func):
         if 'l' in mode:
             learn = True
         # add the parameter to the package
-        curpack[name] = Parameter(default, learn, name, ii, mode,
+        curpack[pname] = Parameter(default, learn, pname, ii, mode,
                                   default, dmin, dmax, prompt_str, dtype,
                                   default_str, curpack)
 
         curpack.__nparam__ += 1
 
     # provide a shortcut access to these parameters from the function itself
-    func.cl = curpack
+    func.__package__ = curpack
     return curpack
 
 
@@ -738,4 +748,4 @@ def cl():
     return
 
 # start the initial IRAF package tree
-cl = loadparams(cl)
+cl = loadparams(cl, 'cl')

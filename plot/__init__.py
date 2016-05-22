@@ -2,8 +2,8 @@ from iraf import loadparams
 from implot import *
 
 
-def plot():
+def _plot():
     return
 
-loadparams(plot)
-loadparams(implot)
+plot = loadparams(_plot, 'plot')
+implot = loadparams(_implot, 'implot')

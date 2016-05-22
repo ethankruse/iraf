@@ -1,7 +1,7 @@
 from iraf import loadparams
 
 
-def imred():
+def _imred():
     return
 
-loadparams(imred)
+imred = loadparams(_imred, 'imred')

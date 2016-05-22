@@ -1,5 +1,5 @@
 from __future__ import print_function
-from iraf import file_handler, clget, startfunc, endfunc
+from iraf import file_handler, clget
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
@@ -7,7 +7,7 @@ from matplotlib.widgets import Button, CheckButtons, Slider
 import copy
 import functools
 
-__all__ = ['implot']
+__all__ = ['_implot']
 
 im_set_init = {'fig': None, 'ax': None, 'sax': None, 'lineplot': True,
                'line': None, 'im': None, 'ndim': None, 'navg': None,
@@ -426,8 +426,7 @@ def implot_make_slider(fig):
     fig.im_set['_slider'] = slider
 
 
-def implot(*args, **kwargs):
-    startfunc(implot, *args, **kwargs)
+def _implot():
     # XXX: where does this go?
     # Disable default Matplotlib shortcut keys:
     keymaps = [param for param in plt.rcParams if param.find('keymap') >= 0]
@@ -435,7 +434,7 @@ def implot(*args, **kwargs):
         plt.rcParams[key] = ''
 
     # params = loadparams(*args, **kwargs)
-    images = file_handler(clget(implot, 'image').value)
+    images = file_handler(clget(_implot, 'image').value)
 
     # we couldn't find any images to plot
     if len(images) == 0:
@@ -450,11 +449,11 @@ def implot(*args, **kwargs):
     fig.im_set['ax'] = ax
 
     fig.im_set['image'] = images
-    fig.im_set['line'] = clget(implot, 'line').value
-    wcs = clget(implot, 'wcs').value
-    step = clget(implot, 'step').value
-    coords = clget(implot, 'coords').value
-    device = clget(implot, 'device').value
+    fig.im_set['line'] = clget(_implot, 'line').value
+    wcs = clget(_implot, 'wcs').value
+    step = clget(_implot, 'step').value
+    coords = clget(_implot, 'coords').value
+    device = clget(_implot, 'device').value
 
     logscale = False
     erase = False
@@ -493,5 +492,4 @@ def implot(*args, **kwargs):
 
     plt.show(block=False)
 
-    endfunc(implot)
     return nax

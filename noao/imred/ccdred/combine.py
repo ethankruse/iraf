@@ -1,6 +1,5 @@
 from __future__ import print_function
-from iraf import startfunc, file_handler, clget, endfunc
-# from iraf import instrument, logfile, ssfile
+from iraf import file_handler, clget
 import numpy as np
 from astropy.io import fits
 import os
@@ -8,7 +7,7 @@ import csv
 from astropy.wcs import WCS
 import sys
 
-__all__ = ['combine']
+__all__ = ['_combine']
 
 
 def make_fits(path):
@@ -271,29 +270,27 @@ def type_max(type1, type2):
     sys.exit(1)
 
 
-def combine(*args, **kwargs):
+def _combine():
     # XXX: figure out if this works or not
-    startfunc(combine, *args, **kwargs)
-
-    inputs = file_handler(clget(combine, 'input').value)
+    inputs = file_handler(clget(_combine, 'input').value)
 
     if len(inputs) == 0:
         return
 
-    instrument = clget(combine, 'instrument').value
-    logfile = clget(combine, 'logfile').value
+    instrument = clget(_combine, 'instrument').value
+    logfile = clget(_combine, 'logfile').value
     if instrument is not None:
         print("Instrument translation files not yet supported.")
         # XXX: need to implement this part
 
     # Determine whether to divide images into subsets and append extensions.
-    dosubsets = clget(combine, 'subsets').value
+    dosubsets = clget(_combine, 'subsets').value
 
     # Go through the input list and eliminate images not satisfying the
     # CCD image type.  Separate into subsets if desired.  Create image
     # and subset lists.
 
-    ccdtypestr = clget(combine, 'ccdtype').value
+    ccdtypestr = clget(_combine, 'ccdtype').value
     """
     pointer	images		# Pointer to lists of subsets (allocated)
     pointer	extns		# Image extensions for each subset (allocated)
@@ -338,41 +335,41 @@ def combine(*args, **kwargs):
         return
 
     # Get task parameters.  Some additional parameters are obtained later.
-    outroot = clget(combine, 'output').value
+    outroot = clget(_combine, 'output').value
     if len(outroot) == 0:
         print("Must give an output base name")
         return
-    plroot = clget(combine, 'plfile').value
-    sigroot = clget(combine, 'sigma').value
+    plroot = clget(_combine, 'plfile').value
+    sigroot = clget(_combine, 'sigma').value
 
-    project = clget(combine, 'project').value
-    combine = clget(combine, 'combine').value
-    reject = clget(combine, 'reject').value
-    blank = clget(combine, 'blank').value
-    gain = clget(combine, 'gain').value
-    rdnoise = clget(combine, 'rdnoise').value
-    snoise = clget(combine, 'snoise').value
-    lthresh = clget(combine, 'lthreshold').value
-    hthresh = clget(combine, 'hthreshold').value
-    lsigma = clget(combine, 'lsigma').value
-    hsigma = clget(combine, 'hsigma').value
-    offsets = clget(combine, 'offsets').value
-    masktype = clget(combine, 'masktype').value
-    maskvalue = clget(combine, 'maskvalue').value
-    scale = clget(combine, 'scale').value
-    zero = clget(combine, 'zero').value
-    weight = clget(combine, 'weight').value
-    statsec = clget(combine, 'statsec').value
+    project = clget(_combine, 'project').value
+    combine = clget(_combine, 'combine').value
+    reject = clget(_combine, 'reject').value
+    blank = clget(_combine, 'blank').value
+    gain = clget(_combine, 'gain').value
+    rdnoise = clget(_combine, 'rdnoise').value
+    snoise = clget(_combine, 'snoise').value
+    lthresh = clget(_combine, 'lthreshold').value
+    hthresh = clget(_combine, 'hthreshold').value
+    lsigma = clget(_combine, 'lsigma').value
+    hsigma = clget(_combine, 'hsigma').value
+    offsets = clget(_combine, 'offsets').value
+    masktype = clget(_combine, 'masktype').value
+    maskvalue = clget(_combine, 'maskvalue').value
+    scale = clget(_combine, 'scale').value
+    zero = clget(_combine, 'zero').value
+    weight = clget(_combine, 'weight').value
+    statsec = clget(_combine, 'statsec').value
 
-    grow = clget(combine, 'grow').value
-    mclip = clget(combine, 'mclip').value
-    sigscale = clget(combine, 'sigscale').value
-    delete = clget(combine, 'delete').value
-    nkeep = clget(combine, 'nkeep').value
-    pclip = clget(combine, 'pclip').value
-    nlow = clget(combine, 'nlow').value
-    nhigh = clget(combine, 'nhigh').value
-    otype = clget(combine, 'outtype').value
+    grow = clget(_combine, 'grow').value
+    mclip = clget(_combine, 'mclip').value
+    sigscale = clget(_combine, 'sigscale').value
+    delete = clget(_combine, 'delete').value
+    nkeep = clget(_combine, 'nkeep').value
+    pclip = clget(_combine, 'pclip').value
+    nlow = clget(_combine, 'nlow').value
+    nhigh = clget(_combine, 'nhigh').value
+    otype = clget(_combine, 'outtype').value
     outtype = None
     # "short|ushort|integer|long|real|double"
     if otype.lower() == 'short':
@@ -607,9 +604,9 @@ def combine(*args, **kwargs):
         ztypes = "none|mode|median|mean".split('|')
         wtypes = "none|mode|median|mean|exposure".split('|')
 
-        stype = ic_gscale(clget(combine, 'scale'), stypes, imin, exptime, scales, nimages)
-        ztype = ic_gscale(clget(combine, 'zero'), ztypes, imin, exptime, zeros, nimages)
-        wtype = ic_gscale(clget(combine, 'weight'), wtypes, imin, exptime, wts, nimages)
+        stype = ic_gscale(clget(_combine, 'scale'), stypes, imin, exptime, scales, nimages)
+        ztype = ic_gscale(clget(_combine, 'zero'), ztypes, imin, exptime, zeros, nimages)
+        wtype = ic_gscale(clget(_combine, 'weight'), wtypes, imin, exptime, wts, nimages)
 
         # Get image statistics only if needed.
         domode = 'mode' in [stype, ztype, wtype]
@@ -693,7 +690,6 @@ def combine(*args, **kwargs):
                 ifile.close()
         logfd.close()
 
-    endfunc(combine)
     return
 
 
