@@ -7,8 +7,8 @@ from glob import glob
 import sys
 import shutil
 
-__all__ = ['Package', 'Parameter', 'loadparams', 'is_iterable', 'file_handler',
-           'cl', 'clget', 'startfunc', 'endfunc']
+__all__ = ['Package', 'Parameter', 'loadpackage', 'is_iterable', 'file_handler',
+           'cl', 'clget']
 
 
 class Package(dict):
@@ -533,7 +533,7 @@ def clget(func, param):
     return obj
 
 
-def loadparams(func, name):
+def loadpackage(func, name):
     """
     Load a new function or package, including getting its parameters from
     either the default parameter file or a user file.
@@ -748,4 +748,4 @@ def cl():
     return
 
 # start the initial IRAF package tree
-cl = loadparams(cl, 'cl')
+cl = loadpackage(cl, 'cl')

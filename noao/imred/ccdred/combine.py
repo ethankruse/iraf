@@ -16,8 +16,6 @@ def make_fits(path):
         path += '.fits'
     return path
 
-# XXX: how do I "search up the tree" for cl.par mode etc?
-
 
 def ccdtypes(header):
     # XXX: this needs to have the instrument file header conversions

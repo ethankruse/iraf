@@ -1,7 +1,7 @@
-from iraf import loadparams
+from iraf import loadpackage
 
 
 def _images():
     return
 
-images = loadparams(_images, 'images')
+images = loadpackage(_images, 'images')

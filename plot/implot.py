@@ -433,7 +433,6 @@ def _implot():
     for key in keymaps:
         plt.rcParams[key] = ''
 
-    # params = loadparams(*args, **kwargs)
     images = file_handler(clget(_implot, 'image').value)
 
     # we couldn't find any images to plot

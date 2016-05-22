@@ -1,9 +1,9 @@
-from iraf import loadparams
+from iraf import loadpackage
 from implot import *
 
 
 def _plot():
     return
 
-plot = loadparams(_plot, 'plot')
-implot = loadparams(_implot, 'implot')
+plot = loadpackage(_plot, 'plot')
+implot = loadpackage(_implot, 'implot')

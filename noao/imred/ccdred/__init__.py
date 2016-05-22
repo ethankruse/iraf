@@ -1,9 +1,9 @@
-from iraf import loadparams
+from iraf import loadpackage
 from combine import *
 
 
 def _ccdred():
     return
 
-ccdred = loadparams(_ccdred, 'ccdred')
-combine = loadparams(_combine, 'combine')
+ccdred = loadpackage(_ccdred, 'ccdred')
+combine = loadpackage(_combine, 'combine')
