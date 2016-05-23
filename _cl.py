@@ -601,23 +601,21 @@ def loadpackage(func, name):
             param[3] = mode
 
     newpack = False
-    # if we've already imported iraf
-    if isinstance(cl, Package):
-        # see if this package has already been loaded
-        try:
-            curpack = cl
-            for ifunc in funcpath.split('.'):
-                curpack = curpack[ifunc]
-        except KeyError:
-            newpack = True
-    else:
+    # see if this package has already been loaded
+    try:
+        curpack = cl
+        for ifunc in funcpath.split('.'):
+            curpack = curpack[ifunc]
+    except KeyError:
+        newpack = True
+    except NameError:
         newpack = True
 
     if newpack:
         curpack = Package(func, name)
-        addloc = cl
         # put the new package in the right place in the tree
         try:
+            addloc = cl
             for ifunc in funcpath.split('.')[:-1]:
                 addloc = addloc[ifunc]
             addloc[name] = curpack
@@ -625,7 +623,7 @@ def loadpackage(func, name):
         except KeyError:
             print('Trying to import function or package out of order.')
             sys.exit(1)
-        except TypeError:
+        except NameError:
             pass
 
     for ii, param in enumerate(defaultparams):
@@ -744,8 +742,8 @@ def file_handler(filelist):
 
 
 # dummy function to start the first import of IRAF
-def cl():
+def _packages():
     return
 
 # start the initial IRAF package tree
-cl = loadpackage(cl, 'cl')
+cl = loadpackage(_packages, 'cl')
