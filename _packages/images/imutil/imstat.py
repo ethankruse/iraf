@@ -1,5 +1,5 @@
 from __future__ import print_function
-from iraf import file_handler, clget
+from iraf._cl import file_handler, clget
 from astropy.io import fits
 import numpy as np
 import scipy.stats
