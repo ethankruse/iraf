@@ -1,4 +1,4 @@
-from iraf import load_task
+from iraf._cl import load_task
 from implot import *
 
 
@@ -7,3 +7,4 @@ def _plot():
 
 plot = load_task(_plot, 'plot')
 implot = load_task(_implot, 'implot')
+del load_task

@@ -1,4 +1,4 @@
-from iraf import load_task
+from iraf._cl import load_task
 
 
 def _images():
@@ -7,3 +7,4 @@ def _images():
 images = load_task(_images, 'images')
 
 from imutil import *
+del load_task
