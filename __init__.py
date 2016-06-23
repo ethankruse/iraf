@@ -55,6 +55,8 @@ def load_task(func, name):
     import os
     from _cl import Parameter, Package, convert_value
 
+    # XXX: what happens if this is accidentally called twice for something?
+
     # path to the function's implementation
     myfile = inspect.getabsfile(func)
     # base of the parameter file name
@@ -168,7 +170,7 @@ def load_task(func, name):
 
     # provide a shortcut access to these parameters from the function itself
     func.__package__ = curpack
-    return
+    return curpack
 
 
 # dummy function to start the first import of IRAF
@@ -177,9 +179,12 @@ def _packages():
 
 
 # start the initial IRAF package tree
-load_task(_packages, 'cl')
+cl = load_task(_packages, 'cl')
 
+from images import *
+from noao import *
+from plot import *
 # default packages
-load_package('images')
-load_package('noao')
-load_package('plot')
+#load_package('images')
+#load_package('noao')
+#load_package('plot')

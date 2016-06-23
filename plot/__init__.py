@@ -5,5 +5,5 @@ from implot import *
 def _plot():
     return
 
-load_task(_plot, 'plot')
-load_task(_implot, 'implot')
+plot = load_task(_plot, 'plot')
+implot = load_task(_implot, 'implot')
