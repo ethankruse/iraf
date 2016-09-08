@@ -482,7 +482,7 @@ def endfunc(func, name):
             for row in reader:
                 # skip comment or blank rows
                 if (len(row) == 0 or len(row[0].strip()) == 0 or
-                            row[0].strip()[0] == '#'):
+                        row[0].strip()[0] == '#'):
                     pass
                 # if we are learning this parameter, replace the default value.
                 elif row[0].strip() in learned:
@@ -757,6 +757,7 @@ def load_task(func, name):
 # dummy function to start the first import of IRAF
 def _cl():
     return
+
 
 # start the initial IRAF package tree
 cl = load_task(_cl, 'cl')

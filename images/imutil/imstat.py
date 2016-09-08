@@ -123,7 +123,7 @@ def _imstatistics():
             npix = valid.size
 
             # do the sigma clipping
-            for ii in np.arange(nclip):
+            for _ in np.arange(nclip):
                 if npix > 0:
                     if lsigma > 0.:
                         lowlim = valid.mean() - lsigma * valid.std()

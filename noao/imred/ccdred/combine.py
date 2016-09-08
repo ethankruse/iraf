@@ -64,7 +64,7 @@ def ccdsubset(im):
                 for row in reader:
                     # skip over blank lines and comment lines
                     if (len(row) == 0 or len(row[0].strip()) == 0 or
-                                row[0].strip()[0] == '#'):
+                            row[0].strip()[0] == '#'):
                         continue
                     # make sure we have a complete row
                     assert len(row) > 1
