@@ -4,6 +4,7 @@ del os
 
 from _cl import cl
 
-from images import *
+import images
+
 from noao import *
 from plot import *

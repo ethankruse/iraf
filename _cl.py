@@ -344,7 +344,7 @@ def update_parameter(param, automode=None, value=None):
         if not prompt:
             break
 
-        value = raw_input('{0}: '.format(param))
+        value = input('{0}: '.format(param))
 
         # if the user just hit enter, accept the default value.
         if len(value.strip()) == 0:

@@ -1,13 +1,14 @@
-from __future__ import print_function
-from iraf._cl import file_handler, clget
+from iraf._cl import file_handler
 from astropy.io import fits
 import numpy as np
 import scipy.stats
 
-__all__ = ['_imstatistics']
+__all__ = ['imstatistics']
 
 
-def _imstatistics():
+def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
+                 lower=None, upper=None, nclip=0, lsigma=3.0, usigma=3.0,
+                 binwidth=0.1, print_format=True, cache=False):
     """
     Get general statistics about the data in a file's (or list of files')
     primary FITS HDU.
@@ -35,37 +36,19 @@ def _imstatistics():
     binwidth : float
         Bin width of histogram (in sigma). Currently obsolete; was only used
         in the original IRAF implementation to calculate the mode.
-    format : boolean
+    print_format : boolean
         Whether or not to format the output and print column labels
     cache : boolean
         Obsolete. Was previously used to ask about caching the images
         in memory.
     """
-    # list of images to run on
-    images = clget(_imstatistics, 'images').value
+
     images = file_handler(images)
-    # which statistics we want to calculate
-    fields = clget(_imstatistics, 'fields').value
-    # lower/upper limits for pixel values
-    lower = clget(_imstatistics, 'lower').value
+
     if lower is None:
         lower = -np.inf
-    upper = clget(_imstatistics, 'upper').value
     if upper is None:
         upper = np.inf
-    # number of clipping iterations
-    nclip = clget(_imstatistics, 'nclip').value
-    # lower and upper sigma clipping level
-    lsigma = clget(_imstatistics, 'lsigma').value
-    usigma = clget(_imstatistics, 'usigma').value
-    # bin width of histogram in sigma
-    # this is only used in the original IRAF method of defining mode.
-    # could now be eliminated.
-    binwidth = clget(_imstatistics, 'binwidth').value
-    # should the output be pretty formatted
-    print_format = clget(_imstatistics, 'format').value
-    # cache image in memory (obsolete)
-    cache = clget(_imstatistics, 'cache').value
 
     possible_fields = "image|npix|min|max|mean|midpt|mode|stddev|skew|kurtosis"
     possible_fields = possible_fields.split('|')
