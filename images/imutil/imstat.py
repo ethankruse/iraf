@@ -53,6 +53,7 @@ def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
     possible_fields = "image|npix|min|max|mean|midpt|mode|stddev|skew|kurtosis"
     possible_fields = possible_fields.split('|')
 
+    # user input fields
     in_fields = [x.strip().lower() for x in fields.split(',')]
     # retain the same order as in_fields, but only the valid ones
     use_fields = [x for x in in_fields if x in possible_fields]
