@@ -1,5 +1,5 @@
 from __future__ import print_function
-from iraf._cl import file_handler, clget
+from iraf._cl import file_handler
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
@@ -7,7 +7,7 @@ from matplotlib.widgets import CheckButtons, Slider
 import copy
 import functools
 
-__all__ = ['_implot']
+__all__ = ['implot']
 
 im_set_init = {'fig': None, 'ax': None, 'sax': None, 'lineplot': True,
                'line': None, 'im': None, 'ndim': None, 'navg': None,
@@ -418,14 +418,15 @@ def implot_make_slider(fig):
     fig.im_set['_slider'] = slider
 
 
-def _implot():
+def implot(image, line, *, wcs='logical', step=0, coords=None,
+           device='stdgraph'):
     # XXX: where does this go?
     # Disable default Matplotlib shortcut keys:
     keymaps = [param for param in plt.rcParams if param.find('keymap') >= 0]
     for key in keymaps:
         plt.rcParams[key] = ''
 
-    images = file_handler(clget(_implot, 'image').value)
+    images = file_handler(image)
 
     # we couldn't find any images to plot
     if len(images) == 0:
@@ -440,11 +441,7 @@ def _implot():
     fig.im_set['ax'] = ax
 
     fig.im_set['image'] = images
-    fig.im_set['line'] = clget(_implot, 'line').value
-    wcs = clget(_implot, 'wcs').value
-    step = clget(_implot, 'step').value
-    coords = clget(_implot, 'coords').value
-    device = clget(_implot, 'device').value
+    fig.im_set['line'] = line
 
     logscale = False
     erase = False

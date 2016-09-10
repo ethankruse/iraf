@@ -1,5 +1,5 @@
 from __future__ import print_function
-from iraf._cl import file_handler, clget
+from iraf._cl import file_handler
 import numpy as np
 from astropy.io import fits
 import os
@@ -7,7 +7,7 @@ import csv
 from astropy.wcs import WCS
 import sys
 
-__all__ = ['_combine']
+__all__ = ['combine']
 
 
 def make_fits(path):
@@ -29,7 +29,7 @@ def ccdtypes(header):
     return typ
 
 
-def ccdsubset(im):
+def ccdsubset(im, ssfile):
     # XXX: this needs to have the instrument file header conversions
     try:
         # XXX: change back to subset
@@ -43,8 +43,6 @@ def ccdsubset(im):
     except KeyError:
         subsetstr = None
         subset1 = None
-
-    ssfile = clget(combine, 'ssfile')
 
     # A null subset string is ok.  If not null check for conflict
     # with previous subset IDs.
@@ -64,7 +62,7 @@ def ccdsubset(im):
                 for row in reader:
                     # skip over blank lines and comment lines
                     if (len(row) == 0 or len(row[0].strip()) == 0 or
-                            row[0].strip()[0] == '#'):
+                                row[0].strip()[0] == '#'):
                         continue
                     # make sure we have a complete row
                     assert len(row) > 1
@@ -148,7 +146,7 @@ def ic_setout(inputs, output, nimages, project, offsets):
         bb = inputs[0][0].data.shape[jj] + aa
         amin = aa
         bmax = bb
-        for ii in np.arange(nimages-1) + 1:
+        for ii in np.arange(nimages - 1) + 1:
             aa = offsetsarr[ii, jj]
             bb = inputs[ii][0].data.shape[jj] + aa
             if aa != amin or bb != bmax or not reloff:
@@ -159,7 +157,7 @@ def ic_setout(inputs, output, nimages, project, offsets):
         if reloff or amin < 0:
             offsetsarr[:, jj] -= amin
 
-        # also d? IM_LEN(out[1],j) = IM_LEN(out[1],j) - amin
+            # also d? IM_LEN(out[1],j) = IM_LEN(out[1],j) - amin
 
     # Update the WCS.
     # XXX: do this
@@ -264,31 +262,79 @@ def type_max(type1, type2):
             if np.can_cast(type2, iint, casting='safe'):
                 return np.dtype(iint)
 
-    print("Unrecognized dtype or cannot safely cast between {0} and {1}.".format(type1, type2))
+    print(
+        "Unrecognized dtype or cannot safely cast between {0} and {1}.".format(
+            type1, type2))
     sys.exit(1)
 
 
-def _combine():
+"""
+input,s,a,,,,List of images to combine
+output,s,a,,,,List of output images
+plfile,s,h,"",,,List of output pixel list files (optional)
+sigma,s,h,"",,,"List of sigma images (optional)"
+
+ccdtype,s,h,"",,,CCD image type to combine (optional)
+subsets,b,h,no,,,Combine images by subset parameter?
+delete,b,h,no,,,Delete input images after combining?
+# XXX: clobber no longer exists
+clobber,b,h,no,,,"Clobber existing output image?"
+
+combine,s,h,"average","average|median",,Type of combine operation
+reject,s,h,"none","none|minmax|ccdclip|crreject|sigclip|avsigclip|pclip",,Type of rejection
+project,b,h,no,,,Project highest dimension of input images?
+outtype,s,h,"real","short|ushort|integer|long|real|double",,Output image pixel datatype
+offsets,f,h,"none",,,Input image offsets
+masktype,s,h,"none","none|goodvalue|badvalue|goodbits|badbits",,Mask type
+maskvalue,r,h,0,,,Mask value
+blank,r,h,0.,,,"Value if there are no pixels"
+
+scale,s,h,"none",,,Image scaling
+zero,s,h,"none",,,Image zero point offset
+weight,s,h,"none",,,Image weights
+statsec,s,h,"",,,"Image section for computing statistics"
+
+lthreshold,r,h,INDEF,,,Lower threshold
+hthreshold,r,h,INDEF,,,Upper threshold
+nlow,i,h,1,0,,minmax: Number of low pixels to reject
+nhigh,i,h,1,0,,minmax: Number of high pixels to reject
+nkeep,i,h,1,,,Minimum to keep (pos) or maximum to reject (neg)
+mclip,b,h,yes,,,Use median in sigma clipping algorithms?
+lsigma,r,h,3.,0.,,Lower sigma clipping factor
+hsigma,r,h,3.,0.,,Upper sigma clipping factor
+rdnoise,s,h,"0.",,,ccdclip: CCD readout noise (electrons)
+gain,s,h,"1.",,,ccdclip: CCD gain (electrons/DN)
+snoise,s,h,"0.",,,ccdclip: Sensitivity noise (fraction)
+sigscale,r,h,0.1,0.,,Tolerance for sigma clipping scaling corrections
+pclip,r,h,-0.5,,,pclip: Percentile clipping parameter
+grow,i,h,0,,,Radius (pixels) for 1D neighbor rejection
+"""
+
+
+def combine(input, output, *, plfile=None, sigma=None, ccdtype=None,
+            subsets=False, delete=False, clobber=False, combine='average',
+            reject='none', project=False, outtype='real', offsets='none', masktype='none',
+            maskvalue=0, blank=0, scale='none', zero='none', weight='none', statsec=None,
+            lthreshold=None, hthreshold=None, nlow=1, nhigh=1, nkeep=1, mclip=True, lsigma=3.0,
+            hsigma=3.0, rdnoise='0.', gain='1.', snoise='0.', sigscale=0.1,
+            pclip=-0.5, grow=0, instrument=None, logfile=None):
     # XXX: figure out if this works or not
-    inputs = file_handler(clget(_combine, 'input').value)
+    inputs = file_handler(input)
 
     if len(inputs) == 0:
         return
 
-    instrument = clget(_combine, 'instrument').value
-    logfile = clget(_combine, 'logfile').value
+    # XXX: need to define these in the inputs
+    # instrument = clget(_combine, 'instrument').value
+    # logfile = clget(_combine, 'logfile').value
     if instrument is not None:
         print("Instrument translation files not yet supported.")
         # XXX: need to implement this part
-
-    # Determine whether to divide images into subsets and append extensions.
-    dosubsets = clget(_combine, 'subsets').value
 
     # Go through the input list and eliminate images not satisfying the
     # CCD image type.  Separate into subsets if desired.  Create image
     # and subset lists.
 
-    ccdtypestr = clget(_combine, 'ccdtype').value
     """
     pointer	images		# Pointer to lists of subsets (allocated)
     pointer	extns		# Image extensions for each subset (allocated)
@@ -311,11 +357,11 @@ def _combine():
 
         thistype = ccdtypes(hdulist[0].header)
 
-        if ccdtypestr is not None and thistype != ccdtypestr:
+        if ccdtype is not None and thistype != ccdtype:
             hdulist.close()
             continue
 
-        if dosubsets:
+        if subsets:
             subsetstr = ccdsubset(hdulist)
         else:
             subsetstr = None
@@ -332,56 +378,31 @@ def _combine():
         print("No images to combine.")
         return
 
+    # XXX: double check this is ok now after switching to pythonic
+    # the outroot, plroot, and sigroot stuff.
+
     # Get task parameters.  Some additional parameters are obtained later.
-    outroot = clget(_combine, 'output').value
+    outroot = output
     if len(outroot) == 0:
         print("Must give an output base name")
         return
-    plroot = clget(_combine, 'plfile').value
-    sigroot = clget(_combine, 'sigma').value
+    plroot = plfile
+    sigroot = sigma
 
-    project = clget(_combine, 'project').value
-    combine = clget(_combine, 'combine').value
-    reject = clget(_combine, 'reject').value
-    blank = clget(_combine, 'blank').value
-    gain = clget(_combine, 'gain').value
-    rdnoise = clget(_combine, 'rdnoise').value
-    snoise = clget(_combine, 'snoise').value
-    lthresh = clget(_combine, 'lthreshold').value
-    hthresh = clget(_combine, 'hthreshold').value
-    lsigma = clget(_combine, 'lsigma').value
-    hsigma = clget(_combine, 'hsigma').value
-    offsets = clget(_combine, 'offsets').value
-    masktype = clget(_combine, 'masktype').value
-    maskvalue = clget(_combine, 'maskvalue').value
-    scale = clget(_combine, 'scale').value
-    zero = clget(_combine, 'zero').value
-    weight = clget(_combine, 'weight').value
-    statsec = clget(_combine, 'statsec').value
-
-    grow = clget(_combine, 'grow').value
-    mclip = clget(_combine, 'mclip').value
-    sigscale = clget(_combine, 'sigscale').value
-    delete = clget(_combine, 'delete').value
-    nkeep = clget(_combine, 'nkeep').value
-    pclip = clget(_combine, 'pclip').value
-    nlow = clget(_combine, 'nlow').value
-    nhigh = clget(_combine, 'nhigh').value
-    otype = clget(_combine, 'outtype').value
-    outtype = None
+    rtype = None
     # "short|ushort|integer|long|real|double"
-    if otype.lower() == 'short':
-        outtype = np.short
-    elif otype.lower() == 'ushort':
-        outtype = np.ushort
-    elif otype.lower() == 'integer':
-        outtype = np.intc
-    elif otype.lower() == 'long':
-        outtype = np.long
-    elif otype.lower() == 'real':
-        outtype = np.float
-    elif otype.lower() == 'double':
-        outtype = np.double
+    if outtype.lower() == 'short':
+        rtype = np.short
+    elif outtype.lower() == 'ushort':
+        rtype = np.ushort
+    elif outtype.lower() == 'integer':
+        rtype = np.intc
+    elif outtype.lower() == 'long':
+        rtype = np.long
+    elif outtype.lower() == 'real':
+        rtype = np.float
+    elif outtype.lower() == 'double':
+        rtype = np.double
 
     # Check parameters, map INDEFs, and set threshold flag
     if blank is None:
@@ -396,13 +417,13 @@ def _combine():
     if sigscale is None:
         sigscale = 0.
 
-    if lthresh is None and hthresh is None:
+    if lthreshold is None and hthreshold is None:
         dothresh = False
     else:
-        if lthresh is None:
-            lthresh = -np.inf
-        if hthresh is None:
-            hthresh = np.inf
+        if lthreshold is None:
+            lthreshold = -np.inf
+        if hthreshold is None:
+            hthreshold = np.inf
 
     # Combine each input subset.
     for zz, iset in enumerate(subset):
@@ -509,8 +530,8 @@ def _combine():
         for im in imin:
             intype = type_max(intype, im[0].data.dtype)
 
-        if outtype is None:
-            outtype = intype
+        if rtype is None:
+            rtype = intype
         # set this? IM_PIXTYPE(out[1]) = getdatatype (clgetc ("outtype"))
 
         # XXX: this won't work if we're introducing 'sections' of files too
@@ -602,9 +623,12 @@ def _combine():
         ztypes = "none|mode|median|mean".split('|')
         wtypes = "none|mode|median|mean|exposure".split('|')
 
-        stype = ic_gscale(clget(_combine, 'scale'), stypes, imin, exptime, scales, nimages)
-        ztype = ic_gscale(clget(_combine, 'zero'), ztypes, imin, exptime, zeros, nimages)
-        wtype = ic_gscale(clget(_combine, 'weight'), wtypes, imin, exptime, wts, nimages)
+        stype = ic_gscale(scale, stypes, imin, exptime,
+                          scales, nimages)
+        ztype = ic_gscale(zero, ztypes, imin, exptime, zeros,
+                          nimages)
+        wtype = ic_gscale(weight, wtypes, imin, exptime, wts,
+                          nimages)
 
         # Get image statistics only if needed.
         domode = 'mode' in [stype, ztype, wtype]
@@ -622,11 +646,12 @@ def _combine():
             elif statsec == 'overlap':
                 section = '['
                 for ii in np.arange(out[0][0].data.ndim):
-                    kk = offarr[0,ii]
-                    ll = offarr[0,ii] + imin[0][0].data.shape[ii]
+                    kk = offarr[0, ii]
+                    ll = offarr[0, ii] + imin[0][0].data.shape[ii]
                     for jj in np.arange(1, nimages):
                         kk = max(kk, offarr[jj, ii])
-                        ll = min(ll, offarr[jj, ii] + imin[jj][0].data.shape[ii])
+                        ll = min(ll,
+                                 offarr[jj, ii] + imin[jj][0].data.shape[ii])
                     section += '{0:d}:{1:d},'.format(kk, ll)
                 section = section[:-1]
                 section += ']'
@@ -640,7 +665,7 @@ def _combine():
                 else:
                     imref = oref
 
-                # ic_stat(imin[ii], imref, section, offarr)
+                    # ic_stat(imin[ii], imref, section, offarr)
         """
         do i = 1, nimages {
         if (imref != out[1])
@@ -714,32 +739,32 @@ def ic_stat(imin, imref, section, offarr, project):
 
 
 def ic_gscale(param, dic, inp, exptime, values, nimages):
-    if param.value is None:
+    if param is None:
         stype = 'none'
-    elif param.value[0] == '@':
+    elif param[0] == '@':
         stype = 'file'
-        tmp = np.loadtxt(param.value[1:])
+        tmp = np.loadtxt(param[1:])
         if len(tmp.shape) != 1:
-            print("Could not understand {0} values in {1}".format(param.name, param.value[1:]))
+            print("Could not understand values in {1}".format(param[1:]))
             sys.exit(1)
         if tmp.size < nimages:
-            print("Insufficient {0} values in {1}".format(param.name, param.value[1:]))
+            print("Insufficient values in {1}".format(param[1:]))
             sys.exit(1)
         if tmp.size > nimages:
-            print("Warning: Ignoring additional {0} values in {1}".format(param.name, param.value[1:]))
+            print("Warning: Ignoring additional values in {1}".format(param[1:]))
         values[:] = tmp[:nimages]
-    elif param.value[0] == '!':
+    elif param[0] == '!':
         stype = 'keyword'
         for ii, im in enumerate(inp):
-            values[ii] = im[0].header[param.value[1:]]
+            values[ii] = im[0].header[param[1:]]
     else:
-        if param.value in dic:
-            stype = param.value
+        if param in dic:
+            stype = param
             if stype == 'exposure':
                 tmp = np.where(exptime > 0.001)[0]
                 values[tmp] = 0.001
         else:
-            print("Unknown {0} type".format(param.name))
+            print("Unknown type")
             sys.exit(1)
     return stype
 

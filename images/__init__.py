@@ -1,2 +1,1 @@
-import .imutil
-
+from . import imutil
