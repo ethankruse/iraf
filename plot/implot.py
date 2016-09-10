@@ -1,4 +1,3 @@
-from __future__ import print_function
 from iraf._cl import file_handler
 import numpy as np
 import matplotlib.pyplot as plt
@@ -455,7 +454,7 @@ def implot(image, line, *, wcs='logical', step=0, coords=None,
     fig.im_set['navg'] = 1
 
     # number of images in the list to look through
-    nim = len(fig.im_set['image'])
+    # nim = len(fig.im_set['image'])
     # which image we're examining now
     fig.im_set['index'] = 0
 

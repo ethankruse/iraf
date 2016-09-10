@@ -1,10 +1,6 @@
-from __future__ import print_function
-import inspect
 import os
 import csv
 from glob import glob
-import sys
-import shutil
 
 __all__ = ['is_iterable', 'file_handler']
 
@@ -69,7 +65,7 @@ def file_handler(filelist):
                 for row in reader:
                     # skip over blank lines and comment lines
                     if (len(row) == 0 or len(row[0].strip()) == 0 or
-                                row[0].strip()[0] == '#'):
+                            row[0].strip()[0] == '#'):
                         continue
 
                     files.append(os.path.expanduser(row[0].strip()))
@@ -90,4 +86,3 @@ def file_handler(filelist):
                 outlist.append(jfile)
 
     return outlist
-

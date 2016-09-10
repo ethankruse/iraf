@@ -1,4 +1,3 @@
-from __future__ import print_function
 from iraf._cl import file_handler
 import numpy as np
 from astropy.io import fits
@@ -62,7 +61,7 @@ def ccdsubset(im, ssfile):
                 for row in reader:
                     # skip over blank lines and comment lines
                     if (len(row) == 0 or len(row[0].strip()) == 0 or
-                                row[0].strip()[0] == '#'):
+                            row[0].strip()[0] == '#'):
                         continue
                     # make sure we have a complete row
                     assert len(row) > 1
@@ -268,53 +267,10 @@ def type_max(type1, type2):
     sys.exit(1)
 
 
-"""
-input,s,a,,,,List of images to combine
-output,s,a,,,,List of output images
-plfile,s,h,"",,,List of output pixel list files (optional)
-sigma,s,h,"",,,"List of sigma images (optional)"
-
-ccdtype,s,h,"",,,CCD image type to combine (optional)
-subsets,b,h,no,,,Combine images by subset parameter?
-delete,b,h,no,,,Delete input images after combining?
-# XXX: clobber no longer exists
-clobber,b,h,no,,,"Clobber existing output image?"
-
-combine,s,h,"average","average|median",,Type of combine operation
-reject,s,h,"none","none|minmax|ccdclip|crreject|sigclip|avsigclip|pclip",,Type of rejection
-project,b,h,no,,,Project highest dimension of input images?
-outtype,s,h,"real","short|ushort|integer|long|real|double",,Output image pixel datatype
-offsets,f,h,"none",,,Input image offsets
-masktype,s,h,"none","none|goodvalue|badvalue|goodbits|badbits",,Mask type
-maskvalue,r,h,0,,,Mask value
-blank,r,h,0.,,,"Value if there are no pixels"
-
-scale,s,h,"none",,,Image scaling
-zero,s,h,"none",,,Image zero point offset
-weight,s,h,"none",,,Image weights
-statsec,s,h,"",,,"Image section for computing statistics"
-
-lthreshold,r,h,INDEF,,,Lower threshold
-hthreshold,r,h,INDEF,,,Upper threshold
-nlow,i,h,1,0,,minmax: Number of low pixels to reject
-nhigh,i,h,1,0,,minmax: Number of high pixels to reject
-nkeep,i,h,1,,,Minimum to keep (pos) or maximum to reject (neg)
-mclip,b,h,yes,,,Use median in sigma clipping algorithms?
-lsigma,r,h,3.,0.,,Lower sigma clipping factor
-hsigma,r,h,3.,0.,,Upper sigma clipping factor
-rdnoise,s,h,"0.",,,ccdclip: CCD readout noise (electrons)
-gain,s,h,"1.",,,ccdclip: CCD gain (electrons/DN)
-snoise,s,h,"0.",,,ccdclip: Sensitivity noise (fraction)
-sigscale,r,h,0.1,0.,,Tolerance for sigma clipping scaling corrections
-pclip,r,h,-0.5,,,pclip: Percentile clipping parameter
-grow,i,h,0,,,Radius (pixels) for 1D neighbor rejection
-"""
-
-
 def combine(input, output, *, plfile=None, sigma=None, ccdtype=None,
             subsets=False, delete=False, clobber=False, combine='average',
-            reject='none', project=False, outtype='real', offsets='none', masktype='none',
-            maskvalue=0, blank=0, scale='none', zero='none', weight='none', statsec=None,
+            reject='none', project=False, outtype='real', offsets=None, masktype='none',
+            maskvalue=0, blank=0, scale=None, zero=None, weight=None, statsec=None,
             lthreshold=None, hthreshold=None, nlow=1, nhigh=1, nkeep=1, mclip=True, lsigma=3.0,
             hsigma=3.0, rdnoise='0.', gain='1.', snoise='0.', sigscale=0.1,
             pclip=-0.5, grow=0, instrument=None, logfile=None):
@@ -386,8 +342,6 @@ def combine(input, output, *, plfile=None, sigma=None, ccdtype=None,
     if len(outroot) == 0:
         print("Must give an output base name")
         return
-    plroot = plfile
-    sigroot = sigma
 
     rtype = None
     # "short|ushort|integer|long|real|double"
@@ -436,14 +390,11 @@ def combine(input, output, *, plfile=None, sigma=None, ccdtype=None,
         output = '{0}{1}'.format(outroot, sstring)
         output = make_fits(output)
 
-        plfile = None
-        sigma = None
+        if plfile is not None:
+            plfile = '{0}{1}'.format(plfile, sstring)
 
-        if plroot is not None:
-            plfile = '{0}{1}'.format(plroot, sstring)
-
-        if sigroot is not None:
-            sigma = '{0}{1}'.format(sigroot, sstring)
+        if sigma is not None:
+            sigma = '{0}{1}'.format(sigma, sstring)
 
         """
             # Combine all images from the (subset) list.
