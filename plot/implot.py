@@ -5,6 +5,7 @@ from astropy.io import fits
 from matplotlib.widgets import CheckButtons, Slider
 import copy
 import functools
+from iraf.sys import image_open, image_close
 
 __all__ = ['implot']
 
@@ -214,7 +215,7 @@ def implot_keypress(event, fig=None):
         # we're currently plotting columns
         if not fig.im_set['lineplot']:
             # which column to plot
-            fracthru = fig.im_set['line'] * 1. / fig.im_set['ncols']
+            fracthru = fig.im_set['line'] / fig.im_set['ncols']
             fig.im_set['line'] = int(fig.im_set['nlines'] * fracthru)
 
             implot_plot_line(fig)
@@ -228,7 +229,7 @@ def implot_keypress(event, fig=None):
                 return
 
             # which line to plot
-            fracthru = fig.im_set['line'] * 1. / fig.im_set['nlines']
+            fracthru = fig.im_set['line'] / fig.im_set['nlines']
             fig.im_set['line'] = int(fig.im_set['ncols'] * fracthru)
 
             implot_plot_col(fig)
@@ -339,7 +340,8 @@ def implot_open_image(fig, infile=None):
 
     # open the image
     try:
-        hdulist = fits.open(infile)
+        # hdulist = fits.open(infile)
+        hdulist = image_open(infile)
     except IOError:
         print("Error reading image {0} ...".format(
             fig.im_set['image'][fig.im_set['index']]))
@@ -347,7 +349,8 @@ def implot_open_image(fig, infile=None):
         # XXX: go to next image
 
     fig.im_set['im'] = hdulist[0].data
-    hdulist.close()
+    # hdulist.close()
+    image_close(hdulist)
 
     if fig.im_set['im'] is None:
         # XXX: call error (1, "image has no pixels")
@@ -363,11 +366,11 @@ def implot_open_image(fig, infile=None):
 
     if fig.im_set['line'] is None:
         fig.im_set['line'] = max(0, min(fig.im_set['nlines'],
-                                        (fig.im_set['nlines'] + 1) / 2) - 1)
+                                        (fig.im_set['nlines'] + 1) // 2) - 1)
         fig.im_set['lineinit'] = fig.im_set['line']
         fig.im_set['colinit'] = max(0,
                                     min(fig.im_set['ncols'],
-                                        (fig.im_set['ncols'] + 1) / 2) - 1)
+                                        (fig.im_set['ncols'] + 1) // 2) - 1)
     # redo the slider
     implot_remove_slider(fig)
     implot_make_slider(fig)
@@ -417,7 +420,7 @@ def implot_make_slider(fig):
     fig.im_set['_slider'] = slider
 
 
-def implot(image, line, *, wcs='logical', step=0, coords=None,
+def implot(image, *, line=None, wcs='logical', step=0, coords=None,
            device='stdgraph'):
     # XXX: where does this go?
     # Disable default Matplotlib shortcut keys:

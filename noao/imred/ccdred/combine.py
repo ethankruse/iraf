@@ -267,25 +267,23 @@ def type_max(type1, type2):
     sys.exit(1)
 
 
-def combine(input, output, *, plfile=None, sigma=None, ccdtype=None,
+def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             subsets=False, delete=False, clobber=False, combine='average',
             reject='none', project=False, outtype='real', offsets=None, masktype='none',
             maskvalue=0, blank=0, scale=None, zero=None, weight=None, statsec=None,
             lthreshold=None, hthreshold=None, nlow=1, nhigh=1, nkeep=1, mclip=True, lsigma=3.0,
             hsigma=3.0, rdnoise='0.', gain='1.', snoise='0.', sigscale=0.1,
             pclip=-0.5, grow=0, instrument=None, logfile=None):
-    # XXX: figure out if this works or not
-    inputs = file_handler(input)
 
-    if len(inputs) == 0:
-        return
-
-    # XXX: need to define these in the inputs
-    # instrument = clget(_combine, 'instrument').value
-    # logfile = clget(_combine, 'logfile').value
     if instrument is not None:
         print("Instrument translation files not yet supported.")
         # XXX: need to implement this part
+
+    # start of IRAF cmb_images.
+    inputs = file_handler(images)
+
+    if len(inputs) == 0:
+        return
 
     # Go through the input list and eliminate images not satisfying the
     # CCD image type.  Separate into subsets if desired.  Create image
@@ -433,7 +431,7 @@ def combine(input, output, *, plfile=None, sigma=None, ccdtype=None,
             if pclip is None:
                 pclip = -0.5
 
-            ii = nimages / 2.
+            ii = nimages // 2.
             if np.abs(pclip) < 1.:
                 pclip *= ii
             if pclip < 0.:

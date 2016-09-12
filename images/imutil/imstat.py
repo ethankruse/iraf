@@ -1,7 +1,8 @@
 from iraf._cl import file_handler
-from astropy.io import fits
 import numpy as np
 import scipy.stats
+from iraf.sys import image_open, image_close
+
 
 __all__ = ['imstatistics']
 
@@ -86,7 +87,8 @@ def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
     for image in images:
         # open the image
         try:
-            hdulist = fits.open(image)
+            # hdulist = fits.open(image)
+            hdulist = image_open(image)
         except IOError:
             print("Error reading image {0} ...".format(image))
             continue
@@ -239,5 +241,6 @@ def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
                 outstring += '  '
         print(outstring)
 
-        hdulist.close()
+        # hdulist.close()
+        image_close(hdulist)
     return
