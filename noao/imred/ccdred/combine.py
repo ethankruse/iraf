@@ -5,6 +5,7 @@ import os
 import csv
 from astropy.wcs import WCS
 import sys
+from iraf.sys import image_open, image_close
 
 __all__ = ['combine']
 
@@ -16,32 +17,47 @@ def make_fits(path):
     return path
 
 
-def ccdtypes(header):
+def ccdtypes(hdulist, instrument):
     # XXX: this needs to have the instrument file header conversions
+    if instrument is not None:
+        sys.exit(1)
+
+    typ = None
     options = "object|zero|dark|flat|illum|fringe|other|comp".split('|')
-    try:
-        typ = header['imagetyp'].lower()
-        if typ not in options:
-            typ = 'unknown'
-    except KeyError:
+    for hdu in hdulist:
+        try:
+            typ = hdu.header['imagetyp'].strip().lower()
+            if typ not in options:
+                typ = 'unknown'
+        except KeyError:
+            pass
+    if typ is None:
         typ = 'none'
     return typ
 
 
-def ccdsubset(im, ssfile):
+def ccdsubset(hdulist, instrument, ssfile):
     # XXX: this needs to have the instrument file header conversions
-    try:
-        # XXX: change back to subset
-        subsetstr = im[0].header['subset']
-        # The default subset identifier is the first word of the subset string.
-        subset1 = subsetstr.strip().split()
-        if len(subset1) > 0:
-            subset1 = subset1[0]
-        else:
-            subset1 = None
-    except KeyError:
-        subsetstr = None
-        subset1 = None
+    if instrument is not None:
+        sys.exit(1)
+
+    subsetstr = None
+    subset1 = None
+
+    for hdu in hdulist:
+        try:
+            subsetstr = hdu.header['subset']
+            # The default subset identifier is the first
+            # word of the subset string.
+            subset1 = subsetstr.strip().split()
+            if len(subset1) > 0:
+                subset1 = subset1[0]
+            else:
+                subset1 = None
+        except KeyError:
+            pass
+
+    # XXX: I stopped looking again here.
 
     # A null subset string is ok.  If not null check for conflict
     # with previous subset IDs.
@@ -273,11 +289,19 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             maskvalue=0, blank=0, scale=None, zero=None, weight=None, statsec=None,
             lthreshold=None, hthreshold=None, nlow=1, nhigh=1, nkeep=1, mclip=True, lsigma=3.0,
             hsigma=3.0, rdnoise='0.', gain='1.', snoise='0.', sigscale=0.1,
-            pclip=-0.5, grow=0, instrument=None, logfile=None):
+            pclip=-0.5, grow=0, instrument=None, logfile=None, ssfile=None):
 
     if instrument is not None:
         print("Instrument translation files not yet supported.")
         # XXX: need to implement this part
+        """
+        To learn about instruments, look into
+        'iraf-src/noao/imred/ccdred/src/hdrmap.x' for the functions that create
+        a symbol table pointer and do the translations.
+        Instrument file tables are located in
+        'iraf-src/noao/imred/ccdred/ccddb'.
+        """
+        sys.exit(1)
 
     # start of IRAF cmb_images.
     inputs = file_handler(images)
@@ -303,20 +327,20 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
 
     for image in inputs:
         # open the image
-        try:
-            hdulist = fits.open(image)
-        except IOError:
-            print("Error reading image {0} ...".format(image))
+        hdulist = image_open(image)
+
+        if hdulist is None:
             continue
 
-        thistype = ccdtypes(hdulist[0].header)
+        thistype = ccdtypes(hdulist, instrument)
 
         if ccdtype is not None and thistype != ccdtype:
-            hdulist.close()
+            image_close(hdulist)
             continue
 
+        # XXX: I stopped looking again here.
         if subsets:
-            subsetstr = ccdsubset(hdulist)
+            subsetstr = ccdsubset(hdulist, instrument, ssfile)
         else:
             subsetstr = None
 
@@ -326,7 +350,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         else:
             images[subset.index(subsetstr)].append(image)
 
-        hdulist.close()
+        image_close(hdulist)
 
     if len(images) == 0:
         print("No images to combine.")

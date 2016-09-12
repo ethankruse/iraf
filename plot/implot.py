@@ -1,7 +1,6 @@
 from iraf._cl import file_handler
 import numpy as np
 import matplotlib.pyplot as plt
-from astropy.io import fits
 from matplotlib.widgets import CheckButtons, Slider
 import copy
 import functools
@@ -339,12 +338,8 @@ def implot_open_image(fig, infile=None):
         infile = fig.im_set['image'][fig.im_set['index']]
 
     # open the image
-    try:
-        # hdulist = fits.open(infile)
-        hdulist = image_open(infile)
-    except IOError:
-        print("Error reading image {0} ...".format(
-            fig.im_set['image'][fig.im_set['index']]))
+    hdulist = image_open(infile)
+    if hdulist is None:
         return
         # XXX: go to next image
 

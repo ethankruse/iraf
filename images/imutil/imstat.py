@@ -86,11 +86,8 @@ def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
 
     for image in images:
         # open the image
-        try:
-            # hdulist = fits.open(image)
-            hdulist = image_open(image)
-        except IOError:
-            print("Error reading image {0} ...".format(image))
+        hdulist = image_open(image)
+        if hdulist is None:
             continue
 
         results = {'npix': 0, 'min': None,
