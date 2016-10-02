@@ -307,7 +307,7 @@ def type_max(type1, type2):
 
 
 def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
-            subsets=False, delete=False, clobber=False, combine='average',
+            subsets=False, delete=False, combine='average',
             reject='none', project=False, outtype='real', offsets=None, masktype='none',
             maskvalue=0, blank=0, scale=None, zero=None, weight=None, statsec=None,
             lthreshold=None, hthreshold=None, nlow=1, nhigh=1, nkeep=1, mclip=True, lsigma=3.0,
@@ -377,19 +377,8 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
 
     # end of cmb_images code.
 
-    # XXX: I stopped looking again here.
-    
     if len(images) == 0:
         print("No images to combine.")
-        return
-
-    # XXX: double check this is ok now after switching to pythonic
-    # the outroot, plroot, and sigroot stuff.
-
-    # Get task parameters.  Some additional parameters are obtained later.
-    outroot = output
-    if len(outroot) == 0:
-        print("Must give an output base name")
         return
 
     rtype = None
@@ -407,26 +396,21 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
     elif outtype.lower() == 'double':
         rtype = np.double
 
-    # Check parameters, map INDEFs, and set threshold flag
-    if blank is None:
-        blank = 0.
-    if lsigma is None:
-        # XXX: typo? This should probably be -np.inf
-        lsigma = np.inf
-    if hsigma is None:
-        hsigma = np.inf
-    if grow is None:
-        grow = 0
-    if sigscale is None:
-        sigscale = 0.
+    outroot = output.strip()
+    plroot = plfile.strip()
+    sigroot = sigma.strip()
 
+    # Check parameters, map INDEFs, and set threshold flag
     if lthreshold is None and hthreshold is None:
         dothresh = False
     else:
+        dothresh = True
         if lthreshold is None:
             lthreshold = -np.inf
         if hthreshold is None:
             hthreshold = np.inf
+
+    # XXX: I stopped looking again here.
 
     # Combine each input subset.
     for zz, iset in enumerate(subset):
