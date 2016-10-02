@@ -18,6 +18,23 @@ def make_fits(path):
 
 
 def ccdtypes(hdulist, instrument):
+    """
+    Get the header value of 'imagetyp' (or instrument equivalent).
+    If that (instrument converted) value is one of
+    "|object|zero|dark|flat|illum|fringe|other|comp|" return that.
+    Otherwise return 'unknown' unless the header does not contain any
+    'imagetyp' and the instrument doesn't have a default value for it. Then
+    return 'none'.
+
+    Parameters
+    ----------
+    hdulist
+    instrument
+
+    Returns
+    -------
+
+    """
     # XXX: this needs to have the instrument file header conversions
     if instrument is not None:
         sys.exit(1)
