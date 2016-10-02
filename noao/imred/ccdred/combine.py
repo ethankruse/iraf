@@ -6,6 +6,8 @@ import csv
 from astropy.wcs import WCS
 import sys
 from iraf.sys import image_open, image_close
+import shlex
+
 
 __all__ = ['combine']
 
@@ -58,6 +60,10 @@ def ccdsubset(hdulist, instrument, ssfile):
     if instrument is not None:
         sys.exit(1)
 
+    if ssfile is None:
+        print('ssfile must be defined to use subsets')
+        sys.exit(1)
+
     subsetstr = None
     subset1 = None
 
@@ -65,16 +71,16 @@ def ccdsubset(hdulist, instrument, ssfile):
         try:
             subsetstr = hdu.header['subset']
             # The default subset identifier is the first
-            # word of the subset string.
-            subset1 = subsetstr.strip().split()
+            # word/string of the subset string.
+            subset1 = shlex.split(subsetstr.strip())
             if len(subset1) > 0:
                 subset1 = subset1[0]
             else:
+                # the subset string was just white space
                 subset1 = None
+                subsetstr = None
         except KeyError:
             pass
-
-    # XXX: I stopped looking again here.
 
     # A null subset string is ok.  If not null check for conflict
     # with previous subset IDs.
@@ -90,16 +96,17 @@ def ccdsubset(hdulist, instrument, ssfile):
             subsetstrs = []
             subsetids = []
             with open(ssfile, 'r') as ff:
-                reader = csv.reader(ff, delimiter='\t')
-                for row in reader:
+                lines = ff.readlines()
+                for row in lines:
                     # skip over blank lines and comment lines
-                    if (len(row) == 0 or len(row[0].strip()) == 0 or
+                    if (len(row) == 0 or len(row.strip()) == 0 or
                             row[0].strip()[0] == '#'):
                         continue
-                    # make sure we have a complete row
-                    assert len(row) > 1
-                    subsetstrs.append(row[0])
-                    subsetids.append(row[1])
+
+                    groups = shlex.strip(row)
+                    assert len(groups) == 2
+                    subsetstrs.append(groups[0])
+                    subsetids.append(groups[1])
 
             ii = 1
             while True:
@@ -116,8 +123,7 @@ def ccdsubset(hdulist, instrument, ssfile):
 
         if append:
             with open(ssfile, 'a') as ff:
-                writer = csv.writer(ff, delimiter='\t')
-                writer.writerow([subsetstr, subset1])
+                ff.write('{0}\t{1}\n'.format(subsetstr, subset1))
 
         # Set the subset ID string and replace magic characters by '_'
         # since the subset ID is used in forming image names.
@@ -355,9 +361,9 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             image_close(hdulist)
             continue
 
-        # XXX: I stopped looking again here.
         if subsets:
             subsetstr = ccdsubset(hdulist, instrument, ssfile)
+            extn = subsetstr
         else:
             subsetstr = None
 
@@ -369,6 +375,10 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
 
         image_close(hdulist)
 
+    # end of cmb_images code.
+
+    # XXX: I stopped looking again here.
+    
     if len(images) == 0:
         print("No images to combine.")
         return
