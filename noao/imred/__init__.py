@@ -1,7 +1,1 @@
-from iraf import loadparams
-
-
-def imred():
-    return
-
-loadparams(imred)
+from .ccdred import *

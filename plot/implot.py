@@ -1,11 +1,10 @@
-from __future__ import print_function
-from iraf import file_handler, clget, startfunc, endfunc
+from iraf._cl import file_handler
 import numpy as np
 import matplotlib.pyplot as plt
-from astropy.io import fits
-from matplotlib.widgets import Button, CheckButtons, Slider
+from matplotlib.widgets import CheckButtons, Slider
 import copy
 import functools
+from iraf.sys import image_open, image_close
 
 __all__ = ['implot']
 
@@ -24,28 +23,25 @@ def implot_plot(fig):
         fig.im_set['ax'].cla()
 
     if fig.im_set['lineplot']:
-        y1 = max(0, min(fig.im_set['nlines'] - 1, fig.im_set['line']))
-        y2 = max(1, min(fig.im_set['nlines'],
+        i1 = max(0, min(fig.im_set['nlines'] - 1, fig.im_set['line']))
+        i2 = max(1, min(fig.im_set['nlines'],
                         fig.im_set['line'] + fig.im_set['navg']))
         if fig.im_set['ndim'] == 1:
             yplot = fig.im_set['im']
         else:
-            yplot = fig.im_set['im'][:, y1:y2].mean(axis=1)
+            yplot = fig.im_set['im'][:, i1:i2].mean(axis=1)
         # XXX: need to add in the WCS transformation here
         xplot = np.arange(fig.im_set['ncols'])
     else:
-        x1 = max(0, min(fig.im_set['ncols'] - 1, fig.im_set['line']))
-        x2 = max(1, min(fig.im_set['ncols'],
+        i1 = max(0, min(fig.im_set['ncols'] - 1, fig.im_set['line']))
+        i2 = max(1, min(fig.im_set['ncols'],
                         fig.im_set['line'] + fig.im_set['navg']))
         if fig.im_set['ndim'] == 1:
-            yplot = fig.im_set['im'][x1:x2]
+            yplot = fig.im_set['im'][i1:i2]
         else:
-            yplot = fig.im_set['im'][x1:x2, :].mean(axis=0)
+            yplot = fig.im_set['im'][i1:i2, :].mean(axis=0)
         # XXX: need to add in the WCS transformation here
         xplot = np.arange(fig.im_set['nlines'])
-
-    # if (format[1] == '%')
-    #    call strcpy(format, fmt, SZ_FNAME)
 
     fig.im_set['ax'].plot(xplot, yplot)
     fig.im_set['xdata'] = xplot
@@ -55,13 +51,9 @@ def implot_plot(fig):
         if fig.im_set['navg'] > 1:
             if fig.im_set['lineplot']:
                 txt = "lines"
-                i1 = y1
-                i2 = y2
                 sz = fig.im_set['nlines'] - 1
             else:
                 txt = "columns"
-                i1 = x1
-                i2 = x2
                 sz = fig.im_set['ncols'] - 1
             title = "Average of {0} {1:d} to {2:d} of {3} in\n{4}"
             title = title.format(txt, i1, i2 - 1, sz,
@@ -194,7 +186,6 @@ def implot_keypress(event, fig=None):
             else:
                 print(bell)
 
-
         except ValueError:
             print(bell)
 
@@ -223,7 +214,7 @@ def implot_keypress(event, fig=None):
         # we're currently plotting columns
         if not fig.im_set['lineplot']:
             # which column to plot
-            fracthru = fig.im_set['line'] * 1. / fig.im_set['ncols']
+            fracthru = fig.im_set['line'] / fig.im_set['ncols']
             fig.im_set['line'] = int(fig.im_set['nlines'] * fracthru)
 
             implot_plot_line(fig)
@@ -237,7 +228,7 @@ def implot_keypress(event, fig=None):
                 return
 
             # which line to plot
-            fracthru = fig.im_set['line'] * 1. / fig.im_set['nlines']
+            fracthru = fig.im_set['line'] / fig.im_set['nlines']
             fig.im_set['line'] = int(fig.im_set['ncols'] * fracthru)
 
             implot_plot_col(fig)
@@ -275,7 +266,7 @@ def implot_keypress(event, fig=None):
     # print statistics on a region
     if event.key == 's':
         if (event.inaxes is not fig.im_set['ax'] or event.xdata is None or
-                    event.ydata is None):
+                event.ydata is None):
             fig.im_set['stat'] = None
             return
 
@@ -288,8 +279,8 @@ def implot_keypress(event, fig=None):
         x1 = min(fig.im_set['stat'][0], event.xdata)
         x2 = max(fig.im_set['stat'][0], event.xdata)
 
-        region = \
-        np.where((fig.im_set['xdata'] >= x1) & (fig.im_set['xdata'] <= x2))[0]
+        region = np.where((fig.im_set['xdata'] >= x1) &
+                          (fig.im_set['xdata'] <= x2))[0]
         if len(region) == 0:
             ind1 = np.abs(fig.im_set['xdata'] - x1).argmin()
             if ind1 != len(fig.im_set['xdata']):
@@ -298,10 +289,10 @@ def implot_keypress(event, fig=None):
                 region = np.array([ind1, ind1 - 1])
         mean = fig.im_set['ydata'][region].mean()
         std = fig.im_set['ydata'][region].std()
-        sum = fig.im_set['ydata'][region].sum()
+        isum = fig.im_set['ydata'][region].sum()
         median = np.median(fig.im_set['ydata'][region])
         outstr = "Median={0:g}, mean={1:g}, rms={2:g}, sum={3:g}, npix={4:d}"
-        print(outstr.format(median, mean, std, sum, len(region)))
+        print(outstr.format(median, mean, std, isum, len(region)))
         fig.im_set['stat'] = None
 
     if event.key == ' ':
@@ -347,16 +338,14 @@ def implot_open_image(fig, infile=None):
         infile = fig.im_set['image'][fig.im_set['index']]
 
     # open the image
-    try:
-        hdulist = fits.open(infile)
-    except IOError:
-        print("Error reading image {0} ...".format(
-            fig.im_set['image'][fig.im_set['index']]))
+    hdulist = image_open(infile)
+    if hdulist is None:
         return
         # XXX: go to next image
 
     fig.im_set['im'] = hdulist[0].data
-    hdulist.close()
+    # hdulist.close()
+    image_close(hdulist)
 
     if fig.im_set['im'] is None:
         # XXX: call error (1, "image has no pixels")
@@ -372,11 +361,11 @@ def implot_open_image(fig, infile=None):
 
     if fig.im_set['line'] is None:
         fig.im_set['line'] = max(0, min(fig.im_set['nlines'],
-                                        (fig.im_set['nlines'] + 1) / 2) - 1)
+                                        (fig.im_set['nlines'] + 1) // 2) - 1)
         fig.im_set['lineinit'] = fig.im_set['line']
         fig.im_set['colinit'] = max(0,
                                     min(fig.im_set['ncols'],
-                                        (fig.im_set['ncols'] + 1) / 2) - 1)
+                                        (fig.im_set['ncols'] + 1) // 2) - 1)
     # redo the slider
     implot_remove_slider(fig)
     implot_make_slider(fig)
@@ -426,16 +415,15 @@ def implot_make_slider(fig):
     fig.im_set['_slider'] = slider
 
 
-def implot(*args, **kwargs):
-    startfunc(implot, *args, **kwargs)
+def implot(image, *, line=None, wcs='logical', step=0, coords=None,
+           device='stdgraph'):
     # XXX: where does this go?
     # Disable default Matplotlib shortcut keys:
     keymaps = [param for param in plt.rcParams if param.find('keymap') >= 0]
     for key in keymaps:
         plt.rcParams[key] = ''
 
-    # params = loadparams(*args, **kwargs)
-    images = file_handler(clget(implot, 'image').value)
+    images = file_handler(image)
 
     # we couldn't find any images to plot
     if len(images) == 0:
@@ -450,11 +438,7 @@ def implot(*args, **kwargs):
     fig.im_set['ax'] = ax
 
     fig.im_set['image'] = images
-    fig.im_set['line'] = clget(implot, 'line').value
-    wcs = clget(implot, 'wcs').value
-    step = clget(implot, 'step').value
-    coords = clget(implot, 'coords').value
-    device = clget(implot, 'device').value
+    fig.im_set['line'] = line
 
     logscale = False
     erase = False
@@ -468,7 +452,7 @@ def implot(*args, **kwargs):
     fig.im_set['navg'] = 1
 
     # number of images in the list to look through
-    nim = len(fig.im_set['image'])
+    # nim = len(fig.im_set['image'])
     # which image we're examining now
     fig.im_set['index'] = 0
 
@@ -493,5 +477,4 @@ def implot(*args, **kwargs):
 
     plt.show(block=False)
 
-    endfunc(implot)
     return nax

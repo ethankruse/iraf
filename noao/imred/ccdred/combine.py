@@ -1,12 +1,13 @@
-from __future__ import print_function
-from iraf import startfunc, file_handler, clget, endfunc
-# from iraf import instrument, logfile, ssfile
+from iraf._cl import file_handler
 import numpy as np
 from astropy.io import fits
 import os
 import csv
 from astropy.wcs import WCS
 import sys
+from iraf.sys import image_open, image_close
+import shlex
+
 
 __all__ = ['combine']
 
@@ -17,37 +18,69 @@ def make_fits(path):
         path += '.fits'
     return path
 
-# XXX: how do I "search up the tree" for cl.par mode etc?
 
+def ccdtypes(hdulist, instrument):
+    """
+    Get the header value of 'imagetyp' (or instrument equivalent).
+    If that (instrument converted) value is one of
+    "|object|zero|dark|flat|illum|fringe|other|comp|" return that.
+    Otherwise return 'unknown' unless the header does not contain any
+    'imagetyp' and the instrument doesn't have a default value for it. Then
+    return 'none'.
 
-def ccdtypes(header):
+    Parameters
+    ----------
+    hdulist
+    instrument
+
+    Returns
+    -------
+
+    """
     # XXX: this needs to have the instrument file header conversions
+    if instrument is not None:
+        sys.exit(1)
+
+    typ = None
     options = "object|zero|dark|flat|illum|fringe|other|comp".split('|')
-    try:
-        typ = header['imagetyp'].lower()
-        if typ not in options:
-            typ = 'unknown'
-    except KeyError:
+    for hdu in hdulist:
+        try:
+            typ = hdu.header['imagetyp'].strip().lower()
+            if typ not in options:
+                typ = 'unknown'
+        except KeyError:
+            pass
+    if typ is None:
         typ = 'none'
     return typ
 
 
-def ccdsubset(im):
+def ccdsubset(hdulist, instrument, ssfile):
     # XXX: this needs to have the instrument file header conversions
-    try:
-        # XXX: change back to subset
-        subsetstr = im[0].header['subset']
-        # The default subset identifier is the first word of the subset string.
-        subset1 = subsetstr.strip().split()
-        if len(subset1) > 0:
-            subset1 = subset1[0]
-        else:
-            subset1 = None
-    except KeyError:
-        subsetstr = None
-        subset1 = None
+    if instrument is not None:
+        sys.exit(1)
 
-    ssfile = clget(combine, 'ssfile')
+    if ssfile is None:
+        print('ssfile must be defined to use subsets')
+        sys.exit(1)
+
+    subsetstr = None
+    subset1 = None
+
+    for hdu in hdulist:
+        try:
+            subsetstr = hdu.header['subset']
+            # The default subset identifier is the first
+            # word/string of the subset string.
+            subset1 = shlex.split(subsetstr.strip())
+            if len(subset1) > 0:
+                subset1 = subset1[0]
+            else:
+                # the subset string was just white space
+                subset1 = None
+                subsetstr = None
+        except KeyError:
+            pass
 
     # A null subset string is ok.  If not null check for conflict
     # with previous subset IDs.
@@ -63,16 +96,17 @@ def ccdsubset(im):
             subsetstrs = []
             subsetids = []
             with open(ssfile, 'r') as ff:
-                reader = csv.reader(ff, delimiter='\t')
-                for row in reader:
+                lines = ff.readlines()
+                for row in lines:
                     # skip over blank lines and comment lines
-                    if (len(row) == 0 or len(row[0].strip()) == 0 or
-                                row[0].strip()[0] == '#'):
+                    if (len(row) == 0 or len(row.strip()) == 0 or
+                            row[0].strip()[0] == '#'):
                         continue
-                    # make sure we have a complete row
-                    assert len(row) > 1
-                    subsetstrs.append(row[0])
-                    subsetids.append(row[1])
+
+                    groups = shlex.strip(row)
+                    assert len(groups) == 2
+                    subsetstrs.append(groups[0])
+                    subsetids.append(groups[1])
 
             ii = 1
             while True:
@@ -89,8 +123,7 @@ def ccdsubset(im):
 
         if append:
             with open(ssfile, 'a') as ff:
-                writer = csv.writer(ff, delimiter='\t')
-                writer.writerow([subsetstr, subset1])
+                ff.write('{0}\t{1}\n'.format(subsetstr, subset1))
 
         # Set the subset ID string and replace magic characters by '_'
         # since the subset ID is used in forming image names.
@@ -151,7 +184,7 @@ def ic_setout(inputs, output, nimages, project, offsets):
         bb = inputs[0][0].data.shape[jj] + aa
         amin = aa
         bmax = bb
-        for ii in np.arange(nimages-1) + 1:
+        for ii in np.arange(nimages - 1) + 1:
             aa = offsetsarr[ii, jj]
             bb = inputs[ii][0].data.shape[jj] + aa
             if aa != amin or bb != bmax or not reloff:
@@ -162,7 +195,7 @@ def ic_setout(inputs, output, nimages, project, offsets):
         if reloff or amin < 0:
             offsetsarr[:, jj] -= amin
 
-        # also d? IM_LEN(out[1],j) = IM_LEN(out[1],j) - amin
+            # also d? IM_LEN(out[1],j) = IM_LEN(out[1],j) - amin
 
     # Update the WCS.
     # XXX: do this
@@ -267,33 +300,42 @@ def type_max(type1, type2):
             if np.can_cast(type2, iint, casting='safe'):
                 return np.dtype(iint)
 
-    print("Unrecognized dtype or cannot safely cast between {0} and {1}.".format(type1, type2))
+    print(
+        "Unrecognized dtype or cannot safely cast between {0} and {1}.".format(
+            type1, type2))
     sys.exit(1)
 
 
-def combine(*args, **kwargs):
-    # XXX: figure out if this works or not
-    startfunc(combine, *args, **kwargs)
+def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
+            subsets=False, delete=False, clobber=False, combine='average',
+            reject='none', project=False, outtype='real', offsets=None, masktype='none',
+            maskvalue=0, blank=0, scale=None, zero=None, weight=None, statsec=None,
+            lthreshold=None, hthreshold=None, nlow=1, nhigh=1, nkeep=1, mclip=True, lsigma=3.0,
+            hsigma=3.0, rdnoise='0.', gain='1.', snoise='0.', sigscale=0.1,
+            pclip=-0.5, grow=0, instrument=None, logfile=None, ssfile=None):
 
-    inputs = file_handler(clget(combine, 'input').value)
-
-    if len(inputs) == 0:
-        return
-
-    instrument = clget(combine, 'instrument').value
-    logfile = clget(combine, 'logfile').value
     if instrument is not None:
         print("Instrument translation files not yet supported.")
         # XXX: need to implement this part
+        """
+        To learn about instruments, look into
+        'iraf-src/noao/imred/ccdred/src/hdrmap.x' for the functions that create
+        a symbol table pointer and do the translations.
+        Instrument file tables are located in
+        'iraf-src/noao/imred/ccdred/ccddb'.
+        """
+        sys.exit(1)
 
-    # Determine whether to divide images into subsets and append extensions.
-    dosubsets = clget(combine, 'subsets').value
+    # start of IRAF cmb_images.
+    inputs = file_handler(images)
+
+    if len(inputs) == 0:
+        return
 
     # Go through the input list and eliminate images not satisfying the
     # CCD image type.  Separate into subsets if desired.  Create image
     # and subset lists.
 
-    ccdtypestr = clget(combine, 'ccdtype').value
     """
     pointer	images		# Pointer to lists of subsets (allocated)
     pointer	extns		# Image extensions for each subset (allocated)
@@ -308,20 +350,20 @@ def combine(*args, **kwargs):
 
     for image in inputs:
         # open the image
-        try:
-            hdulist = fits.open(image)
-        except IOError:
-            print("Error reading image {0} ...".format(image))
+        hdulist = image_open(image)
+
+        if hdulist is None:
             continue
 
-        thistype = ccdtypes(hdulist[0].header)
+        thistype = ccdtypes(hdulist, instrument)
 
-        if ccdtypestr is not None and thistype != ccdtypestr:
-            hdulist.close()
+        if ccdtype is not None and thistype != ccdtype:
+            image_close(hdulist)
             continue
 
-        if dosubsets:
-            subsetstr = ccdsubset(hdulist)
+        if subsets:
+            subsetstr = ccdsubset(hdulist, instrument, ssfile)
+            extn = subsetstr
         else:
             subsetstr = None
 
@@ -331,62 +373,39 @@ def combine(*args, **kwargs):
         else:
             images[subset.index(subsetstr)].append(image)
 
-        hdulist.close()
+        image_close(hdulist)
 
+    # end of cmb_images code.
+
+    # XXX: I stopped looking again here.
+    
     if len(images) == 0:
         print("No images to combine.")
         return
 
+    # XXX: double check this is ok now after switching to pythonic
+    # the outroot, plroot, and sigroot stuff.
+
     # Get task parameters.  Some additional parameters are obtained later.
-    outroot = clget(combine, 'output').value
+    outroot = output
     if len(outroot) == 0:
         print("Must give an output base name")
         return
-    plroot = clget(combine, 'plfile').value
-    sigroot = clget(combine, 'sigma').value
 
-    project = clget(combine, 'project').value
-    combine = clget(combine, 'combine').value
-    reject = clget(combine, 'reject').value
-    blank = clget(combine, 'blank').value
-    gain = clget(combine, 'gain').value
-    rdnoise = clget(combine, 'rdnoise').value
-    snoise = clget(combine, 'snoise').value
-    lthresh = clget(combine, 'lthreshold').value
-    hthresh = clget(combine, 'hthreshold').value
-    lsigma = clget(combine, 'lsigma').value
-    hsigma = clget(combine, 'hsigma').value
-    offsets = clget(combine, 'offsets').value
-    masktype = clget(combine, 'masktype').value
-    maskvalue = clget(combine, 'maskvalue').value
-    scale = clget(combine, 'scale').value
-    zero = clget(combine, 'zero').value
-    weight = clget(combine, 'weight').value
-    statsec = clget(combine, 'statsec').value
-
-    grow = clget(combine, 'grow').value
-    mclip = clget(combine, 'mclip').value
-    sigscale = clget(combine, 'sigscale').value
-    delete = clget(combine, 'delete').value
-    nkeep = clget(combine, 'nkeep').value
-    pclip = clget(combine, 'pclip').value
-    nlow = clget(combine, 'nlow').value
-    nhigh = clget(combine, 'nhigh').value
-    otype = clget(combine, 'outtype').value
-    outtype = None
+    rtype = None
     # "short|ushort|integer|long|real|double"
-    if otype.lower() == 'short':
-        outtype = np.short
-    elif otype.lower() == 'ushort':
-        outtype = np.ushort
-    elif otype.lower() == 'integer':
-        outtype = np.intc
-    elif otype.lower() == 'long':
-        outtype = np.long
-    elif otype.lower() == 'real':
-        outtype = np.float
-    elif otype.lower() == 'double':
-        outtype = np.double
+    if outtype.lower() == 'short':
+        rtype = np.short
+    elif outtype.lower() == 'ushort':
+        rtype = np.ushort
+    elif outtype.lower() == 'integer':
+        rtype = np.intc
+    elif outtype.lower() == 'long':
+        rtype = np.long
+    elif outtype.lower() == 'real':
+        rtype = np.float
+    elif outtype.lower() == 'double':
+        rtype = np.double
 
     # Check parameters, map INDEFs, and set threshold flag
     if blank is None:
@@ -401,13 +420,13 @@ def combine(*args, **kwargs):
     if sigscale is None:
         sigscale = 0.
 
-    if lthresh is None and hthresh is None:
+    if lthreshold is None and hthreshold is None:
         dothresh = False
     else:
-        if lthresh is None:
-            lthresh = -np.inf
-        if hthresh is None:
-            hthresh = np.inf
+        if lthreshold is None:
+            lthreshold = -np.inf
+        if hthreshold is None:
+            hthreshold = np.inf
 
     # Combine each input subset.
     for zz, iset in enumerate(subset):
@@ -420,14 +439,11 @@ def combine(*args, **kwargs):
         output = '{0}{1}'.format(outroot, sstring)
         output = make_fits(output)
 
-        plfile = None
-        sigma = None
+        if plfile is not None:
+            plfile = '{0}{1}'.format(plfile, sstring)
 
-        if plroot is not None:
-            plfile = '{0}{1}'.format(plroot, sstring)
-
-        if sigroot is not None:
-            sigma = '{0}{1}'.format(sigroot, sstring)
+        if sigma is not None:
+            sigma = '{0}{1}'.format(sigma, sstring)
 
         """
             # Combine all images from the (subset) list.
@@ -466,7 +482,7 @@ def combine(*args, **kwargs):
             if pclip is None:
                 pclip = -0.5
 
-            ii = nimages / 2.
+            ii = nimages // 2.
             if np.abs(pclip) < 1.:
                 pclip *= ii
             if pclip < 0.:
@@ -514,8 +530,8 @@ def combine(*args, **kwargs):
         for im in imin:
             intype = type_max(intype, im[0].data.dtype)
 
-        if outtype is None:
-            outtype = intype
+        if rtype is None:
+            rtype = intype
         # set this? IM_PIXTYPE(out[1]) = getdatatype (clgetc ("outtype"))
 
         # XXX: this won't work if we're introducing 'sections' of files too
@@ -607,9 +623,12 @@ def combine(*args, **kwargs):
         ztypes = "none|mode|median|mean".split('|')
         wtypes = "none|mode|median|mean|exposure".split('|')
 
-        stype = ic_gscale(clget(combine, 'scale'), stypes, imin, exptime, scales, nimages)
-        ztype = ic_gscale(clget(combine, 'zero'), ztypes, imin, exptime, zeros, nimages)
-        wtype = ic_gscale(clget(combine, 'weight'), wtypes, imin, exptime, wts, nimages)
+        stype = ic_gscale(scale, stypes, imin, exptime,
+                          scales, nimages)
+        ztype = ic_gscale(zero, ztypes, imin, exptime, zeros,
+                          nimages)
+        wtype = ic_gscale(weight, wtypes, imin, exptime, wts,
+                          nimages)
 
         # Get image statistics only if needed.
         domode = 'mode' in [stype, ztype, wtype]
@@ -627,11 +646,12 @@ def combine(*args, **kwargs):
             elif statsec == 'overlap':
                 section = '['
                 for ii in np.arange(out[0][0].data.ndim):
-                    kk = offarr[0,ii]
-                    ll = offarr[0,ii] + imin[0][0].data.shape[ii]
+                    kk = offarr[0, ii]
+                    ll = offarr[0, ii] + imin[0][0].data.shape[ii]
                     for jj in np.arange(1, nimages):
                         kk = max(kk, offarr[jj, ii])
-                        ll = min(ll, offarr[jj, ii] + imin[jj][0].data.shape[ii])
+                        ll = min(ll,
+                                 offarr[jj, ii] + imin[jj][0].data.shape[ii])
                     section += '{0:d}:{1:d},'.format(kk, ll)
                 section = section[:-1]
                 section += ']'
@@ -645,7 +665,7 @@ def combine(*args, **kwargs):
                 else:
                     imref = oref
 
-                # ic_stat(imin[ii], imref, section, offarr)
+                    # ic_stat(imin[ii], imref, section, offarr)
         """
         do i = 1, nimages {
         if (imref != out[1])
@@ -693,7 +713,6 @@ def combine(*args, **kwargs):
                 ifile.close()
         logfd.close()
 
-    endfunc(combine)
     return
 
 
@@ -720,32 +739,32 @@ def ic_stat(imin, imref, section, offarr, project):
 
 
 def ic_gscale(param, dic, inp, exptime, values, nimages):
-    if param.value is None:
+    if param is None:
         stype = 'none'
-    elif param.value[0] == '@':
+    elif param[0] == '@':
         stype = 'file'
-        tmp = np.loadtxt(param.value[1:])
+        tmp = np.loadtxt(param[1:])
         if len(tmp.shape) != 1:
-            print("Could not understand {0} values in {1}".format(param.name, param.value[1:]))
+            print("Could not understand values in {1}".format(param[1:]))
             sys.exit(1)
         if tmp.size < nimages:
-            print("Insufficient {0} values in {1}".format(param.name, param.value[1:]))
+            print("Insufficient values in {1}".format(param[1:]))
             sys.exit(1)
         if tmp.size > nimages:
-            print("Warning: Ignoring additional {0} values in {1}".format(param.name, param.value[1:]))
+            print("Warning: Ignoring additional values in {1}".format(param[1:]))
         values[:] = tmp[:nimages]
-    elif param.value[0] == '!':
+    elif param[0] == '!':
         stype = 'keyword'
         for ii, im in enumerate(inp):
-            values[ii] = im[0].header[param.value[1:]]
+            values[ii] = im[0].header[param[1:]]
     else:
-        if param.value in dic:
-            stype = param.value
+        if param in dic:
+            stype = param
             if stype == 'exposure':
                 tmp = np.where(exptime > 0.001)[0]
                 values[tmp] = 0.001
         else:
-            print("Unknown {0} type".format(param.name))
+            print("Unknown type")
             sys.exit(1)
     return stype
 

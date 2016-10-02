@@ -1,13 +1,15 @@
-from __future__ import print_function
-from iraf import file_handler, clget, startfunc, endfunc
-from astropy.io import fits
+from iraf._cl import file_handler
 import numpy as np
 import scipy.stats
+from iraf.sys import image_open, image_close
+
 
 __all__ = ['imstatistics']
 
 
-def imstatistics(*args, **kwargs):
+def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
+                 lower=None, upper=None, nclip=0, lsigma=3.0, usigma=3.0,
+                 binwidth=0.1, print_format=True, cache=False):
     """
     Get general statistics about the data in a file's (or list of files')
     primary FITS HDU.
@@ -35,43 +37,24 @@ def imstatistics(*args, **kwargs):
     binwidth : float
         Bin width of histogram (in sigma). Currently obsolete; was only used
         in the original IRAF implementation to calculate the mode.
-    format : boolean
+    print_format : boolean
         Whether or not to format the output and print column labels
     cache : boolean
         Obsolete. Was previously used to ask about caching the images
         in memory.
     """
-    startfunc(imstatistics, *args, **kwargs)
 
-    # list of images to run on
-    images = clget(imstatistics, 'images').value
     images = file_handler(images)
-    # which statistics we want to calculate
-    fields = clget(imstatistics, 'fields').value
-    # lower/upper limits for pixel values
-    lower = clget(imstatistics, 'lower').value
+
     if lower is None:
         lower = -np.inf
-    upper = clget(imstatistics, 'upper').value
     if upper is None:
         upper = np.inf
-    # number of clipping iterations
-    nclip = clget(imstatistics, 'nclip').value
-    # lower and upper sigma clipping level
-    lsigma = clget(imstatistics, 'lsigma').value
-    usigma = clget(imstatistics, 'usigma').value
-    # bin width of histogram in sigma
-    # this is only used in the original IRAF method of defining mode.
-    # could now be eliminated.
-    binwidth = clget(imstatistics, 'binwidth').value
-    # should the output be pretty formatted
-    print_format = clget(imstatistics, 'format').value
-    # cache image in memory (obsolete)
-    cache = clget(imstatistics, 'cache').value
 
     possible_fields = "image|npix|min|max|mean|midpt|mode|stddev|skew|kurtosis"
     possible_fields = possible_fields.split('|')
 
+    # user input fields
     in_fields = [x.strip().lower() for x in fields.split(',')]
     # retain the same order as in_fields, but only the valid ones
     use_fields = [x for x in in_fields if x in possible_fields]
@@ -103,10 +86,8 @@ def imstatistics(*args, **kwargs):
 
     for image in images:
         # open the image
-        try:
-            hdulist = fits.open(image)
-        except IOError:
-            print("Error reading image {0} ...".format(image))
+        hdulist = image_open(image)
+        if hdulist is None:
             continue
 
         results = {'npix': 0, 'min': None,
@@ -125,7 +106,7 @@ def imstatistics(*args, **kwargs):
             npix = valid.size
 
             # do the sigma clipping
-            for ii in np.arange(nclip):
+            for _ in np.arange(nclip):
                 if npix > 0:
                     if lsigma > 0.:
                         lowlim = valid.mean() - lsigma * valid.std()
@@ -257,7 +238,6 @@ def imstatistics(*args, **kwargs):
                 outstring += '  '
         print(outstring)
 
-        hdulist.close()
-
-    endfunc(imstatistics)
+        # hdulist.close()
+        image_close(hdulist)
     return
