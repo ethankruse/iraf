@@ -397,8 +397,15 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         rtype = np.double
 
     outroot = output.strip()
-    plroot = plfile.strip()
-    sigroot = sigma.strip()
+    if plfile is not None:
+        plroot = plfile.strip()
+    else:
+        plroot = None
+    if sigma is not None:
+        sigroot = sigma.strip()
+    else:
+        sigroot = None
+
 
     # Check parameters, map INDEFs, and set threshold flag
     if lthreshold is None and hthreshold is None:
@@ -410,25 +417,30 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         if hthreshold is None:
             hthreshold = np.inf
 
-    # XXX: I stopped looking again here.
-
     # Combine each input subset.
     for zz, iset in enumerate(subset):
+
         iimages = images[zz]
 
-        sstring = subset[zz]
-        if sstring is None:
-            sstring = ''
+        if iset is None:
+            iset = ''
 
-        output = '{0}{1}'.format(outroot, sstring)
-        output = make_fits(output)
+        output = '{0}{1}'.format(outroot, iset)
 
-        if plfile is not None:
-            plfile = '{0}{1}'.format(plfile, sstring)
+        if plroot is not None:
+            plfile = '{0}{1}'.format(plfile, iset)
+        else:
+            plfile = None
 
-        if sigma is not None:
-            sigma = '{0}{1}'.format(sigma, sstring)
+        if sigroot is not None:
+            sigma = '{0}{1}'.format(sigma, iset)
+        else:
+            sigma = None
 
+        # XXX: where does this go
+        # output = make_fits(output)
+
+        # icombine starts here
         """
             # Combine all images from the (subset) list.
             iferr (call icombine (Memc[Memi[images+i-1]], Memi[nimages+i-1],
@@ -440,10 +452,10 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             if len(iimages) > 1:
                 print("Cannot project combine a list of images")
                 return
-            hdulist = fits.open(iimages[0])
-            shp = hdulist[0].data.shape
-            hdulist.close()
-            if len(shp) == 1 or shp[-1] == 1:
+            hdulist = image_open(iimages[0])
+            shp = np.array(hdulist[0].data.shape)
+            image_close(hdulist)
+            if shp.size == 1 or shp[shp > 1].size == 1:
                 print("Can't project one dimensional images")
                 return
             nimages = shp[-1]
@@ -459,14 +471,13 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         # rejected.  The number of low and high pixel rejected, however,
         # are converted to a fraction of the valid pixels.
 
+        # define	REJECT	"|none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip|"
         if reject.lower() == 'pclip':
             if pclip == 0.:
                 print("Pclip parameter may not be zero")
                 return
-            if pclip is None:
-                pclip = -0.5
 
-            ii = nimages // 2.
+            ii = nimages // 2
             if np.abs(pclip) < 1.:
                 pclip *= ii
             if pclip < 0.:
@@ -475,11 +486,6 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                 pclip = max(1, min(ii, int(pclip)))
 
         if reject.lower() == 'minmax':
-            if nlow is None:
-                nlow = 0.
-            if nhigh is None:
-                nhigh = 0.
-
             if nlow >= 1.:
                 nlow /= nimages
             if nhigh >= 1.:
@@ -493,16 +499,15 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                 print("Bad minmax rejection parameters")
                 return
 
-        out = []
+        # XXX: I stopped looking again here.
         imin = []
-        if project:
-            tmp = fits.open(images[0])
+        # Map the input image(s).
+        for im in iimages:
+            tmp = image_open(im)
             imin.append(tmp)
-        else:
-            for im in iimages:
-                tmp = fits.open(im)
-                imin.append(tmp)
 
+        # start of ic_setout
+        out = []
         # Map the output image and set dimensions and offsets.
         file_new_copy(output, imin[0], mode='NEW_COPY', clobber=True)
         out.append(fits.open(output))
@@ -690,11 +695,11 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
 
         # close the input images
         for ifile in imin:
-            ifile.close()
+            image_close(ifile)
         # close the output images
         for ifile in out:
             if ifile is not None:
-                ifile.close()
+                image_close(ifile)
         logfd.close()
 
     return
