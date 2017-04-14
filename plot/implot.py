@@ -1,4 +1,4 @@
-from iraf._cl import file_handler
+from iraf.utils import file_handler
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import CheckButtons, Slider

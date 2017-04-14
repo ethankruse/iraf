@@ -1,4 +1,4 @@
-from iraf._cl import file_handler
+from iraf.utils import file_handler
 import numpy as np
 from astropy.io import fits
 import os
@@ -499,13 +499,16 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                 print("Bad minmax rejection parameters")
                 return
 
-        # XXX: I stopped looking again here.
         imin = []
         # Map the input image(s).
         for im in iimages:
             tmp = image_open(im)
             imin.append(tmp)
 
+        print(output)
+        return
+
+        # XXX: I stopped looking again here.
         # start of ic_setout
         out = []
         # Map the output image and set dimensions and offsets.
