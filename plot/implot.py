@@ -9,9 +9,9 @@ from iraf.sys import image_open, image_close
 __all__ = ['implot']
 
 im_set_init = {'fig': None, 'ax': None, 'sax': None, 'lineplot': True,
-               'line': None, 'im': None, 'ndim': None, 'navg': None,
+               'line': None, 'im': None, 'ndim': None, 'navg': 1,
                'ncols': None,
-               'nlines': None, 'image': None, 'index': None, 'cid': None,
+               'nlines': None, 'image': None, 'index': 0, 'cid': None,
                'input': '', 'iax': None, 'overplot': False, 'sid': None,
                '_slider': None, 'stat': None, 'xdata': None, 'ydata': None}
 
@@ -119,9 +119,59 @@ def implot_plot_col(fig):
 
 
 def implot_keypress(event, fig=None):
+    """
+    
+    Parameters
+    ----------
+    event
+    fig
+
+    Returns
+    -------
+
+    """
     # pressed for the second time
     if fig.im_set['stat'] is not None:
         event.key = 's'
+
+    # XXX: handle backspace key
+
+    helpstr = """
+    # Keystrokes:
+    #
+    #	?		help
+    #	a		plot the average of a range of lines of columns
+    #	c		plot column at position of cursor
+    #	e		expand plot by marking corners of new window
+    #	j		move down
+    #	k		move up
+    #	l		plot line at position of cursor
+    #	m		previous image
+    #	n		next image
+    #	p		measure profile (mark region and baseline with 2 pos)
+    #	o		overplot next vector
+    #	r		redraw
+    #	s		print statistics on a region
+    #	/		scroll status line
+    #
+    #
+    # In addition to the above keystrokes, the following ':' escapes are recognized
+    # by the program:
+    #
+    #	:a N		set number of lines or columns to average
+    #	:c M [N]	plot column M or avg of M to N
+    #	:f format	set label format
+    #	:i imagename	open a new image for input
+    #	:l M [N]	plot line M or avg of M to N
+    #	:o		overplot
+    #	:log+,log-	enable, disable log scaling in Y
+    #	:step N		set step size for j,k
+    #	:solid		overplot with solid, not dashed, lines
+    #	:mono		disable coloring of overplotted vectors
+    #	:x x1 x2	fix plot window in X (no args to unfix)
+    #	:y y1 y2	fix plot window in Y (no args to unfix)
+    #	:w wcstype	change world coordinate type
+    """
 
     # user input is complete and was one of the extended options
     if event.key == 'enter' and len(fig.im_set['input']):
@@ -336,15 +386,18 @@ def implot_change_line(value=None, fig=None):
 def implot_open_image(fig, infile=None):
     if infile is None:
         infile = fig.im_set['image'][fig.im_set['index']]
+    else:
+        infile = file_handler(infile)[0]
 
     # open the image
     hdulist = image_open(infile)
     if hdulist is None:
+        print(f"Error opening image {infile}")
         return
         # XXX: go to next image
 
     fig.im_set['im'] = hdulist[0].data
-    # hdulist.close()
+
     image_close(hdulist)
 
     if fig.im_set['im'] is None:
@@ -362,7 +415,6 @@ def implot_open_image(fig, infile=None):
     if fig.im_set['line'] is None:
         fig.im_set['line'] = max(0, min(fig.im_set['nlines'],
                                         (fig.im_set['nlines'] + 1) // 2) - 1)
-        fig.im_set['lineinit'] = fig.im_set['line']
         fig.im_set['colinit'] = max(0,
                                     min(fig.im_set['ncols'],
                                         (fig.im_set['ncols'] + 1) // 2) - 1)
@@ -415,8 +467,20 @@ def implot_make_slider(fig):
     fig.im_set['_slider'] = slider
 
 
-def implot(image, *, line=None, wcs='logical', step=0, coords=None,
-           device='stdgraph'):
+def implot(image, *, line=None, wcs='logical', step=0):
+    """
+    
+    Parameters
+    ----------
+    image
+    line : starting line to plot. Defaults to the middle.
+    wcs
+    step
+
+    Returns
+    -------
+
+    """
     # XXX: where does this go?
     # Disable default Matplotlib shortcut keys:
     keymaps = [param for param in plt.rcParams if param.find('keymap') >= 0]
@@ -432,6 +496,8 @@ def implot(image, *, line=None, wcs='logical', step=0, coords=None,
     plt.ion()
     fig, ax = plt.subplots()
 
+    # initialize parameters and fix them to the image so they persist
+    # with the image
     fig.im_set = copy.deepcopy(im_set_init)
 
     fig.im_set['fig'] = fig
@@ -440,6 +506,7 @@ def implot(image, *, line=None, wcs='logical', step=0, coords=None,
     fig.im_set['image'] = images
     fig.im_set['line'] = line
 
+    # XXX: what are these used for?
     logscale = False
     erase = False
     xnticks = 5
@@ -449,12 +516,6 @@ def implot(image, *, line=None, wcs='logical', step=0, coords=None,
     linetype = 1
     color = 1
     p_navg = 1
-    fig.im_set['navg'] = 1
-
-    # number of images in the list to look through
-    # nim = len(fig.im_set['image'])
-    # which image we're examining now
-    fig.im_set['index'] = 0
 
     # open the image and plot it
     implot_open_image(fig)
