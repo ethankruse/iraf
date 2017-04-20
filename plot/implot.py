@@ -8,20 +8,23 @@ from iraf.sys import image_open, image_close
 
 __all__ = ['implot']
 
+# all the settings the figure needs to access and their initial values
 im_set_init = {'fig': None, 'ax': None, 'sax': None, 'lineplot': True,
                'line': None, 'im': None, 'ndim': None, 'navg': 1,
-               'ncols': None,
+               'ncols': None, 'step': None,
                'nlines': None, 'image': None, 'index': 0, 'cid': None,
                'input': '', 'iax': None, 'overplot': False, 'sid': None,
-               '_slider': None, 'stat': None, 'xdata': None, 'ydata': None}
+               '_slider': None, 'stat': None, 'xdata': None, 'ydata': None,
+               '_check': None}
 
 bell = '\a'
 
 
 def implot_plot(fig):
+    # reset if we're not overplotting
     if not fig.im_set['overplot']:
         fig.im_set['ax'].cla()
-
+    # plot lines
     if fig.im_set['lineplot']:
         i1 = max(0, min(fig.im_set['nlines'] - 1, fig.im_set['line']))
         i2 = max(1, min(fig.im_set['nlines'],
@@ -31,11 +34,16 @@ def implot_plot(fig):
         else:
             yplot = fig.im_set['im'][:, i1:i2].mean(axis=1)
         # XXX: need to add in the WCS transformation here
+        # from IRAF:
+        # call plt_wcs (im, mw, ct, 1, Memr[axvals], real(x1), real(x2),
+        # Memr[x], nx, xlabel, format, SZ_FNAME)
         xplot = np.arange(fig.im_set['ncols'])
+    # plot columns
     else:
         i1 = max(0, min(fig.im_set['ncols'] - 1, fig.im_set['line']))
         i2 = max(1, min(fig.im_set['ncols'],
                         fig.im_set['line'] + fig.im_set['navg']))
+        # XXX: is 1-D possible here?
         if fig.im_set['ndim'] == 1:
             yplot = fig.im_set['im'][i1:i2]
         else:
@@ -370,24 +378,22 @@ def implot_keypress(event, fig=None):
 
 
 def button_click(label=None, fig=None):
+    # only one button for now, but still make sure it's the right one.
     if label == 'Overplot':
+        # toggle overplot values
         if not fig.im_set['overplot']:
             fig.im_set['overplot'] = True
         else:
             fig.im_set['overplot'] = False
 
 
-def implot_change_line(value=None, fig=None):
-    fig.im_set['line'] = int(value)
-    implot_plot(fig)
-    pass
-
-
 def implot_open_image(fig, infile=None):
     if infile is None:
         infile = fig.im_set['image'][fig.im_set['index']]
     else:
-        infile = file_handler(infile)[0]
+        infile = file_handler(infile)
+        if len(infile) > 0:
+            infile = infile[0]
 
     # open the image
     hdulist = image_open(infile)
@@ -415,13 +421,19 @@ def implot_open_image(fig, infile=None):
     if fig.im_set['line'] is None:
         fig.im_set['line'] = max(0, min(fig.im_set['nlines'],
                                         (fig.im_set['nlines'] + 1) // 2) - 1)
-        fig.im_set['colinit'] = max(0,
-                                    min(fig.im_set['ncols'],
-                                        (fig.im_set['ncols'] + 1) // 2) - 1)
+
+    if fig.im_set['step'] < 1:
+        fig.im_set['step'] = max(1, fig.im_set['nlines'] // 10)
+
     # redo the slider
     implot_remove_slider(fig)
     implot_make_slider(fig)
 
+    implot_plot(fig)
+
+
+def implot_change_line(value=None, fig=None):
+    fig.im_set['line'] = int(value)
     implot_plot(fig)
 
 
@@ -505,6 +517,7 @@ def implot(image, *, line=None, wcs='logical', step=0):
 
     fig.im_set['image'] = images
     fig.im_set['line'] = line
+    fig.im_set['step'] = step
 
     # XXX: what are these used for?
     logscale = False
@@ -520,22 +533,28 @@ def implot(image, *, line=None, wcs='logical', step=0):
     # open the image and plot it
     implot_open_image(fig)
 
+    # set up the keyboard commands
     partial = functools.partial(implot_keypress, fig=fig)
     fig.im_set['cid'] = fig.canvas.mpl_connect('key_press_event', partial)
 
     fig.subplots_adjust(right=0.8)
 
+    # where user input will appear
     inptxt = fig.text(0.02, 0.02, '')
     fig.im_set['iax'] = inptxt
 
+    # set up the slider allowing the user to scan through lines/columns
     nax = plt.axes([0.85, 0.65, 0.2, 0.25], zorder=-1)
+
+    # label and whether to start with True or False
     check = CheckButtons(nax, ('Overplot',), (fig.im_set['overplot'],))
+    nax.set_axis_off()
+
     partial = functools.partial(button_click, fig=fig)
     check.on_clicked(partial)
 
     fig.im_set['_check'] = check
-    nax.set_axis_off()
 
     plt.show(block=False)
 
-    return nax
+    return
