@@ -11,7 +11,7 @@ __all__ = ['implot']
 # all the settings the figure needs to access and their initial values
 im_set_init = {'fig': None, 'ax': None, 'sax': None, 'lineplot': True,
                'line': None, 'im': None, 'ndim': None, 'navg': 1,
-               'ncols': None, 'step': None,
+               'ncols': None, 'helptxt': None,
                'nlines': None, 'image': None, 'index': 0, 'cid': None,
                'input': '', 'iax': None, 'overplot': False, 'sid': None,
                '_slider': None, 'stat': None, 'xdata': None, 'ydata': None,
@@ -26,9 +26,10 @@ def implot_plot(fig):
         fig.im_set['ax'].cla()
     # plot lines
     if fig.im_set['lineplot']:
-        i1 = max(0, min(fig.im_set['nlines'] - 1, fig.im_set['line']))
+        i1 = max(0, min(fig.im_set['nlines'] - 1,
+                        fig.im_set['line'] - fig.im_set['navg'] // 2))
         i2 = max(1, min(fig.im_set['nlines'],
-                        fig.im_set['line'] + fig.im_set['navg']))
+                        i1 + fig.im_set['navg']))
         if fig.im_set['ndim'] == 1:
             yplot = fig.im_set['im']
         else:
@@ -40,9 +41,10 @@ def implot_plot(fig):
         xplot = np.arange(fig.im_set['ncols'])
     # plot columns
     else:
-        i1 = max(0, min(fig.im_set['ncols'] - 1, fig.im_set['line']))
+        i1 = max(0, min(fig.im_set['ncols'] - 1,
+                        fig.im_set['line'] - fig.im_set['navg'] // 2))
         i2 = max(1, min(fig.im_set['ncols'],
-                        fig.im_set['line'] + fig.im_set['navg']))
+                        i1 + fig.im_set['navg']))
         # XXX: is 1-D possible here?
         if fig.im_set['ndim'] == 1:
             yplot = fig.im_set['im'][i1:i2]
@@ -56,6 +58,12 @@ def implot_plot(fig):
     fig.im_set['ydata'] = yplot
 
     if fig.im_set['ndim'] > 1:
+        if fig.im_set['lineplot']:
+            xlab = 'Column'
+        else:
+            xlab = 'Line'
+        fig.im_set['ax'].set_xlabel(xlab)
+
         if fig.im_set['navg'] > 1:
             if fig.im_set['lineplot']:
                 txt = "lines"
@@ -138,61 +146,72 @@ def implot_keypress(event, fig=None):
     -------
 
     """
-    # pressed for the second time
-    if fig.im_set['stat'] is not None:
-        event.key = 's'
-
-    # XXX: handle backspace key
+    # reset stat checking if the user didn't press s
+    if event.key != 's':
+        fig.im_set['stat'] = None
 
     helpstr = """
-    # Keystrokes:
-    #
-    #	?		help
-    #	a		plot the average of a range of lines of columns
-    #	c		plot column at position of cursor
-    #	e		expand plot by marking corners of new window
-    #	j		move down
-    #	k		move up
-    #	l		plot line at position of cursor
-    #	m		previous image
-    #	n		next image
-    #	p		measure profile (mark region and baseline with 2 pos)
-    #	o		overplot next vector
-    #	r		redraw
-    #	s		print statistics on a region
-    #	/		scroll status line
-    #
-    #
-    # In addition to the above keystrokes, the following ':' escapes are recognized
-    # by the program:
-    #
-    #	:a N		set number of lines or columns to average
-    #	:c M [N]	plot column M or avg of M to N
-    #	:f format	set label format
-    #	:i imagename	open a new image for input
-    #	:l M [N]	plot line M or avg of M to N
-    #	:o		overplot
-    #	:log+,log-	enable, disable log scaling in Y
-    #	:step N		set step size for j,k
-    #	:solid		overplot with solid, not dashed, lines
-    #	:mono		disable coloring of overplotted vectors
-    #	:x x1 x2	fix plot window in X (no args to unfix)
-    #	:y y1 y2	fix plot window in Y (no args to unfix)
-    #	:w wcstype	change world coordinate type
+    Implot Command Summary:
+
+    c       plot columns
+    l       plot lines
+    m       go to the previous image in the input list
+    n       go to the next image in the input list
+    p       measure profile (mark region and background with 2 pos)
+    s       print statistics on a region
+    <space> print coordinates and data value
+    
+    In addition to the above keystrokes, the following ':' escapes
+    are recognized by the program:
+    
+    :a N       set number of lines or columns to be averaged
+    :c M [N]       plot column[s] M [to N]
+    :f format       label format (%f %h %m %H %M)
+    :i image       open a different image
+    :o       overplot next vector
+    :l M [N]       plot line[s] M [to N]
+    :log+, log-       enable, disable log scaling in Y
+    :nxticks       number of tick marks on X axis
+    :nyticks       number of tick marks on Y axis
+    :solid       use only solid linetypes when overplotting
+    :step N       set step size for j,k
+    :w wcstype       set wcs type (logical|physical|world)
+    :x x1 x2       fix plotting range in X (call with no args to unfix)
+    :y y1 y2       fix plotting range in Y (call with no args to unfix)
     """
+
+    # user is continuing their long input
+    # just add to the input string and return, bypassing single
+    # character commands below
+    if len(fig.im_set['input']) and event.key != 'enter':
+        # ignore keypress events like 'up', 'down', 'shift'.
+        if len(event.key) == 1:
+            fig.im_set['input'] += event.key
+
+        # let them delete things
+        if event.key == 'backspace' or event.key == 'delete':
+            fig.im_set['input'] = fig.im_set['input'][:-1]
+            if len(fig.im_set['input']) == 0:
+                fig.im_set['helptxt'].set_visible(True)
+
+        fig.im_set['iax'].set_text(fig.im_set['input'])
+        fig.im_set['fig'].canvas.draw_idle()
+        return
 
     # user input is complete and was one of the extended options
     if event.key == 'enter' and len(fig.im_set['input']):
         full_inp = fig.im_set['input']
+        # reset the input
         fig.im_set['input'] = ''
         fig.im_set['iax'].set_text('')
+        fig.im_set['helptxt'].set_visible(True)
         fig.im_set['fig'].canvas.draw_idle()
         # nothing input
         if len(full_inp.strip()) == 1:
             return
         # print out for the user's history
         print(full_inp)
-        # ignore the leading :
+        # ignore the leading ':'
         full_inp = full_inp[1:]
         pieces = full_inp.strip().split()
         try:
@@ -249,23 +268,11 @@ def implot_keypress(event, fig=None):
 
         return
 
-    # user is continuing their long input
-    if len(fig.im_set['input']):
-        # ignore keypress events like 'up', 'down', 'shift'.
-        if len(event.key) == 1:
-            fig.im_set['input'] += event.key
-
-        fig.im_set['iax'].set_text(fig.im_set['input'])
-        fig.im_set['fig'].canvas.draw_idle()
-        return
     # user is beginning a long input
     if event.key == ':':
+        fig.im_set['helptxt'].set_visible(False)
         fig.im_set['input'] += ':'
         fig.im_set['iax'].set_text(fig.im_set['input'])
-        # XXX: make a global variable of 'previous inputs' that resets when
-        # you hit the enter key. Then interpret that.
-        # Also make use of the stdout manipulation to be printing what you're
-        # typing on the command line.
 
     # wants to plot lines
     if event.key == 'l':
@@ -305,6 +312,7 @@ def implot_keypress(event, fig=None):
 
     if event.key == 'p':
         # XXX: implement impprofile.x
+        print("Profile function not currently implemented.")
         """
         case 'p':
         # Profile analysis.
@@ -319,18 +327,17 @@ def implot_keypress(event, fig=None):
             x1, y1, x2, y2, sl, sline)
         call printf (Memc[sl_getstr(sl,sline)])
         """
-        pass
 
     # print statistics on a region
     if event.key == 's':
         if (event.inaxes is not fig.im_set['ax'] or event.xdata is None or
-                event.ydata is None):
+                    event.ydata is None):
             fig.im_set['stat'] = None
             return
 
         if fig.im_set['stat'] is None:
             fig.im_set['stat'] = (event.xdata, event.ydata)
-            print('Again')
+            print("Press 's' again at other bound of region.")
             return
 
         # have 2 successive presses, calculate the statistics
@@ -340,21 +347,27 @@ def implot_keypress(event, fig=None):
         region = np.where((fig.im_set['xdata'] >= x1) &
                           (fig.im_set['xdata'] <= x2))[0]
         if len(region) == 0:
+            print('No valid data points found to calculate statistics.')
+            """
             ind1 = np.abs(fig.im_set['xdata'] - x1).argmin()
             if ind1 != len(fig.im_set['xdata']):
                 region = np.array([ind1, ind1 + 1])
             else:
                 region = np.array([ind1, ind1 - 1])
-        mean = fig.im_set['ydata'][region].mean()
-        std = fig.im_set['ydata'][region].std()
-        isum = fig.im_set['ydata'][region].sum()
-        median = np.median(fig.im_set['ydata'][region])
-        outstr = "Median={0:g}, mean={1:g}, rms={2:g}, sum={3:g}, npix={4:d}"
-        print(outstr.format(median, mean, std, isum, len(region)))
+            """
+        else:
+            mean = fig.im_set['ydata'][region].mean()
+            std = fig.im_set['ydata'][region].std()
+            isum = fig.im_set['ydata'][region].sum()
+            median = np.median(fig.im_set['ydata'][region])
+            ostr = "Between {0:g} and {1:g}:\n".format(x1, x2)
+            ostr += "Median={0:g}, mean={1:g}, std={2:g}, sum={3:g}, npix={4:d}"
+            print(ostr.format(median, mean, std, isum, len(region)))
+
         fig.im_set['stat'] = None
 
     if event.key == ' ':
-        if event.xdata is not None:
+        if event.xdata is not None and event.inaxes is fig.im_set['ax']:
             pixel = np.abs(event.xdata - fig.im_set['xdata']).argmin()
             txt = 'Pixel = [{0}, {1}] Value = {2}'
             if fig.im_set['lineplot']:
@@ -366,13 +379,7 @@ def implot_keypress(event, fig=None):
             print(txt)
 
     if event.key == '?':
-        # XXX: implement pagefiles
-        """
-        # Print command summary.
-        call
-        gpagefile(gp, KEYSFILE, "implot cursor commands")
-        """
-        pass
+        print(helpstr)
 
     fig.im_set['fig'].canvas.draw_idle()
 
@@ -422,9 +429,6 @@ def implot_open_image(fig, infile=None):
         fig.im_set['line'] = max(0, min(fig.im_set['nlines'],
                                         (fig.im_set['nlines'] + 1) // 2) - 1)
 
-    if fig.im_set['step'] < 1:
-        fig.im_set['step'] = max(1, fig.im_set['nlines'] // 10)
-
     # redo the slider
     implot_remove_slider(fig)
     implot_make_slider(fig)
@@ -463,7 +467,7 @@ def implot_make_slider(fig):
     # smax = max(fig.im_set['ncols'], fig.im_set['nlines']) - 1
     fig.im_set['sax'] = plt.axes([0.83, 0.6, 0.15, 0.05], zorder=1)
     slider = Slider(fig.im_set['sax'], txt, 0, smax, valinit=fig.im_set['line'],
-                    valfmt='%.0f')
+                    valfmt='%d')
     partial = functools.partial(implot_change_line, fig=fig)
     fig.im_set['sid'] = slider.on_changed(partial)
     slider.vline.set_visible(False)
@@ -479,7 +483,7 @@ def implot_make_slider(fig):
     fig.im_set['_slider'] = slider
 
 
-def implot(image, *, line=None, wcs='logical', step=0):
+def implot(image, *, line=None, wcs='logical'):
     """
     
     Parameters
@@ -487,7 +491,6 @@ def implot(image, *, line=None, wcs='logical', step=0):
     image
     line : starting line to plot. Defaults to the middle.
     wcs
-    step
 
     Returns
     -------
@@ -517,7 +520,6 @@ def implot(image, *, line=None, wcs='logical', step=0):
 
     fig.im_set['image'] = images
     fig.im_set['line'] = line
-    fig.im_set['step'] = step
 
     # XXX: what are these used for?
     logscale = False
@@ -539,6 +541,8 @@ def implot(image, *, line=None, wcs='logical', step=0):
 
     fig.subplots_adjust(right=0.8)
 
+    helptxt = fig.text(0.02, 0.02, 'Press ? for help')
+    fig.im_set['helptxt'] = helptxt
     # where user input will appear
     inptxt = fig.text(0.02, 0.02, '')
     fig.im_set['iax'] = inptxt
