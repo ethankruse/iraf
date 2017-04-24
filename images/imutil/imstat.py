@@ -1,4 +1,4 @@
-from iraf._cl import file_handler
+from iraf.utils import file_handler
 import numpy as np
 import scipy.stats
 from iraf.sys import image_open, image_close
@@ -9,7 +9,7 @@ __all__ = ['imstatistics']
 
 def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
                  lower=None, upper=None, nclip=0, lsigma=3.0, usigma=3.0,
-                 binwidth=0.1, print_format=True, cache=False):
+                 print_format=True):
     """
     Get general statistics about the data in a file's (or list of files')
     primary FITS HDU.
@@ -34,14 +34,8 @@ def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
     usigma : float
         Upper clipping factor (in sigma). e.g. 3.0 would remove any pixels
         with values 3.0 sigma above the mean.
-    binwidth : float
-        Bin width of histogram (in sigma). Currently obsolete; was only used
-        in the original IRAF implementation to calculate the mode.
     print_format : boolean
         Whether or not to format the output and print column labels
-    cache : boolean
-        Obsolete. Was previously used to ask about caching the images
-        in memory.
     """
 
     images = file_handler(images)
@@ -56,6 +50,7 @@ def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
 
     # user input fields
     in_fields = [x.strip().lower() for x in fields.split(',')]
+    # XXX: print warning if a user field isn't in the possible list?
     # retain the same order as in_fields, but only the valid ones
     use_fields = [x for x in in_fields if x in possible_fields]
 
@@ -153,7 +148,8 @@ def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
                 # it does seem to have the benefit of returning something near
                 # a peak of a distribution in the case of floating point pixels,
                 # which are unlikely to have a mode of more than 1.
-
+                # if used, need to include binwidth=0.1 as a keyword argument
+                
                 mode = None
                 hwidth = binwidth * valid.std()
                 nbins = (valid.max() - valid.min()) / hwidth + 1
@@ -238,6 +234,5 @@ def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
                 outstring += '  '
         print(outstring)
 
-        # hdulist.close()
         image_close(hdulist)
     return

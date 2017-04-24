@@ -31,24 +31,18 @@ def file_handler(filelist):
 
     Returns
     -------
-    outlist : list
+    list[str]
         List of file names matching all patterns.
     """
     # XXX: This is supposed to be the replacement for IRAF's IMTOPEN, but has
     # much reduced functionality from that currently.
 
-    # XXX: should we return None or an empty list?
-    if filelist is None:
-        return []
-
     # XXX: this does not allow for image subsections,
     #  e.g. imagename[x1:x2,y1:y2]
     # How should that be handled?
 
-    # see if the input is already a list
-    is_list = is_iterable(filelist)
     # make the input string a list
-    if not is_list:
+    if not is_iterable(filelist):
         filelist = [filelist]
 
     outlist = []
