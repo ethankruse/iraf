@@ -11,7 +11,7 @@ __all__ = ['implot']
 # all the settings the figure needs to access and their initial values
 im_set_init = {'fig': None, 'ax': None, 'sax': None, 'lineplot': True,
                'line': None, 'im': None, 'ndim': None, 'navg': 1,
-               'ncols': None, 'helptxt': None,
+               'ncols': None, 'helptxt': None, 'wcs': None,
                'nlines': None, 'image': None, 'index': 0, 'cid': None,
                'input': '', 'iax': None, 'overplot': False, 'sid': None,
                '_slider': None, 'stat': None, 'xdata': None, 'ydata': None,
@@ -164,20 +164,11 @@ def implot_keypress(event, fig=None):
     In addition to the above keystrokes, the following ':' escapes
     are recognized by the program:
     
-    :a N       set number of lines or columns to be averaged
-    :c M [N]       plot column[s] M [to N]
-    :f format       label format (%f %h %m %H %M)
+    :a N           set number of lines or columns to be averaged
+    :c M [N]       plot column[s] M [to N, inclusive]
     :i image       open a different image
-    :o       overplot next vector
-    :l M [N]       plot line[s] M [to N]
-    :log+, log-       enable, disable log scaling in Y
-    :nxticks       number of tick marks on X axis
-    :nyticks       number of tick marks on Y axis
-    :solid       use only solid linetypes when overplotting
-    :step N       set step size for j,k
-    :w wcstype       set wcs type (logical|physical|world)
-    :x x1 x2       fix plotting range in X (call with no args to unfix)
-    :y y1 y2       fix plotting range in Y (call with no args to unfix)
+    :l M [N]       plot line[s] M [to N, inclusive]
+    :w wcstype     set wcs type (logical|physical|world)
     """
 
     # user is continuing their long input
@@ -220,16 +211,17 @@ def implot_keypress(event, fig=None):
                 fig.im_set['navg'] = int(pieces[1])
                 if fig.im_set['navg'] <= 0:
                     fig.im_set['navg'] = 1
+                # make the plot
+                implot_plot(fig)
+
+            # open another image
             elif pieces[0] == 'i' and len(pieces) > 1:
-                infile = file_handler(pieces[1])
-                if len(infile) > 0:
-                    implot_open_image(fig, infile=infile[0])
+                implot_open_image(fig, infile=pieces[1])
+
+            # XXX: Change wcs type.
             elif pieces[0] == 'w' and len(pieces) > 1:
-                pass
-                # XXX: Change wcs type.
-            elif pieces[0] == 'f' and len(pieces) > 1:
-                pass
-                # XXX: Change label format.
+                print('WCS types not implemented yet.')
+
             # plot a selected line/column or average between 2 lines/columns
             elif (pieces[0] == 'l' or pieces[0] == 'c') and len(pieces) > 1:
                 if len(pieces) == 2:
@@ -239,27 +231,29 @@ def implot_keypress(event, fig=None):
                             implot_plot_line(fig)
                         else:
                             implot_plot_col(fig)
+                        fig.im_set['_slider'].set_val(fig.im_set['line'])
                     else:
                         print(bell)
                 else:
                     if int(pieces[1]) >= 0 and int(pieces[2]) >= 0:
-                        fig.im_set['line'] = min(int(pieces[1]), int(pieces[2]))
+                        i1 = int(pieces[1])
+                        i2 = int(pieces[2])
+                        # inclusive range
+                        diff = np.abs(i1 - i2) + 1
+                        # don't use this as the new number of lines to average
                         oldavg = fig.im_set['navg']
-                        fig.im_set['navg'] = np.abs(
-                            int(pieces[1]) - int(pieces[2])) - 1
+                        fig.im_set['navg'] = diff
+                        fig.im_set['line'] = min(i1, i2) + diff // 2
+
                         if pieces[0] == 'l':
                             implot_plot_line(fig)
                         else:
                             implot_plot_col(fig)
+                        fig.im_set['_slider'].set_val(fig.im_set['line'])
+                        # reset the number of lines to average
                         fig.im_set['navg'] = oldavg
                     else:
                         print(bell)
-            # toggle log y scale on or off
-            elif pieces[0] == 'log+':
-                fig.im_set['ax'].set_yscale('log')
-            elif pieces[0] == 'log-':
-                fig.im_set['ax'].set_yscale('linear')
-
             else:
                 print(bell)
 
@@ -331,7 +325,7 @@ def implot_keypress(event, fig=None):
     # print statistics on a region
     if event.key == 's':
         if (event.inaxes is not fig.im_set['ax'] or event.xdata is None or
-                    event.ydata is None):
+                event.ydata is None):
             fig.im_set['stat'] = None
             return
 
@@ -520,17 +514,7 @@ def implot(image, *, line=None, wcs='logical'):
 
     fig.im_set['image'] = images
     fig.im_set['line'] = line
-
-    # XXX: what are these used for?
-    logscale = False
-    erase = False
-    xnticks = 5
-    ynticks = 5
-
-    linestep = 1
-    linetype = 1
-    color = 1
-    p_navg = 1
+    fig.im_set['wcs'] = wcs
 
     # open the image and plot it
     implot_open_image(fig)

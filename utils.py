@@ -31,7 +31,7 @@ def file_handler(filelist):
 
     Returns
     -------
-    outlist : list
+    list[str]
         List of file names matching all patterns.
     """
     # XXX: This is supposed to be the replacement for IRAF's IMTOPEN, but has

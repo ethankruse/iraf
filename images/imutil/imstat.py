@@ -9,7 +9,7 @@ __all__ = ['imstatistics']
 
 def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
                  lower=None, upper=None, nclip=0, lsigma=3.0, usigma=3.0,
-                 print_format=True, binwidth=0.1):
+                 print_format=True):
     """
     Get general statistics about the data in a file's (or list of files')
     primary FITS HDU.
@@ -36,9 +36,6 @@ def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
         with values 3.0 sigma above the mean.
     print_format : boolean
         Whether or not to format the output and print column labels
-    binwidth : float
-        Bin width of histogram (in sigma). Currently obsolete; was only used
-        in the original IRAF implementation to calculate the mode.
     """
 
     images = file_handler(images)
@@ -151,7 +148,8 @@ def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
                 # it does seem to have the benefit of returning something near
                 # a peak of a distribution in the case of floating point pixels,
                 # which are unlikely to have a mode of more than 1.
-
+                # if used, need to include binwidth=0.1 as a keyword argument
+                
                 mode = None
                 hwidth = binwidth * valid.std()
                 nbins = (valid.max() - valid.min()) / hwidth + 1
