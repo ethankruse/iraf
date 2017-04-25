@@ -93,45 +93,51 @@ def implot_plot(fig):
     fig.im_set['fig'].canvas.draw_idle()
 
 
-def implot_plot_line(fig):
+def implot_plot_line(fig, draw=True):
     was_set = False
     # we're currently plotting columns
     if not fig.im_set['lineplot']:
         was_set = fig.im_set['overplot']
         # turn overplot off
         if fig.im_set['overplot']:
+            # toggle overplot
             fig.im_set['_check'].set_active(0)
-            fig.im_set['overplot'] = False
         fig.im_set['lineplot'] = True
         # redo the slider
         implot_remove_slider(fig)
         implot_make_slider(fig)
-
-    implot_plot(fig)
+    if draw:
+        implot_plot(fig)
+    elif not fig.im_set['overplot']:
+        fig.im_set['ax'].cla()
     if was_set:
+        # toggle overplot
         fig.im_set['_check'].set_active(0)
-        fig.im_set['overplot'] = True
 
 
-def implot_plot_col(fig):
+def implot_plot_col(fig, draw=True):
     was_set = False
     # we're currently plotting lines
     if fig.im_set['lineplot']:
         # turn overplot off
         was_set = fig.im_set['overplot']
         if fig.im_set['overplot']:
+            # toggle overplot
             fig.im_set['_check'].set_active(0)
-            fig.im_set['overplot'] = False
 
         fig.im_set['lineplot'] = False
         # redo the slider
         implot_remove_slider(fig)
         implot_make_slider(fig)
 
-    implot_plot(fig)
+    if draw:
+        implot_plot(fig)
+    elif not fig.im_set['overplot']:
+        fig.im_set['ax'].cla()
+
     if was_set:
+        # toggle overplot
         fig.im_set['_check'].set_active(0)
-        fig.im_set['overplot'] = True
 
 
 def implot_keypress(event, fig=None):
@@ -228,9 +234,9 @@ def implot_keypress(event, fig=None):
                     if int(pieces[1]) >= 0:
                         fig.im_set['line'] = int(pieces[1])
                         if pieces[0] == 'l':
-                            implot_plot_line(fig)
+                            implot_plot_line(fig, draw=False)
                         else:
-                            implot_plot_col(fig)
+                            implot_plot_col(fig, draw=False)
                         fig.im_set['_slider'].set_val(fig.im_set['line'])
                     else:
                         print(bell)
@@ -246,9 +252,9 @@ def implot_keypress(event, fig=None):
                         fig.im_set['line'] = min(i1, i2) + diff // 2
 
                         if pieces[0] == 'l':
-                            implot_plot_line(fig)
+                            implot_plot_line(fig, draw=False)
                         else:
-                            implot_plot_col(fig)
+                            implot_plot_col(fig, draw=False)
                         fig.im_set['_slider'].set_val(fig.im_set['line'])
                         # reset the number of lines to average
                         fig.im_set['navg'] = oldavg
@@ -403,7 +409,8 @@ def implot_open_image(fig, infile=None):
         return
         # XXX: go to next image
 
-    fig.im_set['im'] = hdulist[0].data
+    # transpose to match the IRAF definition of line/column
+    fig.im_set['im'] = hdulist[0].data.T
 
     image_close(hdulist)
 
