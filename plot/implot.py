@@ -90,7 +90,7 @@ def implot_plot(fig):
 
     fig.im_set['ax'].set_title(title)
 
-    fig.im_set['fig'].canvas.draw_idle()
+    fig.im_set['fig'].canvas.draw()
 
 
 def implot_plot_line(fig, draw=True):
@@ -192,7 +192,7 @@ def implot_keypress(event, fig=None):
                 fig.im_set['helptxt'].set_visible(True)
 
         fig.im_set['iax'].set_text(fig.im_set['input'])
-        fig.im_set['fig'].canvas.draw_idle()
+        fig.im_set['fig'].canvas.draw()
         return
 
     # user input is complete and was one of the extended options
@@ -202,7 +202,7 @@ def implot_keypress(event, fig=None):
         fig.im_set['input'] = ''
         fig.im_set['iax'].set_text('')
         fig.im_set['helptxt'].set_visible(True)
-        fig.im_set['fig'].canvas.draw_idle()
+        fig.im_set['fig'].canvas.draw()
         # nothing input
         if len(full_inp.strip()) == 1:
             return
@@ -275,6 +275,8 @@ def implot_keypress(event, fig=None):
         fig.im_set['iax'].set_text(fig.im_set['input'])
 
     # wants to plot lines
+    # XXX: switching between l/c is not determinative. So it will
+    # gradually shift down rather than bouncing between the same 2.
     if event.key == 'l':
         # we're currently plotting columns
         if not fig.im_set['lineplot']:
@@ -381,7 +383,7 @@ def implot_keypress(event, fig=None):
     if event.key == '?':
         print(helpstr)
 
-    fig.im_set['fig'].canvas.draw_idle()
+    fig.im_set['fig'].canvas.draw()
 
 
 def button_click(label=None, fig=None):
@@ -472,8 +474,6 @@ def implot_make_slider(fig):
     partial = functools.partial(implot_change_line, fig=fig)
     fig.im_set['sid'] = slider.on_changed(partial)
     slider.vline.set_visible(False)
-    fig.im_set['sax'].legend(loc='top')
-    # slider.poly.set_fc('r')
     slider.label.set_x(0.5)
     slider.label.set_y(1.4)
     slider.label.set_ha('center')

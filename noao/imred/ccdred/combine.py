@@ -1,4 +1,4 @@
-from iraf.utils import file_handler
+from iraf.utils import file_handler, is_iterable
 import numpy as np
 from astropy.io import fits
 import os
@@ -9,7 +9,59 @@ from iraf.sys import image_open, image_close
 import shlex
 
 
-__all__ = ['combine']
+__all__ = ['combine', 'Instrument', 'ccdtypes', 'header_value']
+
+
+class Instrument(object):
+    """
+    Instrument object.
+    """
+    """
+    To learn about instruments, look into
+    'iraf-src/noao/imred/ccdred/src/hdrmap.x' for the functions that create
+    a symbol table pointer and do the translations.
+    Instrument file tables are located in
+    'iraf-src/noao/imred/ccdred/ccddb'.
+
+    values in fits headers/etc actually used so far:
+    imagetyp 
+    and its header values: object|zero|dark|flat|illum|fringe|other|comp
+    and also none, unknown.
+    
+    """
+    # XXX: need to handle allowing 'default' values for things
+    def __init__(self, name=None):
+        self.definitions = {}
+
+        if name is None or name.strip().lower() == 'default':
+            # insert how to interpret things
+            self.definitions['subset'] = 'filters'
+            self.definitions['bias'] = 'zero'
+            self.definitions['dome flat'] = 'flat'
+            self.definitions['projector flat'] = 'flat'
+            self.definitions['comparison'] = 'comp'
+            self.definitions['sky flat'] = 'object'
+
+        else:
+            print(f'Instrument {name} not implemented yet.')
+            sys.exit(1)
+
+    def translate(self, key):
+        # if it's a string, strip the value and put it in lowercase.
+        try:
+            key = key.strip().lower()
+        except AttributeError:
+            pass
+
+        if key in self.definitions:
+            return self.definitions[key]
+        else:
+            return key
+
+    """
+    Set up an Instrument class with a translate() function or something.
+    Maybe more like to_default() or from_default() 
+    """
 
 
 def make_fits(path):
@@ -19,11 +71,48 @@ def make_fits(path):
     return path
 
 
+def header_value(hdulist, instrument, key):
+    """
+    The equivalent of IRAF's hdmgstr.
+    
+    Parameters
+    ----------
+    hdulist
+    instrument
+    key
+
+    Returns
+    -------
+
+    """
+    # what is the header key in the instrument's language
+    key = instrument.translate(key)
+    val = None
+
+    # go reverse order because we'll typically want the first instance
+    # if something is in multiple headers
+    for hdu in hdulist[::-1]:
+        try:
+            # get the instrument's value in the header
+            val = hdu.header[key]
+            # translate that back to our normalized language
+            val = instrument.translate(val)
+        except KeyError:
+            pass
+
+    if val is None:
+        # XXX: we need a way to use a default value here if given in the
+        # instrument object
+        pass
+
+    return val
+
+
 def ccdtypes(hdulist, instrument):
     """
     Get the header value of 'imagetyp' (or instrument equivalent).
     If that (instrument converted) value is one of
-    "|object|zero|dark|flat|illum|fringe|other|comp|" return that.
+    "object|zero|dark|flat|illum|fringe|other|comp" return that.
     Otherwise return 'unknown' unless the header does not contain any
     'imagetyp' and the instrument doesn't have a default value for it. Then
     return 'none'.
@@ -31,57 +120,53 @@ def ccdtypes(hdulist, instrument):
     Parameters
     ----------
     hdulist
-    instrument
+    instrument : Instrument
 
     Returns
     -------
 
     """
-    # XXX: this needs to have the instrument file header conversions
-    if instrument is not None:
+
+    if not isinstance(instrument, Instrument):
+        print('ccdtypes not given an Instrument object.')
         sys.exit(1)
 
-    typ = None
     options = "object|zero|dark|flat|illum|fringe|other|comp".split('|')
-    for hdu in hdulist:
-        try:
-            typ = hdu.header['imagetyp'].strip().lower()
-            if typ not in options:
-                typ = 'unknown'
-        except KeyError:
-            pass
+    typ = header_value(hdulist, instrument, 'imagetyp')
+
     if typ is None:
         typ = 'none'
+    elif typ not in options:
+        typ = 'unknown'
+
     return typ
 
 
 def ccdsubset(hdulist, instrument, ssfile):
-    # XXX: this needs to have the instrument file header conversions
-    if instrument is not None:
+
+    if not isinstance(instrument, Instrument):
+        print('ccdsubset not given an Instrument object.')
         sys.exit(1)
 
     if ssfile is None:
         print('ssfile must be defined to use subsets')
         sys.exit(1)
 
-    subsetstr = None
-    subset1 = None
+    subsetstr = header_value(hdulist, instrument, 'subset')
 
-    for hdu in hdulist:
-        try:
-            subsetstr = hdu.header['subset']
-            # The default subset identifier is the first
-            # word/string of the subset string.
-            subset1 = shlex.split(subsetstr.strip())
-            if len(subset1) > 0:
-                subset1 = subset1[0]
-            else:
-                # the subset string was just white space
-                subset1 = None
-                subsetstr = None
-        except KeyError:
-            pass
+    # The default subset identifier is the first
+    # word/string of the subset string.
+    if subsetstr is not None:
+        subset1 = shlex.split(subsetstr.strip())
+        if len(subset1) > 0:
+            subset1 = subset1[0]
+        else:
+            subset1 = None
+    else:
+        # the subset string was just white space or not found
+        subset1 = None
 
+    # XXX: stopped here
     # A null subset string is ok.  If not null check for conflict
     # with previous subset IDs.
     if subset1 is not None:
@@ -308,23 +393,94 @@ def type_max(type1, type2):
 
 def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             subsets=False, delete=False, combine='average',
-            reject='none', project=False, outtype='real', offsets=None, masktype='none',
-            maskvalue=0, blank=0, scale=None, zero=None, weight=None, statsec=None,
-            lthreshold=None, hthreshold=None, nlow=1, nhigh=1, nkeep=1, mclip=True, lsigma=3.0,
+            reject='none', project=False, outtype='real', offsets=None,
+            masktype='none', maskvalue=0., blank=0., scale=None, zero=None,
+            weight=None, statsec=None, lthreshold=None, hthreshold=None,
+            nlow=1, nhigh=1, nkeep=1, mclip=True, lsigma=3.0,
             hsigma=3.0, rdnoise='0.', gain='1.', snoise='0.', sigscale=0.1,
             pclip=-0.5, grow=0, instrument=None, logfile=None, ssfile=None):
+    """
+    
+    Parameters
+    ----------
+    images : 
+        List of images to combine
+    output : 
+        List of output images
+    plfile : 
+        List of output pixel list files (optional)
+    sigma : 
+        List of sigma images (optional)
+    ccdtype  : 
+        CCD image type to combine (optional)
+    subsets : 
+        Combine images by subset parameter?
+    delete : 
+        Delete input images after combining?
+    combine : "average|median"
+        Type of combine operation
+    reject : "none|minmax|ccdclip|crreject|sigclip|avsigclip|pclip" 
+        Type of rejection
+    project : 
+        Project highest dimension of input images?
+    outtype : "short|ushort|integer|long|real|double"
+        Output image pixel datatype
+    offsets : 
+        Input image offsets
+    masktype : "none|goodvalue|badvalue|goodbits|badbits"
+        Mask type
+    maskvalue :
+        Mask value
+    blank : 
+        Value if there are no pixels
+    scale : 
+        Image scaling
+    zero : 
+        Image zero point offset
+    weight : 
+        Image weights
+    statsec : 
+        Image section for computing statistics
+    lthreshold : 
+        Lower threshold
+    hthreshold : 
+        Upper threshold
+    nlow : 
+        minmax: Number of low pixels to reject
+    nhigh : 
+        minmax: Number of high pixels to reject
+    nkeep : 
+        Minimum to keep (pos) or maximum to reject (neg)
+    mclip : 
+        Use median in sigma clipping algorithms?
+    lsigma : 
+        Lower sigma clipping factor
+    hsigma : 
+        Upper sigma clipping factor
+    rdnoise : 
+        ccdclip: CCD readout noise (electrons)
+    gain : 
+        ccdclip: CCD gain (electrons/DN)
+    snoise : 
+        ccdclip: Sensitivity noise (fraction)
+    sigscale : 
+        Tolerance for sigma clipping scaling corrections
+    pclip : 
+        Percentile clipping parameter
+    grow : 
+        Radius (pixels) for 1D neighbor rejection
+    instrument
+    logfile
+    ssfile
 
-    if instrument is not None:
-        print("Instrument translation files not yet supported.")
-        # XXX: need to implement this part
-        """
-        To learn about instruments, look into
-        'iraf-src/noao/imred/ccdred/src/hdrmap.x' for the functions that create
-        a symbol table pointer and do the translations.
-        Instrument file tables are located in
-        'iraf-src/noao/imred/ccdred/ccddb'.
-        """
-        sys.exit(1)
+    Returns
+    -------
+
+    """
+
+    # was given a string or something else, so set up the instrument object
+    if not isinstance(instrument, Instrument):
+        instrument = Instrument(instrument)
 
     # start of IRAF cmb_images.
     inputs = file_handler(images)
@@ -355,8 +511,10 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         if hdulist is None:
             continue
 
+        # what image type is this one
         thistype = ccdtypes(hdulist, instrument)
 
+        # if this isn't the image type we're looking for, skip it
         if ccdtype is not None and thistype != ccdtype:
             image_close(hdulist)
             continue
