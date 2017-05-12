@@ -7,6 +7,7 @@ from astropy.wcs import WCS
 import sys
 from iraf.sys import image_open, image_close
 import shlex
+import re
 
 
 __all__ = ['combine', 'Instrument', 'ccdtypes', 'header_value']
@@ -27,6 +28,7 @@ class Instrument(object):
     imagetyp 
     and its header values: object|zero|dark|flat|illum|fringe|other|comp
     and also none, unknown.
+    subset
     
     """
     # XXX: need to handle allowing 'default' values for things
@@ -148,27 +150,38 @@ def ccdsubset(hdulist, instrument, ssfile):
         print('ccdsubset not given an Instrument object.')
         sys.exit(1)
 
+    subsetstr = header_value(hdulist, instrument, 'subset')
+
+    if subsetstr is None:
+        subsetstr = ''
+
+    subsetstr = subsetstr.strip()
+
+    # Replace non alphanumeric or '.' characters by '_'
+    # since the subset ID is used in forming image names.
+    subsetstr = re.sub(r'[^\w.]', '_', subsetstr)
+
+    """
+    # This bit was a translation of the original IRAF ccdsubset function
+    # that uses the subsets file and turns things into shorter subset strings
+    # while also making sure there aren't overlaps. This all seems unnecessary
+    # and we should just use the full subset string as the identifier.
+    
     if ssfile is None:
         print('ssfile must be defined to use subsets')
         sys.exit(1)
-
-    subsetstr = header_value(hdulist, instrument, 'subset')
-
+        
     # The default subset identifier is the first
     # word/string of the subset string.
-    if subsetstr is not None:
-        subset1 = shlex.split(subsetstr.strip())
-        if len(subset1) > 0:
-            subset1 = subset1[0]
-        else:
-            subset1 = None
+    subset1 = shlex.split(subsetstr.strip())
+    if len(subset1) > 0:
+        subset1 = subset1[0]
     else:
-        # the subset string was just white space or not found
         subset1 = None
 
-    # XXX: stopped here
     # A null subset string is ok.  If not null check for conflict
     # with previous subset IDs.
+
     if subset1 is not None:
         orig = subset1
         # whether or not to append this to the subsets file
@@ -217,6 +230,9 @@ def ccdsubset(hdulist, instrument, ssfile):
                 subset1[ii] = '_'
 
     return subset1
+    """
+
+    return subsetstr
 
 
 def ic_setout(inputs, output, nimages, project, offsets):
@@ -492,13 +508,6 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
     # CCD image type.  Separate into subsets if desired.  Create image
     # and subset lists.
 
-    """
-    pointer	images		# Pointer to lists of subsets (allocated)
-    pointer	extns		# Image extensions for each subset (allocated)
-    pointer	subsets		# Subset names (allocated)
-    pointer	nimages		# Number of images in subset (allocated)
-    int	nsubsets	# Number of subsets
-    """
     # lists of images in each subset
     images = []
     # subset names
@@ -521,7 +530,8 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
 
         if subsets:
             subsetstr = ccdsubset(hdulist, instrument, ssfile)
-            extn = subsetstr
+            # As far as I can tell, the subset and extn list is the same.
+            # extn = subsetstr
         else:
             subsetstr = None
 
