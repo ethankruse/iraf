@@ -533,7 +533,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             # As far as I can tell, the subset and extn list is the same.
             # extn = subsetstr
         else:
-            subsetstr = None
+            subsetstr = ''
 
         if subsetstr not in subset:
             subset.append(subsetstr)
@@ -548,6 +548,16 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
     if len(images) == 0:
         print("No images to combine.")
         return
+
+    # set threshold flag
+    if lthreshold is None and hthreshold is None:
+        dothresh = False
+    else:
+        dothresh = True
+        if lthreshold is None:
+            lthreshold = -np.inf
+        if hthreshold is None:
+            hthreshold = np.inf
 
     rtype = None
     # "short|ushort|integer|long|real|double"
@@ -564,6 +574,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
     elif outtype.lower() == 'double':
         rtype = np.double
 
+    # get copies of these before adding to them for each subset
     outroot = output.strip()
     if plfile is not None:
         plroot = plfile.strip()
@@ -574,34 +585,27 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
     else:
         sigroot = None
 
-
-    # Check parameters, map INDEFs, and set threshold flag
-    if lthreshold is None and hthreshold is None:
-        dothresh = False
-    else:
-        dothresh = True
-        if lthreshold is None:
-            lthreshold = -np.inf
-        if hthreshold is None:
-            hthreshold = np.inf
-
     # Combine each input subset.
     for zz, iset in enumerate(subset):
 
         iimages = images[zz]
 
-        if iset is None:
-            iset = ''
+        # this apparently isn't done in IRAF, but I like separating the two
+        # parts with a '.' if they both exist
+        if len(iset) > 0:
+            comb = '.'
+        else:
+            comb = ''
 
-        output = '{0}{1}'.format(outroot, iset)
+        output = '{0}{1}{2}'.format(outroot, comb, iset)
 
         if plroot is not None:
-            plfile = '{0}{1}'.format(plfile, iset)
+            plfile = '{0}{1}{2}'.format(plroot, comb, iset)
         else:
             plfile = None
 
         if sigroot is not None:
-            sigma = '{0}{1}'.format(sigma, iset)
+            sigma = '{0}{1}{2}'.format(sigma, comb, iset)
         else:
             sigma = None
 
