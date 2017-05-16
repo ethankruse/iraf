@@ -12,6 +12,9 @@ import re
 
 __all__ = ['combine', 'Instrument', 'ccdtypes', 'header_value']
 
+# XXX: deal with hdulist assuming we have a fits file. trace all image_open and
+# see if what I do is fits specific.
+
 
 class Instrument(object):
     """
@@ -37,7 +40,8 @@ class Instrument(object):
 
         if name is None or name.strip().lower() == 'default':
             # insert how to interpret things
-            self.definitions['subset'] = 'filters'
+            # XXX: filter or filters?
+            self.definitions['subset'] = 'filter'
             self.definitions['bias'] = 'zero'
             self.definitions['dome flat'] = 'flat'
             self.definitions['projector flat'] = 'flat'
@@ -236,12 +240,13 @@ def ccdsubset(hdulist, instrument, ssfile):
 
 
 def ic_setout(inputs, output, nimages, project, offsets):
+
     indim = len(inputs[0][0].data.shape)
     outdim = len(output[0][0].data.shape)
 
     if project:
         outdim = indim - 1
-        # also do? IM_NDIM(out[1]) = outdim
+        # XXX: IM_NDIM(out[1]) = outdim
     else:
         for im in inputs:
             if len(im[0].data.shape) != outdim:
@@ -250,10 +255,16 @@ def ic_setout(inputs, output, nimages, project, offsets):
 
     """
     # Set the reference point to that of the first image.
+    # Open an MWCS descriptor on an image
     mw = mw_openim (in[1])
+    # Get the value of a MWCS interface parameter.
     mwdim = mw_stati (mw, MW_NPHYSDIM)
+    # Get the linear part of the Wterm, i.e., the physical and world
+    # coordinates of the reference point and the CD matrix.
     call mw_gwtermd (mw, Memd[lref], Memd[wref], Memd[cd], mwdim)
+    # Set up a coordinate transformation (CTRAN) descriptor.
     ct = mw_sctran (mw, "world", "logical", 0)
+    # Transform a single N-dimensional point
     call mw_ctrand (ct, Memd[wref], Memd[lref], mwdim)
     call mw_ctfree (ct)
     if (project)
@@ -264,7 +275,7 @@ def ic_setout(inputs, output, nimages, project, offsets):
     # If "wcs" then set the offsets based on the image WCS.
     # If "grid" then set the offsets based on the input grid parameters.
     # If a file scan it.
-    if offsets is None or offsets.lower() == 'none':
+    if offsets == 'none':
         offsetsarr = np.zeros((nimages, outdim), dtype=int)
         reloff = True
     # XXX: implement these
@@ -292,28 +303,39 @@ def ic_setout(inputs, output, nimages, project, offsets):
                 aligned = False
             amin = min(aa, amin)
             bmax = max(bb, bmax)
-        # also do? IM_LEN(out[1],j) = bmax
+        # XXX: also do? IM_LEN(out[1],j) = bmax
         if reloff or amin < 0:
             offsetsarr[:, jj] -= amin
 
-            # also d? IM_LEN(out[1],j) = IM_LEN(out[1],j) - amin
+            # XXX: also do? IM_LEN(out[1],j) = IM_LEN(out[1],j) - amin
 
     # Update the WCS.
     # XXX: do this
     if project or not aligned or not reloff:
         print("WCS updates to output files not implemented yet!")
+        sys.exit(1)
 
-    return offsetsarr, aligned
+    print('aligned?', aligned)
+    return offsetsarr
 
 
 # this is meant to be equivalent to immap (output, NEW_COPY, Memi[in]) in IRAF
-def file_new_copy(outstr, in_header, mode='NEW_COPY', clobber=True):
+def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True):
     if mode != 'NEW_COPY':
         print('other modes of file_new_copy not supported.')
         return
 
     # XXX: check this part. Need to add lines to history files, etc.
-    in_header.writeto(outstr, clobber=clobber)
+    # Also this only works for FITS files.
+    if in_header.__filetype__ == 'fits':
+        in_header.writeto(outstr, overwrite=overwrite)
+        # XXX: are some header parameters added/changed at this stage?
+        # see sys/imio/immapz.x
+
+    else:
+        err = 'file_new_copy of file type {0} not yet implemented.'
+        print(err.format(in_header.__filetype__))
+        sys.exit(1)
     return
 
 
@@ -409,7 +431,7 @@ def type_max(type1, type2):
 
 def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             subsets=False, delete=False, combine='average',
-            reject='none', project=False, outtype='real', offsets=None,
+            reject='none', project=False, outtype='real', offsets='none',
             masktype='none', maskvalue=0., blank=0., scale=None, zero=None,
             weight=None, statsec=None, lthreshold=None, hthreshold=None,
             nlow=1, nhigh=1, nkeep=1, mclip=True, lsigma=3.0,
@@ -442,7 +464,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
     outtype : "short|ushort|integer|long|real|double"
         Output image pixel datatype
     offsets : 
-        Input image offsets
+        Input image offsets. 'none, wcs, grid, or file name'
     masktype : "none|goodvalue|badvalue|goodbits|badbits"
         Mask type
     maskvalue :
@@ -493,6 +515,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
     -------
 
     """
+    offsets = offsets.strip().lower()
 
     # was given a string or something else, so set up the instrument object
     if not isinstance(instrument, Instrument):
@@ -597,27 +620,27 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         else:
             comb = ''
 
-        output = '{0}{1}{2}'.format(outroot, comb, iset)
+        base, ext = os.path.splitext(outroot)
+        output = '{0}{1}{2}{3}'.format(base, comb, iset, ext)
 
         if plroot is not None:
-            plfile = '{0}{1}{2}'.format(plroot, comb, iset)
+            base, ext = os.path.splitext(plroot)
+            plfile = '{0}{1}{2}{3}'.format(base, comb, iset, ext)
         else:
             plfile = None
 
         if sigroot is not None:
-            sigma = '{0}{1}{2}'.format(sigma, comb, iset)
+            base, ext = os.path.splitext(sigroot)
+            sigma = '{0}{1}{2}{3}'.format(base, comb, iset, ext)
         else:
             sigma = None
 
-        # XXX: where does this go
-        # output = make_fits(output)
-
         # icombine starts here
         """
-            # Combine all images from the (subset) list.
-            iferr (call icombine (Memc[Memi[images+i-1]], Memi[nimages+i-1],
-            Memc[output], Memc[plfile], Memc[sigma],
-            Memc[logfile], NO, delete))
+        # Combine all images from the (subset) list.
+        call icombine (Memc[Memi[images+i-1]], Memi[nimages+i-1],
+        Memc[output], Memc[plfile], Memc[sigma],
+        Memc[logfile], NO, delete))
         """
         # Set number of images to combine.
         if project:
@@ -630,6 +653,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             if shp.size == 1 or shp[shp > 1].size == 1:
                 print("Can't project one dimensional images")
                 return
+            # XXX: which dimension do we project over?
             nimages = shp[-1]
         else:
             nimages = len(iimages)
@@ -643,10 +667,11 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         # rejected.  The number of low and high pixel rejected, however,
         # are converted to a fraction of the valid pixels.
 
+        reject = reject.lower().strip()
         # define	REJECT	"|none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip|"
-        if reject.lower() == 'pclip':
+        if reject == 'pclip':
             if pclip == 0.:
-                print("Pclip parameter may not be zero")
+                print("Pclip parameter can not be zero when reject =='pclip'")
                 return
 
             ii = nimages // 2
@@ -657,7 +682,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             else:
                 pclip = max(1, min(ii, int(pclip)))
 
-        if reject.lower() == 'minmax':
+        if reject == 'minmax':
             if nlow >= 1.:
                 nlow /= nimages
             if nhigh >= 1.:
@@ -678,16 +703,19 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             imin.append(tmp)
 
         print(output)
-        return
+        print(tmp.__filetype__)
 
-        # XXX: I stopped looking again here.
-        # start of ic_setout
         out = []
+
         # Map the output image and set dimensions and offsets.
-        file_new_copy(output, imin[0], mode='NEW_COPY', clobber=True)
+        file_new_copy(output, imin[0], mode='NEW_COPY', overwrite=True)
         out.append(fits.open(output))
 
-        offarr, aligned = ic_setout(imin, out, nimages, project, offsets)
+        # start of ic_setout
+        offarr = ic_setout(imin, out, nimages, project, offsets)
+
+        # XXX: I stopped looking again here.
+        return
 
         # Determine the highest precedence datatype and set output datatype.
         intype = imin[0][0].data.dtype
