@@ -1,6 +1,5 @@
 from iraf.utils import file_handler, is_iterable
 import numpy as np
-from astropy.io import fits
 import os
 import csv
 from astropy.wcs import WCS
@@ -80,7 +79,7 @@ def make_fits(path):
 def header_value(hdulist, instrument, key):
     """
     The equivalent of IRAF's hdmgstr.
-    
+
     Parameters
     ----------
     hdulist
@@ -315,7 +314,6 @@ def ic_setout(inputs, output, nimages, project, offsets):
         print("WCS updates to output files not implemented yet!")
         sys.exit(1)
 
-    print('aligned?', aligned)
     return offsetsarr
 
 
@@ -409,6 +407,7 @@ def type_max(type1, type2):
     if right:
         return type2
 
+    """
     # likely case of an unsigned int and signed int of same size
     ints = [np.int8, np.int16, np.int32, np.int64]
     if (np.issubdtype(type1.type, np.unsignedinteger) and
@@ -422,90 +421,92 @@ def type_max(type1, type2):
         for iint in ints:
             if np.can_cast(type2, iint, casting='safe'):
                 return np.dtype(iint)
-
-    print(
-        "Unrecognized dtype or cannot safely cast between {0} and {1}.".format(
-            type1, type2))
+    """
+    errstr = "Unrecognized dtype or cannot safely cast between {0} and {1}."
+    print(errstr.format(type1, type2))
     sys.exit(1)
 
 
 def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             subsets=False, delete=False, combine='average',
-            reject='none', project=False, outtype='real', offsets='none',
+            reject='none', project=False, outtype=None, offsets='none',
             masktype='none', maskvalue=0., blank=0., scale=None, zero=None,
             weight=None, statsec=None, lthreshold=None, hthreshold=None,
             nlow=1, nhigh=1, nkeep=1, mclip=True, lsigma=3.0,
             hsigma=3.0, rdnoise='0.', gain='1.', snoise='0.', sigscale=0.1,
             pclip=-0.5, grow=0, instrument=None, logfile=None, ssfile=None):
     """
-    
+
     Parameters
     ----------
-    images : 
+    images :
         List of images to combine
-    output : 
+    output :
         List of output images
-    plfile : 
+    plfile :
         List of output pixel list files (optional)
-    sigma : 
+    sigma :
         List of sigma images (optional)
-    ccdtype  : 
+    ccdtype  :
         CCD image type to combine (optional)
-    subsets : 
+    subsets :
         Combine images by subset parameter?
-    delete : 
+    delete :
         Delete input images after combining?
     combine : "average|median"
         Type of combine operation
-    reject : "none|minmax|ccdclip|crreject|sigclip|avsigclip|pclip" 
+    reject : "none|minmax|ccdclip|crreject|sigclip|avsigclip|pclip"
         Type of rejection
-    project : 
+    project :
         Project highest dimension of input images?
-    outtype : "short|ushort|integer|long|real|double"
-        Output image pixel datatype
-    offsets : 
+    outtype :
+        Output image pixel datatype (e.g. np.float64).
+        Default None gives the output image the datatype of the inputs.
+        Will also revert to the input type if outtype is too low.
+        E.g. inputs have int64 and outtype is int32.
+    offsets :
         Input image offsets. 'none, wcs, grid, or file name'
     masktype : "none|goodvalue|badvalue|goodbits|badbits"
         Mask type
     maskvalue :
         Mask value
-    blank : 
+    blank :
         Value if there are no pixels
-    scale : 
+    scale :
         Image scaling
-    zero : 
+    zero :
         Image zero point offset
-    weight : 
+    weight :
         Image weights
-    statsec : 
+    statsec :
         Image section for computing statistics
-    lthreshold : 
+    lthreshold :
         Lower threshold
-    hthreshold : 
+    hthreshold :
         Upper threshold
-    nlow : 
+    nlow :
         minmax: Number of low pixels to reject
-    nhigh : 
+    nhigh :
         minmax: Number of high pixels to reject
-    nkeep : 
+    nkeep :
         Minimum to keep (pos) or maximum to reject (neg)
-    mclip : 
+    mclip :
         Use median in sigma clipping algorithms?
-    lsigma : 
+    lsigma :
         Lower sigma clipping factor
-    hsigma : 
+    hsigma :
         Upper sigma clipping factor
-    rdnoise : 
+    rdnoise :
         ccdclip: CCD readout noise (electrons)
-    gain : 
+    gain :
         ccdclip: CCD gain (electrons/DN)
-    snoise : 
+    snoise :
         ccdclip: Sensitivity noise (fraction)
-    sigscale : 
+    sigscale :
         Tolerance for sigma clipping scaling corrections
-    pclip : 
+    pclip :
         Percentile clipping parameter
-    grow : 
+    grow :
         Radius (pixels) for 1D neighbor rejection
     instrument
     logfile
@@ -582,21 +583,6 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         if hthreshold is None:
             hthreshold = np.inf
 
-    rtype = None
-    # "short|ushort|integer|long|real|double"
-    if outtype.lower() == 'short':
-        rtype = np.short
-    elif outtype.lower() == 'ushort':
-        rtype = np.ushort
-    elif outtype.lower() == 'integer':
-        rtype = np.intc
-    elif outtype.lower() == 'long':
-        rtype = np.long
-    elif outtype.lower() == 'real':
-        rtype = np.float
-    elif outtype.lower() == 'double':
-        rtype = np.double
-
     # get copies of these before adding to them for each subset
     outroot = output.strip()
     if plfile is not None:
@@ -671,7 +657,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         # define	REJECT	"|none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip|"
         if reject == 'pclip':
             if pclip == 0.:
-                print("Pclip parameter can not be zero when reject =='pclip'")
+                print("Pclip parameter can not be zero when reject=='pclip'")
                 return
 
             ii = nimages // 2
@@ -703,57 +689,57 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             imin.append(tmp)
 
         print(output)
-        print(tmp.__filetype__)
 
         out = []
 
         # Map the output image and set dimensions and offsets.
         file_new_copy(output, imin[0], mode='NEW_COPY', overwrite=True)
-        out.append(fits.open(output))
+        out.append(image_open(output))
 
         # start of ic_setout
         offarr = ic_setout(imin, out, nimages, project, offsets)
-
-        # XXX: I stopped looking again here.
-        return
 
         # Determine the highest precedence datatype and set output datatype.
         intype = imin[0][0].data.dtype
         for im in imin:
             intype = type_max(intype, im[0].data.dtype)
 
-        if rtype is None:
-            rtype = intype
-        # set this? IM_PIXTYPE(out[1]) = getdatatype (clgetc ("outtype"))
+        if outtype is None:
+            outtype = intype
+        # make sure the output type will work given the input
+        outtype = type_max(intype, outtype)
 
-        # XXX: this won't work if we're introducing 'sections' of files too
-        # need to have a 'return the file without the sections' function
-        # e.g. imgimage in IRAF
         # Open pixel list file if given.
         if plfile is not None:
+            # XXX: this won't work if we're introducing 'sections' of files too
+            # need to have a 'return the file without the sections' function
+            # e.g. imgimage in IRAF
+
             # make sure it is a .pl file
             base, tail = os.path.split(plfile)
             if len(tail) > 3:
+                # remove the suffix if it has one
                 if len(tail.split('.')) > 1:
                     tail = '.'.join(tail.split('.')[:-1])
-                tail += '.pl'
+            tail += '.pl'
             plfile = os.path.join(base, tail)
-            file_new_copy(plfile, out[0], mode='NEW_COPY', clobber=True)
-            out.append(fits.open(plfile))
+            file_new_copy(plfile, out[0], mode='NEW_COPY', overwrite=True)
+            out.append(image_open(plfile))
         else:
             out.append(None)
 
+        sigmatype = None
         # Open the sigma image if given.
         if sigma is not None:
-            file_new_copy(sigma, out[0], mode='NEW_COPY', clobber=True)
-            out.append(fits.open(sigma))
-            # XXX: add this?
-            # IM_PIXTYPE(out[3]) = ty_max (TY_REAL, IM_PIXTYPE(out[1]))
-            # call sprintf (IM_TITLE(out[3]), SZ_IMTITLE,
-            # "Combine sigma images for %s")
-            # call pargstr (output)
+            file_new_copy(sigma, out[0], mode='NEW_COPY', overwrite=True)
+            out.append(image_open(sigma))
+            # has to be a float
+            sigmatype = type_max(np.float, outtype)
         else:
             out.append(None)
+
+        # XXX: I stopped looking again here.
+        return
 
         # XXX: this currently is useless except to make sure masktype == 'none'
         # Open masks.
