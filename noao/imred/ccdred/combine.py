@@ -1,11 +1,8 @@
-from iraf.utils import file_handler, is_iterable
+from iraf.utils import file_handler
 import numpy as np
 import os
-import csv
-from astropy.wcs import WCS
 import sys
 from iraf.sys import image_open, image_close
-import shlex
 import re
 
 
@@ -169,6 +166,8 @@ def ccdsubset(hdulist, instrument, ssfile):
     # that uses the subsets file and turns things into shorter subset strings
     # while also making sure there aren't overlaps. This all seems unnecessary
     # and we should just use the full subset string as the identifier.
+
+    import shlex
     
     if ssfile is None:
         print('ssfile must be defined to use subsets')
@@ -337,7 +336,7 @@ def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True):
     return
 
 
-def ic_mopen(in_images, out_images, nimages, mtype, mvalue):
+def ic_mopen(in_images, out_images, nimages, mtype, mvalue, instrument):
     # MASKTYPES	"|none|goodvalue|badvalue|goodbits|badbits|"
     npix = out_images[0][0].data.shape[0]
     """
@@ -353,16 +352,22 @@ def ic_mopen(in_images, out_images, nimages, mtype, mvalue):
     }
     """
 
+    mtype = mtype.strip().lower()
+
+    if mtype not in ['none', 'goodvalue', 'badvalue', 'goodbits', 'badbits']:
+        print('masktype {0} not recognized. Assuming "none".')
+        mtype = 'none'
+
     # Check for special cases.  The BOOLEAN type is used when only
     # zero and nonzero are significant; i.e. the actual mask values are
     # not important.  The invert flag is used to indicate that
-    # empty masks are all bad rather the all good.
-    if mtype.lower() == 'badbits' and mvalue == 0:
+    # empty masks are all bad rather than all good.
+    if mtype == 'badbits' and mvalue == 0:
         mtype = 'none'
-    if mvalue == 0 and mtype.lower() in ['goodvalue', 'goodbits']:
+    if mvalue == 0 and mtype in ['goodvalue', 'goodbits']:
         mtype = 'boolean'
-    if ((mvalue == 0 and mtype.lower() in ['badvalue', 'goodbits']) or
-            (mvalue != 0 and mtype.lower() == 'goodvalue')):
+    if ((mvalue == 0 and mtype in ['badvalue', 'goodbits']) or
+            (mvalue != 0 and mtype == 'goodvalue')):
         invert = True
     else:
         invert = False
@@ -371,15 +376,15 @@ def ic_mopen(in_images, out_images, nimages, mtype, mvalue):
     # header and open it saving the descriptor in the pms array.
     # Empty masks (all good) are treated as if there was no mask image.
     npms = 0
-    if mtype.lower() != 'none':
+    if mtype != 'none':
         for im in in_images:
-            try:
-                fname = im[0].header['bpm']
-                # XXX: implement this
-                print('pixel maps not yet implemented.')
-                sys.exit(1)
-            except KeyError:
+            fname = header_value(im, instrument, 'BPM')
+            if fname is None:
                 continue
+
+            # XXX: implement this
+            print('pixel maps not yet implemented.')
+            sys.exit(1)
 
     # If no mask images are found and the mask parameters imply that
     # good values are 0 then use the special case of no masks.
@@ -594,6 +599,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
     else:
         sigroot = None
 
+    # XXX: make sure we're not changing input values in each loop.
     # Combine each input subset.
     for zz, iset in enumerate(subset):
 
@@ -738,38 +744,28 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         else:
             out.append(None)
 
-        # XXX: I stopped looking again here.
-        return
-
         # XXX: this currently is useless except to make sure masktype == 'none'
         # Open masks.
-        masktype = ic_mopen(imin, out, nimages, masktype, maskvalue)
+        masktype = ic_mopen(imin, out, nimages, masktype, maskvalue, instrument)
 
         # Open the log file.
         if logfile is not None:
             logfd = open(logfile, 'a')
 
+
         # Memi[in], out, Memi[offsets], nimages
-        # icombine(imin, out, offsets, nimages)
-        # XXX: this is where the icombine function starts
+        # icombiner(imin, out, offsets, nimages)
+        # this is where the icombiner function starts
 
-        # icombine seems to just be a bunch of memory handling to see if the
+        # icombiner seems to just be a bunch of memory handling to see if the
         # computer will run out of memory. We're skipping this and assuming
-        # memory management will be taken care of behind the scenes
+        # memory management will be taken care of behind the scenes. Move
+        # to ic_combiner.
 
-        """
-        # If aligned use the IMIO buffer otherwise we need vectors of
-        # output length.
 
-        if (!aligned) {
-            call salloc (dbuf, nimages, TY_POINTER)
-            do i = 1, nimages
-            call salloc (Memi[dbuf+i-1], npts, TY_REAL)
-        }
-        """
-
-        # thus, we skip ahead and are now in the ic_combine function
         # call ic_scale (in, out, offsets, scales, zeros, wts, nimages)
+        # XXX: I stopped looking again here.
+        return
 
         # Set the defaults.
         ncombine = np.ones(nimages)
@@ -880,7 +876,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         }
         """
 
-        # XXX: this is where the icombine function ends
+        # XXX: this is where the icombiner function ends
 
         # close the input images
         for ifile in imin:
@@ -945,7 +941,3 @@ def ic_gscale(param, dic, inp, exptime, values, nimages):
             print("Unknown type")
             sys.exit(1)
     return stype
-
-
-def icombine(ins, out, offsets, nimages):
-    return
