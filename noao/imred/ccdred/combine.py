@@ -840,12 +840,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                 oimref = out[0]
 
             for ii in np.arange(nimages):
-                if oimref is None:
-                    imref = imin[ii]
-                else:
-                    imref = oimref
-
-                ic_stat(imin[ii], imref, section, offarr, project)
+                ic_stat(imin[ii], oimref, section, offarr, project, ii)
 
         # XXX: this is where the icombiner function ends
 
@@ -862,19 +857,64 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
     return
 
 
-def ic_stat(imin, imref, section, offarr, project):
+def ic_stat(imin, imref, section, offarr, project, nim):
     # Determine the image section parameters.  This must be in terms of
     # the data image pixel coordinates though the section may be specified
     # in terms of the reference image coordinates.  Limit the number of
     # pixels in each dimension to a maximum.
+
     ndim = imin[0].data.ndim
     if project:
         ndim -= 1
 
     v1 = np.ones(ndim)
+    v2 = np.zeros(ndim)
     va = np.ones(ndim)
     dv = np.ones(ndim)
     vb = np.ones(ndim) * imref[0].data.shape[0]
+
+    # ic_section function
+    # XXX: implement this ic_section function
+    # I'm not totally sure, but seems to be about array splicing.
+    # In any case, is only active when statsec == 'overlap'
+    # call ic_section (section, Memi[va], Memi[vb], Memi[dv], ndim)
+    if len(section) > 0:
+        print('statsec: overlap not yet implemented.')
+        sys.exit(1)
+
+    # imin and imref are the same in the case of None
+    if imref is None:
+        imref = imin
+    else:
+        va -= offarr[nim, :]
+        vb -= offarr[nim, :]
+
+    # Maximum number of pixels to sample
+    nmax = 10000
+    imshp = np.array(imin[0].data.shape)
+    for jj in np.arange(10)+1:
+        nn = 1
+        for ii in np.arange(ndim):
+            v1[ii] = max(1, min(va[ii], vb[ii]))
+            v2[ii] = min(imin[0].data.shape[ii], max(va[ii], vb[ii]))
+            dv[ii] = jj
+            nv = max(1, (v2[ii] - v1[ii])//dv[ii] + 1)
+            v2[ii] = v1[ii] + (nv - 1) * dv[ii]
+            nn = nn * nv
+        if nn < nmax:
+            break
+
+    va = v1 * 1
+    va[0] = 1
+    if project:
+        va[ndim-1] = nim
+    vb = va * 1
+
+    # Accumulate the pixel values within the section.  Masked pixels and
+    # thresholded pixels are ignored.
+
+
+    # XXX: stopped here
 
 
 
