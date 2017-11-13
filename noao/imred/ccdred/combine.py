@@ -749,9 +749,9 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         masktype = ic_mopen(imin, out, nimages, masktype, maskvalue, instrument)
 
         # Open the log file.
+        logfd = None
         if logfile is not None:
             logfd = open(logfile, 'a')
-
 
         # Memi[in], out, Memi[offsets], nimages
         # icombiner(imin, out, offsets, nimages)
@@ -762,10 +762,8 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         # memory management will be taken care of behind the scenes. Move
         # to ic_combiner.
 
-
+        # beginning of ic_scale
         # call ic_scale (in, out, offsets, scales, zeros, wts, nimages)
-        # XXX: I stopped looking again here.
-        return
 
         # Set the defaults.
         ncombine = np.ones(nimages)
@@ -783,26 +781,31 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         # Get the number of images previously combined and the exposure times.
         # The default combine number is 1 and the default exposure is 0.
         for ii, im in enumerate(imin):
-            try:
-                ncombine[ii] = im[0].header['ncombine']
-            except KeyError:
-                pass
-            try:
-                exptime[ii] = im[0].header['exptime']
-            except KeyError:
-                pass
+            nc = header_value(im, instrument, 'ncombine')
+            et = header_value(im, instrument, 'exptime')
+            if nc is None:
+                nc = 1
+            if et is None:
+                et = 0.
+            ncombine[ii] = nc
+            exptime[ii] = et
+            # all the same image, so repeat these values
+            if project:
+                ncombine[:] = nc
+                exptime[:] = et
+                break
 
         # Set scaling factors.
         stypes = "none|mode|median|mean|exposure".split('|')
         ztypes = "none|mode|median|mean".split('|')
         wtypes = "none|mode|median|mean|exposure".split('|')
 
-        stype = ic_gscale(scale, stypes, imin, exptime,
-                          scales, nimages)
-        ztype = ic_gscale(zero, ztypes, imin, exptime, zeros,
-                          nimages)
-        wtype = ic_gscale(weight, wtypes, imin, exptime, wts,
-                          nimages)
+        stype = ic_gscale(scale, stypes, imin, exptime, scales, nimages,
+                          instrument, project)
+        ztype = ic_gscale(zero, ztypes, imin, exptime, zeros, nimages,
+                          instrument, project)
+        wtype = ic_gscale(weight, wtypes, imin, exptime, wts, nimages,
+                          instrument, project)
 
         # Get image statistics only if needed.
         domode = 'mode' in [stype, ztype, wtype]
@@ -811,12 +814,17 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
 
         if domode or domedian or domean:
             # statsec options: "|input|output|overlap|"
-            section = None
-            oref = None
+            if statsec is None:
+                statsec = ''
+            statsec = statsec.strip().lower()
+
+            oimref = None
+            section = statsec
             if statsec == 'input':
-                pass
+                section = ''
             elif statsec == 'output':
-                oref = out[0]
+                section = ''
+                oimref = out[0]
             elif statsec == 'overlap':
                 section = '['
                 for ii in np.arange(out[0][0].data.ndim):
@@ -829,52 +837,15 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                     section += '{0:d}:{1:d},'.format(kk, ll)
                 section = section[:-1]
                 section += ']'
-                oref = out[0]
-            else:
-                pass
+                oimref = out[0]
 
             for ii in np.arange(nimages):
-                if oref is None:
+                if oimref is None:
                     imref = imin[ii]
                 else:
-                    imref = oref
+                    imref = oimref
 
-                    # ic_stat(imin[ii], imref, section, offarr)
-        """
-        do i = 1, nimages {
-        if (imref != out[1])
-            imref = in[i]
-        call ic_statr (in[i], imref, Memc[section], offsets,
-            i, nimages, domode, domedian, domean, mode, median, mean)
-        if (domode) {
-            Memr[modes+i-1] = mode
-            if (stype == S_MODE)
-            scales[i] = mode
-            if (ztype == S_MODE)
-            zeros[i] = mode
-            if (wtype == S_MODE)
-            wts[i] = mode
-        }
-        if (domedian) {
-            Memr[medians+i-1] = median
-            if (stype == S_MEDIAN)
-            scales[i] = median
-            if (ztype == S_MEDIAN)
-            zeros[i] = median
-            if (wtype == S_MEDIAN)
-            wts[i] = median
-        }
-        if (domean) {
-            Memr[means+i-1] = mean
-            if (stype == S_MEAN)
-            scales[i] = mean
-            if (ztype == S_MEAN)
-            zeros[i] = mean
-            if (wtype == S_MEAN)
-            wts[i] = mean
-        }
-        }
-        """
+                ic_stat(imin[ii], imref, section, offarr, project)
 
         # XXX: this is where the icombiner function ends
 
@@ -885,7 +856,8 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         for ifile in out:
             if ifile is not None:
                 image_close(ifile)
-        logfd.close()
+        if logfd is not None:
+            logfd.close()
 
     return
 
@@ -899,45 +871,48 @@ def ic_stat(imin, imref, section, offarr, project):
     if project:
         ndim -= 1
 
-    """
-	# Determine the image section parameters.  This must be in terms of
-	# the data image pixel coordinates though the section may be specified
-	# in terms of the reference image coordinates.  Limit the number of
-	# pixels in each dimension to a maximum.
-	call amovki (1, Memi[v1], IM_MAXDIM)
-	call amovki (1, Memi[va], IM_MAXDIM)
-	call amovki (1, Memi[dv], IM_MAXDIM)
-	call amovi (IM_LEN(imref,1), Memi[vb], ndim)
-	call ic_section (section, Memi[va], Memi[vb], Memi[dv], ndim)
-    """
+    v1 = np.ones(ndim)
+    va = np.ones(ndim)
+    dv = np.ones(ndim)
+    vb = np.ones(ndim) * imref[0].data.shape[0]
 
 
-def ic_gscale(param, dic, inp, exptime, values, nimages):
+
+
+
+
+def ic_gscale(param, dic, inp, exptime, values, nimages, instrument, project):
     if param is None:
         stype = 'none'
     elif param[0] == '@':
         stype = 'file'
         tmp = np.loadtxt(param[1:])
         if len(tmp.shape) != 1:
-            print("Could not understand values in {1}".format(param[1:]))
+            print("Could not understand values in {0}".format(param[1:]))
             sys.exit(1)
         if tmp.size < nimages:
-            print("Insufficient values in {1}".format(param[1:]))
+            print("Insufficient values in {0}".format(param[1:]))
             sys.exit(1)
         if tmp.size > nimages:
-            print("Warning: Ignoring additional values in {1}".format(param[1:]))
+            print("Warning: Ignoring additional values in {0}".format(param[1:]))
         values[:] = tmp[:nimages]
     elif param[0] == '!':
         stype = 'keyword'
         for ii, im in enumerate(inp):
-            values[ii] = im[0].header[param[1:]]
+            hv = header_value(im, instrument, param[1:])
+            if hv is not None:
+                values[ii] = hv
+                if project:
+                    values[:] = hv
+                    break
     else:
+        param = param.strip().lower()
         if param in dic:
             stype = param
             if stype == 'exposure':
-                tmp = np.where(exptime > 0.001)[0]
+                tmp = np.where(exptime < 0.001)[0]
                 values[tmp] = 0.001
         else:
-            print("Unknown type")
+            print("Unknown scale, zero, or weight type: {0}".format(param))
             sys.exit(1)
     return stype
