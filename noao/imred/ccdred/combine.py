@@ -355,7 +355,7 @@ def ic_mopen(in_images, out_images, nimages, mtype, mvalue, instrument):
     mtype = mtype.strip().lower()
 
     if mtype not in ['none', 'goodvalue', 'badvalue', 'goodbits', 'badbits']:
-        print('masktype {0} not recognized. Assuming "none".')
+        print('masktype {0} not recognized. Assuming "none".'.format(mtype))
         mtype = 'none'
 
     # Check for special cases.  The BOOLEAN type is used when only
@@ -898,14 +898,20 @@ def ic_stat(imin, imref, section, offarr, project, nim):
 
     # I suspect this and the next loop of "accumulating pixel values" into the
     # data array will just turn out to be simplified array logic.
+
     # just need to throw out points below lthreshold or above hthreshold
     # if dothresh is activated.
-    # Figure out how "dflag" is set. If it's D_ALL, use all pixels
-    # (subject to threshold constraints), if it's D_MIX, use only pixles
+    # masks are set per image using ic_mopen previously.
+    # the ic_mget1 function sets the dflag parameter, but it's really
+    # just a time saver. ignoring it and using something like
+    # np.where(mask == 0) would be just fine.
+    # If it's D_ALL, use all pixels
+    # (subject to threshold constraints), if it's D_MIX, use only pixels
     # where the "mask" is 0, and if it's D_NONE, use no pixels.
 
-    # just need to figure out how the starting bounds work and what
-    # the mask array means and how dflag is set.
+    # just need to figure out how the starting bounds work
+
+
     nn = 1
     for jj in np.arange(10)+1:
         nn = 1
