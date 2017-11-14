@@ -892,6 +892,21 @@ def ic_stat(imin, imref, section, offarr, project, nim):
     # Maximum number of pixels to sample
     nmax = 10000
     imshp = np.array(imin[0].data.shape)
+    # XXX: this seems to be doing some kind of binning and choosing start and
+    # end cadences. Will need to be adjusted for 0-indexing of Python compared
+    # to 1-indexing of IRAF.
+
+    # I suspect this and the next loop of "accumulating pixel values" into the
+    # data array will just turn out to be simplified array logic.
+    # just need to throw out points below lthreshold or above hthreshold
+    # if dothresh is activated.
+    # Figure out how "dflag" is set. If it's D_ALL, use all pixels
+    # (subject to threshold constraints), if it's D_MIX, use only pixles
+    # where the "mask" is 0, and if it's D_NONE, use no pixels.
+
+    # just need to figure out how the starting bounds work and what
+    # the mask array means and how dflag is set.
+    nn = 1
     for jj in np.arange(10)+1:
         nn = 1
         for ii in np.arange(ndim):
@@ -912,7 +927,8 @@ def ic_stat(imin, imref, section, offarr, project, nim):
 
     # Accumulate the pixel values within the section.  Masked pixels and
     # thresholded pixels are ignored.
-
+    data = np.zeros(nn)
+    dp = 0
 
     # XXX: stopped here
 
