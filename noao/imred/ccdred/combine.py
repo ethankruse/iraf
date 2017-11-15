@@ -840,7 +840,9 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                 oimref = out[0]
 
             for ii in np.arange(nimages):
-                ic_stat(imin[ii], oimref, section, offarr, project, ii)
+                mn, md, mode = ic_stat(imin[ii], oimref, section, offarr,
+                                       project, ii, masktype, dothresh,
+                                       lthreshold, hthreshold, domode=domode)
 
         # XXX: this is where the icombiner function ends
 
@@ -857,7 +859,8 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
     return
 
 
-def ic_stat(imin, imref, section, offarr, project, nim):
+def ic_stat(imin, imref, section, offarr, project, nim, masktype,
+            dothresh, lower, upper, domode=False):
     # Determine the image section parameters.  This must be in terms of
     # the data image pixel coordinates though the section may be specified
     # in terms of the reference image coordinates.  Limit the number of
@@ -867,80 +870,137 @@ def ic_stat(imin, imref, section, offarr, project, nim):
     if project:
         ndim -= 1
 
-    v1 = np.ones(ndim)
-    v2 = np.zeros(ndim)
-    va = np.ones(ndim)
-    dv = np.ones(ndim)
-    vb = np.ones(ndim) * imref[0].data.shape[0]
+    data = imin[0].data
 
-    # ic_section function
+    starts = np.zeros(ndim)
+    ends = np.array(data.shape)[:ndim]
+    starts = starts.astype(int)
+    ends = ends.astype(int)
+
     # XXX: implement this ic_section function
-    # I'm not totally sure, but seems to be about array splicing.
-    # In any case, is only active when statsec == 'overlap'
+    # it's only active when statsec == 'overlap'
+    # seems to set va, vb, dv to be image from va to vb with step size dv
+    # in each dimension. sticks with default of va = 0 (1 in IRAF),
+    # vb = shape (length) of reference image, and dv = 1.
     # call ic_section (section, Memi[va], Memi[vb], Memi[dv], ndim)
     if len(section) > 0:
         print('statsec: overlap not yet implemented.')
         sys.exit(1)
 
-    # imin and imref are the same in the case of None
-    if imref is None:
-        imref = imin
-    else:
-        va -= offarr[nim, :]
-        vb -= offarr[nim, :]
+    oends = ends * 1
+    # adjust based on the offsets, but be wary of the bounds
+    # equivalent to v1 and v2 in IRAF in the 1->10 loop
+    starts -= offarr[nim, :]
+    ends -= offarr[nim, :]
 
-    # Maximum number of pixels to sample
-    nmax = 10000
-    imshp = np.array(imin[0].data.shape)
-    # XXX: this seems to be doing some kind of binning and choosing start and
-    # end cadences. Will need to be adjusted for 0-indexing of Python compared
-    # to 1-indexing of IRAF.
-
-    # I suspect this and the next loop of "accumulating pixel values" into the
-    # data array will just turn out to be simplified array logic.
-
-    # just need to throw out points below lthreshold or above hthreshold
-    # if dothresh is activated.
-    # masks are set per image using ic_mopen previously.
-    # the ic_mget1 function sets the dflag parameter, but it's really
-    # just a time saver. ignoring it and using something like
-    # np.where(mask == 0) would be just fine.
-    # If it's D_ALL, use all pixels
-    # (subject to threshold constraints), if it's D_MIX, use only pixels
-    # where the "mask" is 0, and if it's D_NONE, use no pixels.
-
-    # just need to figure out how the starting bounds work
-
-
-    nn = 1
-    for jj in np.arange(10)+1:
-        nn = 1
-        for ii in np.arange(ndim):
-            v1[ii] = max(1, min(va[ii], vb[ii]))
-            v2[ii] = min(imin[0].data.shape[ii], max(va[ii], vb[ii]))
-            dv[ii] = jj
-            nv = max(1, (v2[ii] - v1[ii])//dv[ii] + 1)
-            v2[ii] = v1[ii] + (nv - 1) * dv[ii]
-            nn = nn * nv
-        if nn < nmax:
-            break
-
-    va = v1 * 1
-    va[0] = 1
-    if project:
-        va[ndim-1] = nim
-    vb = va * 1
+    starts[starts < 0] = 0
+    ends[ends > oends] = oends[ends > oends]
 
     # Accumulate the pixel values within the section.  Masked pixels and
     # thresholded pixels are ignored.
-    data = np.zeros(nn)
-    dp = 0
 
-    # XXX: stopped here
+    if masktype != 'none':
+        print('need to implement bad pixel masks in ic_stat')
+        # need to carry in the pixel masks to this function,
+        # then check that pixels aren't included in the masks before
+        # adding them to the stats
+        sys.exit(1)
+
+    # NOTE: this may not work if project is True
+    # get the subgrid of points we want
+    idx = tuple(slice(x, y, 1) for x, y in zip(starts, ends))
+    data = data[idx]
+
+    # if we're dealing with masks, now would be the time to remove
+    # points with bad pixel masks
+
+    # now flatten down the data we want
+    data = data.flatten()
+
+    # remove points outside the threshold
+    if dothresh:
+        data = data[(data >= lower) & (data <= upper)]
+
+    if data.size < 1:
+        # this is going to break for things other than fits
+        print('Image section contains no pixels: {0}'.format(imin.filename()))
+        sys.exit(1)
+
+    mean = data.mean()
+    median = np.median(data)
+    # weird IRAF mode calculation is brute force slow even on modern
+    # computers, so only do it if necessary
+    if domode:
+        mode = ic_mode(data)
+    else:
+        mode = None
+
+    return mean, median, mode
 
 
+def ic_mode(data, zrange=0.8, zstep=0.01, zbin=0.1, nmin=10, maxsize=10000):
+    """
+    Compute mode of an array.  The mode is found by binning
+    with a bin size based on the data range over a fraction of the
+    pixels about the median and a bin step which may be smaller than the
+    bin size.  If there are too few points the median is returned.
 
+    Parameters
+    ----------
+    data : ndarray
+        Input array to calculate the mode
+    zrange : float
+        Fraction of pixels about median to use
+    zstep : float
+        Step size for search for mode
+    zbin : float
+        Bin size for mode.
+    nmin : int
+        Minimum number of pixels for mode calculation
+    maxsize : int
+        This function is crazy slow for limited use, so only use up to
+        maxsize random points in this calculation. IRAF use 10k as the
+        maxsize for the entire ic_stat function instead of just silly
+        mode calculations.
+    Returns
+    -------
+    float : mode of the input array
+    """
+    if data.size > maxsize:
+        data = np.random.choice(data, size=maxsize, replace=False)
 
+    data.sort()
+
+    nn = data.size
+    if nn < nmin:
+        return np.median(data)
+
+    ii = int(np.floor(nn * (1. - zrange) / 2.))
+    jj = int(np.ceil(nn * (1. + zrange) / 2.))
+
+    z1 = data[ii]
+    z2 = data[jj]
+    if np.isclose(z1, z2):
+        return z1
+
+    zstep = zstep * (z2 - z1)
+    zbin = zbin * (z2 - z1)
+
+    z1 = z1 - zstep
+    kk = ii * 1
+    nmax = 0
+    while kk < jj:
+        z1 += zstep
+        z2 = z1 + zbin
+        while ii < jj and data[ii] < z1:
+            ii += 1
+        while kk < jj and data[kk] < z2:
+            kk += 1
+        if kk - ii > nmax:
+            nmax = kk - ii
+            mode = data[(ii + kk)//2]
+
+    return mode
 
 
 def ic_gscale(param, dic, inp, exptime, values, nimages, instrument, project):
