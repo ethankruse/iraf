@@ -796,6 +796,8 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                 break
 
         # Set scaling factors.
+        # all can also be '@file' or '!keyword' which turns into
+        # type == 'file' or 'keyword'
         stypes = "none|mode|median|mean|exposure".split('|')
         ztypes = "none|mode|median|mean".split('|')
         wtypes = "none|mode|median|mean|exposure".split('|')
@@ -843,6 +845,42 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                 mn, md, mode = ic_stat(imin[ii], oimref, section, offarr,
                                        project, ii, masktype, dothresh,
                                        lthreshold, hthreshold, domode=domode)
+                if domode:
+                    modes[ii] = mode
+                medians[ii] = md
+                means[ii] = mn
+
+                dc = {'mean': mn, 'median': md, 'mode': mode}
+                if stype in dc:
+                    scales[ii] = dc[stype]
+                if ztype in dc:
+                    zeros[ii] = dc[ztype]
+                if wtype in dc:
+                    wts[ii] = dc[wtype]
+
+        if (scales <= 0.).any():
+            print("WARNING: Negative scale factors -- ignoring scaling.")
+            scales = np.ones(nimages)
+
+        snorm = False
+        if stype in ['file', 'keyword']:
+            snorm = True
+        znorm = False
+        if ztype in ['file', 'keyword']:
+            znorm = True
+        wflag = False
+        if wtype in ['file', 'keyword']:
+            wflag = True
+
+        if snorm:
+            scales = 1./scales
+        else:
+            scales /= scales.mean()
+
+        zeros /= scales
+        zmean = zeros.mean()
+
+
 
         # XXX: this is where the icombiner function ends
 
@@ -989,6 +1027,7 @@ def ic_mode(data, zrange=0.8, zstep=0.01, zbin=0.1, nmin=10, maxsize=10000):
     z1 = z1 - zstep
     kk = ii * 1
     nmax = 0
+    mode = np.median(data)
     while kk < jj:
         z1 += zstep
         z2 = z1 + zbin
