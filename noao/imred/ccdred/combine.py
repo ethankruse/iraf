@@ -6,7 +6,7 @@ from iraf.sys import image_open, image_close
 import re
 
 
-__all__ = ['combine', 'Instrument', 'ccdtypes', 'header_value']
+__all__ = ['combine', 'Instrument', 'ccdtypes', 'get_header_value']
 
 # XXX: deal with hdulist assuming we have a fits file. trace all image_open and
 # see if what I do is fits specific.
@@ -73,9 +73,40 @@ def make_fits(path):
     return path
 
 
-def header_value(hdulist, instrument, key):
+def set_header_value(hdulist, instrument, key, value):
     """
-    The equivalent of IRAF's hdmgstr.
+    The equivalent of IRAF's hdmput*. (e.g. hdmputi, hdmputr)
+
+    Parameters
+    ----------
+    hdulist
+    instrument
+    key
+    value
+
+    Returns
+    -------
+
+    """
+    # what is the header key in the instrument's language
+    key = instrument.translate(key)
+
+    # go through the list of hdus
+    found = False
+    for hdu in hdulist:
+        if key in hdu.header:
+            hdu.header.set(key, value)
+            found = True
+            break
+    # if it's not in any headers, put it in the first one
+    if not found:
+        hdulist[0].header.set(key, value)
+    return
+
+
+def get_header_value(hdulist, instrument, key):
+    """
+    The equivalent of IRAF's hdmg*. (e.g. hdmgstr)
 
     Parameters
     ----------
@@ -134,7 +165,7 @@ def ccdtypes(hdulist, instrument):
         sys.exit(1)
 
     options = "object|zero|dark|flat|illum|fringe|other|comp".split('|')
-    typ = header_value(hdulist, instrument, 'imagetyp')
+    typ = get_header_value(hdulist, instrument, 'imagetyp')
 
     if typ is None:
         typ = 'none'
@@ -150,7 +181,7 @@ def ccdsubset(hdulist, instrument, ssfile):
         print('ccdsubset not given an Instrument object.')
         sys.exit(1)
 
-    subsetstr = header_value(hdulist, instrument, 'subset')
+    subsetstr = get_header_value(hdulist, instrument, 'subset')
 
     if subsetstr is None:
         subsetstr = ''
@@ -378,7 +409,7 @@ def ic_mopen(in_images, out_images, nimages, mtype, mvalue, instrument):
     npms = 0
     if mtype != 'none':
         for im in in_images:
-            fname = header_value(im, instrument, 'BPM')
+            fname = get_header_value(im, instrument, 'BPM')
             if fname is None:
                 continue
 
@@ -439,7 +470,8 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             weight=None, statsec=None, lthreshold=None, hthreshold=None,
             nlow=1, nhigh=1, nkeep=1, mclip=True, lsigma=3.0,
             hsigma=3.0, rdnoise='0.', gain='1.', snoise='0.', sigscale=0.1,
-            pclip=-0.5, grow=0, instrument=None, logfile=None, ssfile=None):
+            pclip=-0.5, grow=0, instrument=None, logfile=None, verbose=False,
+            ssfile=None):
     """
 
     Parameters
@@ -515,6 +547,8 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         Radius (pixels) for 1D neighbor rejection
     instrument
     logfile
+    verbose :
+        Print log information to the standard output?
     ssfile
 
     Returns
@@ -781,8 +815,8 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         # Get the number of images previously combined and the exposure times.
         # The default combine number is 1 and the default exposure is 0.
         for ii, im in enumerate(imin):
-            nc = header_value(im, instrument, 'ncombine')
-            et = header_value(im, instrument, 'exptime')
+            nc = get_header_value(im, instrument, 'ncombine')
+            et = get_header_value(im, instrument, 'exptime')
             if nc is None:
                 nc = 1
             if et is None:
@@ -880,8 +914,96 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         zeros /= scales
         zmean = zeros.mean()
 
+        bad = False
+        if wtype != 'none':
+            if (wts <= 0.).any():
+                em = "WARNING: Negative weights"
+                em += " -- using only NCOMBINE weights."
+                print(em)
+                wts = ncombine * 1
+                bad = True
+            if (zeros <= 0.).any():
+                em = "WARNING: Negative zero offsets"
+                em += " -- ignoring zero weight adjustments."
+                print(em)
+                wts = ncombine * wts
+                bad = True
+            if not bad:
+                if ztype == 'none' or znorm or wflag:
+                    wts = ncombine * wts
+                else:
+                    wts = ncombine * wts * zmean / zeros
 
+        if znorm:
+            zeros *= -1
+        else:
+            zeros -= zmean
+            # Because of finite arithmetic it is possible for the zero offsets
+            # to be nonzero even when they are all equal.  Just for the sake of
+            # a nice log set the zero offsets in this case.
+            allclose = True
+            for ii in np.arange(zeros.size):
+                if not np.isclose([zeros[ii]], [0.]):
+                    allclose = False
+            if allclose:
+                zeros = np.zeros(nimages)
 
+        # normalize the weights to sum to 1
+        wts /= wts.sum()
+
+        # Set flags for scaling, zero offsets, sigma scaling, weights.
+        # Sigma scaling may be suppressed if the scales or zeros are
+        # different by a specified tolerance.
+        doscale = False
+        dozero = False
+        doscale1 = False
+        dowts = False
+        for ii in np.arange(nimages-1) + 1:
+            if snorm or scales[ii] != scales[0]:
+                doscale = True
+            if znorm or zeros[ii] != zeros[0]:
+                dozero = True
+            if wts[ii] != wts[0]:
+                dowts = True
+
+        if doscale and sigscale != 0.:
+            if (np.abs(scales - 1) > sigscale).any():
+                doscale1 = True
+            if not doscale1 and zmean > 0.:
+                if (np.abs(zeros / zmean) > sigscale).any():
+                    doscale1 = True
+
+        # Set the output header parameters.
+        nout = ncombine.sum()
+        set_header_value(out[0], instrument, 'ncombine', nout)
+        exposure = (wts * exptime / scales).sum()
+        darktime = 0.
+        mean = 0.
+        for ii in np.arange(nimages):
+            dark = get_header_value(imin[ii], instrument, 'darktime')
+            if dark is not None:
+                darktime += wts[ii] * dark / scales[ii]
+            else:
+                darktime += wts[ii] * exptime[ii] / scales[ii]
+            mode = get_header_value(imin[ii], instrument, 'ccdmean')
+            if mode is not None:
+                mean += wts[ii] * mode / scales[ii]
+
+        set_header_value(out[0], instrument, 'exptime', exposure)
+        set_header_value(out[0], instrument, 'darktime', darktime)
+        exists = get_header_value(out[0], instrument, 'ccdmean')
+        if exists is not None:
+            set_header_value(out[0], instrument, 'ccdmean', mean)
+
+        if out[1] is not None:
+            oname = out[1].filename()
+            set_header_value(out[0], instrument, 'BPM', oname)
+
+        # Start the log here since much of the info is only available here.
+        if verbose or logfd is not None:
+            ic_log()
+
+        # end of the icscale function
         # XXX: this is where the icombiner function ends
 
         # close the input images
@@ -895,6 +1017,10 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             logfd.close()
 
     return
+
+
+def ic_log():
+    pass
 
 
 def ic_stat(imin, imref, section, offarr, project, nim, masktype,
@@ -1060,7 +1186,7 @@ def ic_gscale(param, dic, inp, exptime, values, nimages, instrument, project):
     elif param[0] == '!':
         stype = 'keyword'
         for ii, im in enumerate(inp):
-            hv = header_value(im, instrument, param[1:])
+            hv = get_header_value(im, instrument, param[1:])
             if hv is not None:
                 values[ii] = hv
                 if project:
