@@ -464,12 +464,12 @@ def type_max(type1, type2):
 
 
 def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
-            subsets=False, delete=False, combine='average',
+            subsets=False, delete=False, method='average',
             reject='none', project=False, outtype=None, offsets='none',
             masktype='none', maskvalue=0., blank=0., scale=None, zero=None,
             weight=None, statsec=None, lthreshold=None, hthreshold=None,
             nlow=1, nhigh=1, nkeep=1, mclip=True, lsigma=3.0,
-            hsigma=3.0, rdnoise='0.', gain='1.', snoise='0.', sigscale=0.1,
+            hsigma=3.0, rdnoise=0., gain=1., snoise=0., sigscale=0.1,
             pclip=-0.5, grow=0, instrument=None, logfile=None, verbose=False,
             ssfile=None):
     """
@@ -490,7 +490,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         Combine images by subset parameter?
     delete :
         Delete input images after combining?
-    combine : "average|median"
+    method : "average|median"
         Type of combine operation
     reject : "none|minmax|ccdclip|crreject|sigclip|avsigclip|pclip"
         Type of rejection
@@ -534,11 +534,17 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
     hsigma :
         Upper sigma clipping factor
     rdnoise :
-        ccdclip: CCD readout noise (electrons)
+        ccdclip: CCD readout noise (electrons).
+        Either a number or string of the keyword to pull the number
+        from the image header file.
     gain :
         ccdclip: CCD gain (electrons/DN)
+        Either a number or string of the keyword to pull the number
+        from the image header file.
     snoise :
         ccdclip: Sensitivity noise (fraction)
+        Either a number or string of the keyword to pull the number
+        from the image header file.
     sigscale :
         Tolerance for sigma clipping scaling corrections
     pclip :
@@ -575,6 +581,11 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
     images = []
     # subset names
     subset = []
+
+    method = method.strip().lower()
+    if method not in ['average', 'median']:
+        print('Combine method not recognized: {0}'.format(method))
+        sys.exit(1)
 
     for image in inputs:
         # open the image
@@ -1001,8 +1012,111 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
 
         # Start the log here since much of the info is only available here.
         if verbose or logfd is not None:
-            ic_log()
+            import datetime
 
+            stack = False
+            if project:
+                fname = get_header_value(imin[0], instrument, 'stck0001')
+                if fname is not None:
+                    stack = True
+
+            # Time stamp the log and print parameter information.
+            logtxt = ''
+            now = datetime.datetime.now()
+            now = now.strftime('%Y-%m-%d %H:%M:%S')
+            logtxt += '{0} : IMCOMBINE\n'.format(now)
+            logtxt += '  combine = {0}, '.format(method)
+            logtxt += 'scale = {0}, zero = {1}, '.format(scale, zero)
+            logtxt += 'weight = {0}\n'.format(weight)
+
+            # REJECT "|none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip|"
+            if reject == 'minmax':
+                ostr = '  reject = minmax, nlow = {0:d}, nhigh = {1:d}\n'
+                slow = int(np.round(nlow * nimages))
+                shigh = int(np.round(nhigh * nimages))
+                logtxt += ostr.format(slow, shigh)
+            elif reject == 'ccdclip':
+                ostr = '  reject = ccdclip, mclip = {0}, nkeep = {1:d}\n'
+                logtxt += ostr.format(mclip, nkeep)
+                ostr = '  rdnoise = {0}, gain = {1}, '.format(rdnoise, gain)
+                ostr += 'snoise = {0}, '.format(snoise)
+                ostr += 'lsigma = {0:g}, hsigma = {1:g}\n'.format(lsigma,
+                                                                  hsigma)
+                logtxt += ostr
+            elif reject == 'crreject':
+                ostr = '  reject = crreject, mclip = {0}, nkeep = {1:d}\n'
+                logtxt += ostr.format(mclip, nkeep)
+                ostr = '  rdnoise = {0}, gain = {1}, '.format(rdnoise, gain)
+                ostr += 'snoise = {0}, hsigma = {1:g}\n'.format(snoise, hsigma)
+                logtxt += ostr
+            elif reject == 'pclip':
+                ostr = '  reject = pclip, nkeep = {0:d}\n'.format(nkeep)
+                logtxt += ostr
+                ostr = '  pclip = {0:g}, lsigma = {1:g}, hsigma = {2:g}\n'
+                logtxt += ostr.format(pclip, lsigma, hsigma)
+            elif reject == 'sigclip':
+                ostr = '  reject = sigclip, mclip = {0}, nkeep = {1:d}\n'
+                logtxt += ostr.format(mclip, nkeep)
+                ostr = '  lsigma = {0:g}, hsigma = {1:g}\n'
+                logtxt += ostr.format(lsigma, hsigma)
+            elif reject == 'avsigclip':
+                ostr = '  reject = avsigclip, mclip = {0}, nkeep = {1:d}\n'
+                logtxt += ostr.format(mclip, nkeep)
+                ostr = '  lsigma = {0:g}, hsigma = {1:g}\n'
+                logtxt += ostr.format(lsigma, hsigma)
+
+            if reject != 'none' and grow > 0:
+                logtxt += '  grow = {0:d}\n'.format(grow)
+
+            if dothresh:
+                if lthreshold > -np.inf and hthreshold < np.inf:
+                    ostr = '  lthreshold = {0:g}, hthreshold = {1:g}\n'
+                    ostr = ostr.format(lthreshold, hthreshold)
+                elif lthreshold > -np.inf:
+                    ostr = '  lthreshold = {0:g}\n'.format(lthreshold)
+                else:
+                    ostr = '  hthreshold = {0:g}\n'.format(hthreshold)
+                logtxt += ostr
+
+            logtxt += '  blank = {0:g}\n'.format(blank)
+            if len(statsec) > 0:
+                logtxt += '  statsec = {0}\n'.format(statsec)
+
+            if masktype != 'none':
+                print('Mask types not yet supported')
+                sys.exit(1)
+
+            dop = {'ncombine': False, 'exptime': False, 'mode': False,
+                   'median': False, 'mean': False, 'mask': False, 'rdn': False,
+                   'gain': False, 'sn': False}
+            for ii in np.arange(nimages):
+                if ncombine[ii] != ncombine[0]:
+                    dop['ncombine'] = True
+                if exptime[ii] != exptime[0]:
+                    dop['exptime'] = True
+                if modes[ii] != modes[0]:
+                    dop['mode'] = True
+                if medians[ii] != medians[0]:
+                    dop['median'] = True
+                if means[ii] != means[0]:
+                    dop['mean'] = True
+                if masktype != 'none':
+                    print('Mask types not yet supported')
+                    sys.exit(1)
+            if reject == 'ccdclip' or reject == 'crreject':
+                if isinstance(rdnoise, str):
+                    dop['rdn'] = True
+                if isinstance(gain, str):
+                    dop['gain'] = True
+                if isinstance(snoise, str):
+                    dop['sn'] = True
+            hdr = '  {0:20s}'.format('Images')
+
+            
+            if verbose:
+                print(logtxt)
+            if logfd is not None:
+                logfd.write(logtxt)
         # end of the icscale function
         # XXX: this is where the icombiner function ends
 
@@ -1017,10 +1131,6 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             logfd.close()
 
     return
-
-
-def ic_log():
-    pass
 
 
 def ic_stat(imin, imref, section, offarr, project, nim, masktype,
