@@ -18,10 +18,15 @@ def image_open(image):
 
     """
     hdulist = None
+    ftype = ''
     try:
         hdulist = fits.open(image)
+        ftype = 'fits'
     except IOError:
         print("Error reading image {0} ...".format(image))
+
+    if hdulist is not None:
+        hdulist.__filetype__ = ftype
 
     return hdulist
 
@@ -39,4 +44,5 @@ def image_close(image):
     -------
 
     """
-    image.close()
+    if image.__filetype__ == 'fits':
+        image.close()
