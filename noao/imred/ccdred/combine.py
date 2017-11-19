@@ -344,7 +344,7 @@ def ic_setout(inputs, output, nimages, project, offsets):
         print("WCS updates to output files not implemented yet!")
         sys.exit(1)
 
-    return offsetsarr
+    return aligned, offsetsarr
 
 
 # this is meant to be equivalent to immap (output, NEW_COPY, Memi[in]) in IRAF
@@ -705,6 +705,10 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         # are converted to a fraction of the valid pixels.
 
         reject = reject.lower().strip()
+        rejectopts = "none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip"
+        if reject not in rejectopts.split('|'):
+            print('Could not recognize reject parameter {0}'.format(reject))
+            sys.exit(1)
         # define	REJECT	"|none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip|"
         if reject == 'pclip':
             if pclip == 0.:
@@ -748,7 +752,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         out.append(image_open(output))
 
         # start of ic_setout
-        offarr = ic_setout(imin, out, nimages, project, offsets)
+        aligned, offarr = ic_setout(imin, out, nimages, project, offsets)
 
         # Determine the highest precedence datatype and set output datatype.
         intype = imin[0][0].data.dtype
@@ -811,14 +815,11 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         # call ic_scale (in, out, offsets, scales, zeros, wts, nimages)
 
         # Set the defaults.
-        ncombine = np.ones(nimages)
+        ncombine = np.ones(nimages).astype(int)
         exptime = np.zeros(nimages)
         means = np.zeros(nimages)
         medians = np.zeros(nimages)
         modes = np.zeros(nimages)
-        means.fill(np.nan)
-        medians.fill(np.nan)
-        modes.fill(np.nan)
         scales = np.ones(nimages)
         zeros = np.zeros(nimages)
         wts = np.ones(nimages)
@@ -1038,16 +1039,37 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             elif reject == 'ccdclip':
                 ostr = '  reject = ccdclip, mclip = {0}, nkeep = {1:d}\n'
                 logtxt += ostr.format(mclip, nkeep)
-                ostr = '  rdnoise = {0}, gain = {1}, '.format(rdnoise, gain)
-                ostr += 'snoise = {0}, '.format(snoise)
+                if isinstance(rdnoise, str):
+                    ostr = '  rdnoise = {0}'.format(rdnoise)
+                else:
+                    ostr = '  rdnoise = {0:g}'.format(rdnoise)
+                if isinstance(gain, str):
+                    ostr += ', gain = {0}, '.format(gain)
+                else:
+                    ostr += ', gain = {0:g}, '.format(gain)
+                if isinstance(snoise, str):
+                    ostr += 'snoise = {0}, '.format(snoise)
+                else:
+                    ostr += 'snoise = {0:g}, '.format(snoise)
                 ostr += 'lsigma = {0:g}, hsigma = {1:g}\n'.format(lsigma,
                                                                   hsigma)
                 logtxt += ostr
             elif reject == 'crreject':
                 ostr = '  reject = crreject, mclip = {0}, nkeep = {1:d}\n'
                 logtxt += ostr.format(mclip, nkeep)
-                ostr = '  rdnoise = {0}, gain = {1}, '.format(rdnoise, gain)
-                ostr += 'snoise = {0}, hsigma = {1:g}\n'.format(snoise, hsigma)
+                if isinstance(rdnoise, str):
+                    ostr = '  rdnoise = {0}'.format(rdnoise)
+                else:
+                    ostr = '  rdnoise = {0:g}'.format(rdnoise)
+                if isinstance(gain, str):
+                    ostr += ', gain = {0}, '.format(gain)
+                else:
+                    ostr += ', gain = {0:g}, '.format(gain)
+                if isinstance(snoise, str):
+                    ostr += 'snoise = {0}, '.format(snoise)
+                else:
+                    ostr += 'snoise = {0:g}, '.format(snoise)
+                ostr += 'hsigma = {0:g}\n'.format(hsigma)
                 logtxt += ostr
             elif reject == 'pclip':
                 ostr = '  reject = pclip, nkeep = {0:d}\n'.format(nkeep)
@@ -1110,14 +1132,176 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                     dop['gain'] = True
                 if isinstance(snoise, str):
                     dop['sn'] = True
-            hdr = '  {0:20s}'.format('Images')
+            hdr = '  {0:20s} '.format('Images')
+            if dop['ncombine']:
+                hdr += ' {0:6s}'.format('NComb')
+            if dop['exptime']:
+                hdr += ' {0:6s}'.format('ExpT')
+            if dop['mode']:
+                hdr += ' {0:7s}'.format('Mode')
+            if dop['median']:
+                hdr += ' {0:7s}'.format('Median')
+            if dop['mean']:
+                hdr += ' {0:7s}'.format('Mean')
+            if dop['rdn']:
+                hdr += ' {0:7s}'.format('RdNoise')
+            if dop['gain']:
+                hdr += ' {0:6s}'.format('Gain')
+            if dop['sn']:
+                hdr += ' {0:6s}'.format('SNoise')
+            if doscale:
+                hdr += ' {0:6s}'.format('Scale')
+            if dozero:
+                hdr += ' {0:7s}'.format('Zero')
+            if dowts:
+                hdr += ' {0:6s}'.format('Weight')
+            if not aligned:
+                hdr += ' {0:9s}'.format('Offsets')
+            if dop['mask']:
+                hdr += ' {0:s}'.format('Maskfile')
+            hdr += '\n'
+            logtxt += hdr
 
-            
+            for ii in np.arange(nimages):
+                if stack:
+                    stc = 'stck{0:04d}'.format(ii)
+                    vl = get_header_value(imin[ii], instrument, stc)
+                    if vl is not None:
+                        ostr = '  {0:21s}'.format(vl)
+                    else:
+                        ostr = '  {0:16s}[{1:03d}]'
+                        ostr = ostr.format(imin[ii].filename(), ii)
+                elif project:
+                    ostr = '  {0:16s}[{1:03d}]'
+                    ostr = ostr.format(imin[ii].filename(), ii)
+                else:
+                    ostr = '  {0:21s}'.format(imin[ii].filename())
+                if dop['ncombine']:
+                    ostr += ' {0:6d}'.format(ncombine[ii])
+                if dop['exptime']:
+                    ostr += ' {0:6.1f}'.format(exptime[ii])
+                if dop['mode']:
+                    ostr += ' {0:7.5g}'.format(modes[ii])
+                if dop['median']:
+                    ostr += ' {0:7.5g}'.format(medians[ii])
+                if dop['mean']:
+                    ostr += ' {0:7.5g}'.format(means[ii])
+                if dop['rdn']:
+                    rval = get_header_value(imin[ii], instrument, rdnoise)
+                    ostr += ' {0:7g}'.format(rval)
+                if dop['gain']:
+                    rval = get_header_value(imin[ii], instrument, gain)
+                    ostr += ' {0:6g}'.format(rval)
+                if dop['sn']:
+                    rval = get_header_value(imin[ii], instrument, snoise)
+                    ostr += ' {0:6g}'.format(rval)
+                if doscale:
+                    ostr += ' {0:6.3f}'.format(1./scales[ii])
+                if dozero:
+                    ostr += ' {0:7.5g}'.format(-zeros[ii])
+                if dowts:
+                    ostr += ' {0:6.3f}'.format(wts[ii])
+                if not aligned:
+                    nd = np.array(out[0][0].data.shape)
+                    # number of dimensions in out array
+                    nd = len(nd[nd > 1])
+                    if nd == 1:
+                        ostr += ' {0:9d}'.format(offarr[ii, 0])
+                    else:
+                        use = offarr[ii, :]
+                        strs = [' {0:4d}'.format(ixx) for ixx in use]
+                        for istr in strs:
+                            ostr += istr
+                if dop['mask']:
+                    print('Mask types not yet supported')
+                    sys.exit(1)
+                ostr += '\n'
+                logtxt += ostr
+
+            # Log information about the output images.
+            ostr = '\n  Output image = {0}, ncombine = {1:d}\n'
+            ostr = ostr.format(out[0].filename(), nout)
+            logtxt += ostr
+
+            if out[1] is not None:
+                logtxt += '  Pixel list image = {0}\n'.format(out[1].filename())
+
+            if out[2] is not None:
+                logtxt += '  Sigma image = {0}\n'.format(out[1].filename())
+
             if verbose:
                 print(logtxt)
             if logfd is not None:
                 logfd.write(logtxt)
+
+        doscale = (doscale or dozero)
         # end of the icscale function
+        keepids = False
+        if method == 'average' and dowts:
+            keepids = True
+        elif method == 'median':
+            dowts = False
+
+        docombine = True
+
+        # Set rejection algorithm specific parameters
+        if reject in ['ccdclip', 'crreject']:
+            # the column order is readnoise, gain, snoise
+            nm = np.zeros((nimages,3))
+            if isinstance(rdnoise, str):
+                for ii in np.arange(nimages):
+                    nm[ii, 0] = get_header_value(imin[ii], instrument, rdnoise)
+            else:
+                nm[:, 0] = rdnoise
+
+            if isinstance(gain, str):
+                for ii in np.arange(nimages):
+                    nm[ii, 1] = get_header_value(imin[ii], instrument, gain)
+            else:
+                nm[:, 1] = gain
+            max_real = 0.99e37
+            small = 1e4 / max_real
+            # adjust the readnoise values? don't let it be actually 0?
+            rdsq = (nm[:, 0]/nm[:, 1])**2
+            nm[:, 0] = np.where(rdsq > small, rdsq, [small])
+
+            if isinstance(snoise, str):
+                for ii in np.arange(nimages):
+                    nm[ii, 2] = get_header_value(imin[ii], instrument, snoise)
+            else:
+                nm[:, 2] = snoise
+
+            if not keepids:
+                if doscale1 or grow > 0:
+                    keepids = True
+                else:
+                    # see if every row is the same as the first row
+                    for ii in np.arange(nimages-1)+1:
+                        if (nm[ii, :] != nm[0, :]).any():
+                            keepids = True
+                            break
+            if reject == 'crreject':
+                lsigma = np.inf
+        elif reject == 'minmax':
+            mclip = False
+            if grow > 0:
+                keepids = True
+        elif reject == 'pclip':
+            mclip = True
+            if grow > 0:
+                keepids = True
+        elif reject in ['sigclip', 'avsigclip']:
+            if doscale1 or grow > 0:
+                keepids = True
+        else:
+            # case 'none'
+            mclip = False
+            grow = 0
+
+        npts = out[0][0].data.shape[0]
+        if keepids:
+            ids = np.zeros((nimages, npts)).astype(int)
+
         # XXX: this is where the icombiner function ends
 
         # close the input images
