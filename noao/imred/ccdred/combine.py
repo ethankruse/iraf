@@ -1302,6 +1302,63 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         if keepids:
             ids = np.zeros((nimages, npts)).astype(int)
 
+        maxdim = 7
+        v1 = np.zeros(maxdim)
+        v2 = np.zeros(maxdim)
+        v3 = np.zeros(maxdim)
+        dd = np.zeros(nimages)
+        dbuf = np.zeros(nimages)
+
+        # start of ic_gdatar
+        if masktype != 'none':
+            print('need to implement mask types')
+            sys.exit(1)
+
+        ndim = np.array(out[0][0].data.shape)
+        ndim = ndim[ndim > 1].size
+
+        for ii in np.arange(nimages):
+            if aligned:
+                v3 = v2 * 1
+                if project:
+                    v3[ndim] = ii
+                dd[ii] = imin[ii][v3]
+            else:
+                v3[0] = v2[0]
+                v3[1:] = v2[1:] - offarr[ii, 1:]
+                if project:
+                    v3[ndim] = ii
+                dbuf[ii + offarr[ii, 0]] = imin[ii][v3]
+                dd[ii] = dbuf[ii]
+
+        # Apply threshold if needed
+        if dothresh:
+            if masktype != 'none':
+                print('need to implement mask types')
+                sys.exit(1)
+            dd = dd[(dd >= lthreshold) & (dd <= hthreshold)]
+
+        # Apply scaling (avoiding masked pixels which might overflow?)
+        if doscale:
+            if masktype != 'none':
+                print('need to implement mask types')
+                sys.exit(1)
+            dd = dd / scales - zeros
+
+        # Sort pointers to exclude unused images.
+        # Use the lflag array to keep track of the image index.
+
+        # Compact data to remove bad pixels
+        # Keep track of the image indices if needed
+        # If growing mark the end of the included image indices with zero
+
+        # Sort the pixels and IDs if needed
+
+        # end of ic_gdatar
+
+        if reject == 'minmax':
+            pass
+
         # XXX: this is where the icombiner function ends
 
         # close the input images
