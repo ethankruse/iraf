@@ -696,6 +696,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             nimages = len(iimages)
 
         # Convert the nkeep parameter if needed.
+        # XXX: do we want to do this here or wait until later?
         if nkeep < 0:
             nkeep = max(0, nimages + nkeep)
 
@@ -1307,7 +1308,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         # easy case, no offsets to deal with
         if aligned:
             for ii in np.arange(nimages):
-                data[:, :, ii] = imin[ii][0].data
+                data[..., ii] = imin[ii][0].data
         else:
             print('need to handle offsets in combine')
             sys.exit(1)
@@ -1328,9 +1329,70 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             data -= zeros
 
         # end of ic_gdatar
+        if reject in ['ccdclip', 'crreject']:
+            minclip = 2
+            if mclip:
+                if nkeep < 0:
+                    minkeep = max(0, nimages + nkeep)
+                else:
+                    minkeep = min(nimages, nkeep)
+                # not allowed to clip any, so move on
+                if nimages < max(minclip, minkeep + 1):
+                    docombine = True
+                else:
+                    # Compute median and sigma and iteratively clip.
+                    # number of good points to use
+                    npts = (~np.isnan(data)).sum(axis=-1)
 
-        if reject == 'minmax':
+        elif reject == 'minmax':
+            # number of good points to use
+            npts = (~np.isnan(data)).sum(axis=-1)
+            npts = npts.astype(float)
+            # number of points to reject both high and low
+            totlow = nlow * npts
+            tothigh = nhigh * npts
+            # if we need to remove lower points
+            if totlow.max() >= 1.:
+                # save the locations of bad points
+                rbad = np.isnan(data)
+                # while finding mins, replace them with infs
+                # necessary because rows of all nans will raise a ValueError in
+                # nanargmin or nanargmax
+                data[rbad] = np.inf
+                # loop through and replace as many as needed
+                while totlow.max() >= 1.:
+                    mins = np.nanargmin(data, axis=-1)
+                    # only the spots we want to remove the min points
+                    torep = np.where(totlow >= 1.)
+                    torep += (mins[np.where(totlow >= 1.)],)
+                    data[torep] = np.nan
+                    totlow -= 1.
+                data[rbad] = np.nan
+
+            # if we need to remove higher points
+            if tothigh.max() >= 1.:
+                # save the locations of bad points
+                rbad = np.isnan(data)
+                # while finding mins, replace them with negative infs
+                # necessary because rows of all nans will raise a ValueError in
+                # nanargmin or nanargmax
+                data[rbad] = -np.inf
+                # loop through and replace as many as needed
+                while tothigh.max() >= 1.:
+                    maxs = np.nanargmax(data, axis=-1)
+                    # only the spots we want to remove the max points
+                    torep = np.where(tothigh >= 1.)
+                    torep += (maxs[np.where(tothigh >= 1.)],)
+                    data[torep] = np.nan
+                    tothigh -= 1.
+                data[rbad] = np.nan
+        elif reject == 'pclip':
             pass
+        elif reject == 'sigclip':
+            pass
+        elif reject == 'avsigclip':
+            pass
+
 
         # XXX: this is where the icombiner function ends
 
