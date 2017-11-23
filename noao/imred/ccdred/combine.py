@@ -1332,67 +1332,79 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         # end of ic_gdatar
         if reject in ['ccdclip', 'crreject']:
             minclip = 2
-            if mclip:
-                # XXX: set docombine somewhere if that is actually useful?
-                # number of good points to use
-                npts = (~np.isnan(data)).sum(axis=-1)
-                if nkeep < 0:
-                    minkeep = np.where(npts + nkeep > 0, npts + nkeep, [0])
-                else:
-                    minkeep = np.where(npts < nkeep, npts, [nkeep])
 
-                finished = np.zeros_like(npts, dtype=bool)
-                finished[(npts < minclip) | (npts <= minkeep)] = True
-                while not finished.all():
+            # XXX: set docombine somewhere if that is actually useful?
+            # number of good points to use
+            npts = (~np.isnan(data)).sum(axis=-1)
+            if nkeep < 0:
+                minkeep = np.where(npts + nkeep > 0, npts + nkeep, [0])
+            else:
+                minkeep = np.where(npts < nkeep, npts, [nkeep])
+
+            finished = np.zeros_like(npts, dtype=bool)
+            finished[(npts < minclip) | (npts <= minkeep)] = True
+            while not finished.all():
+                if mclip:
                     # XXX: catch RuntimeWarning for all nan rows
                     meds = np.nanmedian(data, axis=-1)
+                else:
+                    totals = np.nansum(data, axis=-1)
+                    # if there are 3+ data points, use the min/max removed avg
+                    adjnpts = npts * 1
+                    # this adjustment method will fail if there are infinities
+                    totals[adjnpts >= 3] -= np.nanmin(data[adjnpts >= 3],
+                                                      axis=-1)
+                    totals[adjnpts >= 3] -= np.nanmax(data[adjnpts >= 3],
+                                                      axis=-1)
+                    adjnpts[adjnpts >= 3] -= 2
+                    meds = totals / adjnpts
 
-                    if doscale1:
-                        rescale = scales * (meds[..., np.newaxis] + zeros)
-                        rr = np.where(rescale > 0., rescale, [0.])
-                        ss = np.sqrt(nm[:, 0] + rr / nm[:, 1] +
-                                     (rr * nm[:, 2]) ** 2) / scales
-                    else:
-                        rr = np.where(meds > 0., meds, [0.])
-                        ss = np.sqrt(nm[:, 0] + rr[..., np.newaxis] / nm[:, 1] +
-                                     (rr[..., np.newaxis] * nm[:, 2]) ** 2)
-                    negresids = (meds[..., np.newaxis] - data) / ss
-                    # these don't pass the cut
-                    bad = ((negresids >= lthreshold) |
-                           (-1. * negresids >= hthreshold))
-                    # number that are bad in a given pixel
-                    totbad = bad.sum(axis=-1)
-                    # the easy case of things to update
-                    toup = (totbad > 0) & (npts - totbad >= minkeep)
-                    replace = toup[..., np.newaxis] & bad
-                    data[replace] = np.nan
-                    # only remove the worst outliers in these cases.
-                    # not sure there's a pythonic way to do this, so loop it.
-                    caution = np.where((totbad > 0) & (npts - totbad < minkeep))
-                    for ii in np.arange(len(caution[0])):
-                        inds = tuple(cc[ii] for cc in caution)
-                        # get only this pixel's values in every image
-                        maxresid = np.abs(negresids[inds])
-                        # how many pixels we're allowed to remove
-                        nrem = npts[inds] - minkeep[inds]
-                        while nrem > 0:
-                            # find all values equal to the current max
-                            torem = np.where(np.isclose(maxresid,
-                                                        maxresid.max()))[0]
-                            # only remove all equal values if doing so doesn't
-                            #  put us below the limit
-                            if len(torem) <= nrem:
-                                data[inds + (torem,)] = np.nan
-                            nrem -= len(torem)
-                        # mark this one as finished, even if we're keeping
-                        # values above minkeep because there are
-                        # multiple equal values
-                        finished[inds] = True
-                    # finished is updated where totbad == 0 or npts == minkeep
-                    # or npts < minclip
-                    npts = (~np.isnan(data)).sum(axis=-1)
-                    finished[(totbad == 0) | (npts == minkeep) |
-                             (npts < minclip)] = True
+                if doscale1:
+                    rescale = scales * (meds[..., np.newaxis] + zeros)
+                    rr = np.where(rescale > 0., rescale, [0.])
+                    ss = np.sqrt(nm[:, 0] + rr / nm[:, 1] +
+                                 (rr * nm[:, 2]) ** 2) / scales
+                else:
+                    rr = np.where(meds > 0., meds, [0.])
+                    ss = np.sqrt(nm[:, 0] + rr[..., np.newaxis] / nm[:, 1] +
+                                 (rr[..., np.newaxis] * nm[:, 2]) ** 2)
+                negresids = (meds[..., np.newaxis] - data) / ss
+                # these don't pass the cut
+                bad = ((negresids >= lthreshold) |
+                       (-1. * negresids >= hthreshold))
+                # number that are bad in a given pixel
+                totbad = bad.sum(axis=-1)
+                # the easy case of things to update
+                toup = (totbad > 0) & (npts - totbad >= minkeep)
+                replace = toup[..., np.newaxis] & bad
+                data[replace] = np.nan
+                # only remove the worst outliers in these cases.
+                # not sure there's a pythonic way to do this, so loop it.
+                caution = np.where((totbad > 0) & (npts - totbad < minkeep))
+                for ii in np.arange(len(caution[0])):
+                    inds = tuple(cc[ii] for cc in caution)
+                    # get only this pixel's values in every image
+                    maxresid = np.abs(negresids[inds])
+                    # how many pixels we're allowed to remove
+                    nrem = npts[inds] - minkeep[inds]
+                    while nrem > 0:
+                        # find all values equal to the current max
+                        torem = np.where(np.isclose(maxresid,
+                                                    maxresid.max()))[0]
+                        # only remove all equal values if doing so doesn't
+                        #  put us below the limit
+                        if len(torem) <= nrem:
+                            data[inds + (torem,)] = np.nan
+                        nrem -= len(torem)
+                    # mark this one as finished, even if we're keeping
+                    # values above minkeep because there are
+                    # multiple equal values
+                    finished[inds] = True
+                # finished is updated where totbad == 0 or npts == minkeep
+                # or npts < minclip
+                npts = (~np.isnan(data)).sum(axis=-1)
+                finished[(totbad == 0) | (npts == minkeep) |
+                         (npts < minclip)] = True
 
         elif reject == 'minmax':
             # number of good points to use
