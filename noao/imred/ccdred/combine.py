@@ -717,6 +717,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                 return
 
             ii = nimages // 2
+            # XXX: are these 1 indexed things?
             if np.abs(pclip) < 1.:
                 pclip *= ii
             if pclip < 0.:
@@ -1449,7 +1450,36 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                     tothigh -= 1.
                 data[rbad] = np.nan
         elif reject == 'pclip':
-            pass
+            minclip = 3
+            npts = (~np.isnan(data)).sum(axis=-1)
+            if nkeep < 0:
+                minkeep = np.where(npts + nkeep > 0, npts + nkeep, [0])
+            else:
+                minkeep = np.where(npts < nkeep, npts, [nkeep])
+
+            # Set sign of pclip parameter
+            if pclip < 0.:
+                tt = -1.
+            else:
+                tt = 1.
+            meds = np.nanmedian(data, axis=-1)
+
+            # Define sigma for clipping
+            sigmas = tt * (data - meds)
+            """
+            n2 = 1 + npts // 2
+            even = (npts % 2) == 0
+            # Set sign of pclip parameter
+            if pclip < 0.:
+                tt = -1.
+                n3 = np.where(n2 + pclip > 1, n2+pclip, [1])
+                tmp = n2[even] + pclip - 1
+                n3[even] = np.where(tmp > 1, tmp, [1])
+            else:
+                tt = 1.
+                n3 = np.where(npts < n2 + pclip, npts, n2 + pclip)
+                n3 = np.round(n3).astype(int)
+            """
         elif reject == 'sigclip':
             pass
         elif reject == 'avsigclip':
