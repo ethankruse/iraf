@@ -1330,10 +1330,10 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             data -= zeros
 
         # end of ic_gdatar
-        if reject in ['ccdclip', 'crreject']:
+        if reject in ['ccdclip', 'crreject', 'sigclip']:
             minclip = 2
-
-            # XXX: set docombine somewhere if that is actually useful?
+            if reject == 'sigclip':
+                minclip = 3
             # number of good points to use
             npts = (~np.isnan(data)).sum(axis=-1)
             if nkeep < 0:
@@ -1359,19 +1359,52 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                     adjnpts[adjnpts >= 3] -= 2
                     meds = totals / adjnpts
 
-                if doscale1:
-                    rescale = scales * (meds[..., np.newaxis] + zeros)
-                    rr = np.where(rescale > 0., rescale, [0.])
-                    ss = np.sqrt(nm[:, 0] + rr / nm[:, 1] +
-                                 (rr * nm[:, 2]) ** 2) / scales
+                if reject == 'sigclip':
+                    if doscale1:
+                        # Compute the sigma with scaling correction.
+                        rr = (meds[..., np.newaxis] + zeros) / scales
+                        rr[rr < 1.] = 1.
+                        rr = np.sqrt(rr)
+                        ss = ((data - meds[..., np.newaxis]) / rr) ** 2.
+                        # this is just to compute the standard deviation in
+                        # each pixel (with 1 degree of freedom)
+                        ss = np.sqrt(np.nansum(ss, axis=-1) / (npts - 1))
+                        # ignore points where ss == 0 to avoid divide by 0
+                        # and because we can't cut them out anyway
+                        ss[ss == 0.] = np.inf
+                        negresids = ((meds[..., np.newaxis] - data) /
+                                     (ss[..., np.newaxis] * rr))
+                        bad = ((negresids >= lsigma) |
+                               (-1. * negresids >= hsigma))
+                    else:
+                        # Compute the sigma without scaling correction.
+                        ss = (data - meds[..., np.newaxis]) ** 2.
+                        # this is just to compute the standard deviation in
+                        # each pixel (with 1 degree of freedom)
+                        ss = np.sqrt(np.nansum(ss, axis=-1) / (npts - 1))
+                        # ignore points where ss == 0 to avoid divide by 0
+                        # and because we can't cut them out anyway
+                        ss[ss == 0.] = np.inf
+                        negresids = ((meds[..., np.newaxis] - data) /
+                                     ss[..., np.newaxis])
+                        bad = ((negresids >= lsigma) |
+                               (-1. * negresids >= hsigma))
                 else:
-                    rr = np.where(meds > 0., meds, [0.])
-                    ss = np.sqrt(nm[:, 0] + rr[..., np.newaxis] / nm[:, 1] +
-                                 (rr[..., np.newaxis] * nm[:, 2]) ** 2)
-                negresids = (meds[..., np.newaxis] - data) / ss
-                # these don't pass the cut
-                bad = ((negresids >= lthreshold) |
-                       (-1. * negresids >= hthreshold))
+                    if doscale1:
+                        rescale = scales * (meds[..., np.newaxis] + zeros)
+                        rr = np.where(rescale > 0., rescale, [0.])
+                        ss = np.sqrt(nm[:, 0] + rr / nm[:, 1] +
+                                     (rr * nm[:, 2]) ** 2) / scales
+                    else:
+                        rr = np.where(meds > 0., meds, [0.])
+                        ss = np.sqrt(nm[:, 0] + rr[..., np.newaxis] / nm[:, 1] +
+                                     (rr[..., np.newaxis] * nm[:, 2]) ** 2)
+
+                    negresids = (meds[..., np.newaxis] - data) / ss
+                    # these don't pass the cut
+                    bad = ((negresids >= lthreshold) |
+                           (-1. * negresids >= hthreshold))
+
                 # number that are bad in a given pixel
                 totbad = bad.sum(axis=-1)
                 # the easy case of things to update
@@ -1522,8 +1555,6 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                         data[inds + (torem,)] = np.nan
                     nrem -= len(torem)
 
-        elif reject == 'sigclip':
-            pass
         elif reject == 'avsigclip':
             pass
 
