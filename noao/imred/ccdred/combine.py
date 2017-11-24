@@ -717,7 +717,6 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                 return
 
             ii = nimages // 2
-            # XXX: are these 1 indexed things?
             if np.abs(pclip) < 1.:
                 pclip *= ii
             if pclip < 0.:
@@ -1462,24 +1461,67 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                 tt = -1.
             else:
                 tt = 1.
+
             meds = np.nanmedian(data, axis=-1)
+            # the median value or the rightmost of the 2 median values
+            n2 = npts // 2
+
+            if pclip < 0.:
+                # whether or not we have an even number of points
+                even = (npts % 2) == 0
+                # set the clipping index at n2 - abs(pclip), but using the left
+                # edge of the median if even
+                # can't be below the first index of course
+                n3 = np.where(np.round(n2 - even + pclip) > 0,
+                              np.round(n2 - even + pclip), [0])
+            else:
+                # set the clipping index at n2 + pclip, but can't be
+                # beyond the max number of images
+                n3 = np.where(npts - 1 < np.round(n2 + pclip), npts - 1,
+                              np.round(n2 + pclip))
+            n3 = n3.astype(int)
+
+            # the data needs to be sorted. NaNs are at the end, beyond npts,
+            # so they are ignored.
+            data = np.sort(data, axis=-1)
 
             # Define sigma for clipping
-            sigmas = tt * (data - meds)
-            """
-            n2 = 1 + npts // 2
-            even = (npts % 2) == 0
-            # Set sign of pclip parameter
-            if pclip < 0.:
-                tt = -1.
-                n3 = np.where(n2 + pclip > 1, n2+pclip, [1])
-                tmp = n2[even] + pclip - 1
-                n3[even] = np.where(tmp > 1, tmp, [1])
-            else:
-                tt = 1.
-                n3 = np.where(npts < n2 + pclip, npts, n2 + pclip)
-                n3 = np.round(n3).astype(int)
-            """
+            oinds = np.meshgrid(*[np.arange(dd) for dd in meds.shape],
+                                indexing='ij')
+            oinds.append(n3)
+            msigma = tt * (data[oinds] - meds)
+            # skip over ones where sigma is 0 or there's not enough pixels
+            msigma[(msigma == 0.) | (npts < minclip)] = np.inf
+
+            negresids = (meds[..., np.newaxis] - data) / msigma[..., np.newaxis]
+
+            # these don't pass the cut
+            bad = ((negresids > lsigma) | (-1. * negresids > hsigma))
+            # number that are bad in a given pixel
+            totbad = bad.sum(axis=-1)
+            # the easy case of things to update
+            toup = (totbad > 0) & (npts - totbad >= minkeep)
+            replace = toup[..., np.newaxis] & bad
+            data[replace] = np.nan
+            # only remove the worst outliers in these cases.
+            # not sure there's a pythonic way to do this, so loop it.
+            caution = np.where((totbad > 0) & (npts - totbad < minkeep))
+            for ii in np.arange(len(caution[0])):
+                inds = tuple(cc[ii] for cc in caution)
+                # get only this pixel's values in every image
+                maxresid = np.abs(negresids[inds])
+                # how many pixels we're allowed to remove
+                nrem = npts[inds] - minkeep[inds]
+                while nrem > 0:
+                    # find all values equal to the current max
+                    torem = np.where(np.isclose(maxresid,
+                                                maxresid.max()))[0]
+                    # only remove all equal values if doing so doesn't
+                    #  put us below the limit
+                    if len(torem) <= nrem:
+                        data[inds + (torem,)] = np.nan
+                    nrem -= len(torem)
+
         elif reject == 'sigclip':
             pass
         elif reject == 'avsigclip':
