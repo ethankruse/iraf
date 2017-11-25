@@ -750,7 +750,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
 
         # Map the output image and set dimensions and offsets.
         file_new_copy(output, imin[0], mode='NEW_COPY', overwrite=True)
-        out.append(image_open(output))
+        out.append(image_open(output, mode='update'))
 
         # start of ic_setout
         aligned, offarr = ic_setout(imin, out, nimages, project, offsets)
@@ -780,7 +780,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             tail += '.pl'
             plfile = os.path.join(base, tail)
             file_new_copy(plfile, out[0], mode='NEW_COPY', overwrite=True)
-            out.append(image_open(plfile))
+            out.append(image_open(plfile, mode='update'))
         else:
             out.append(None)
 
@@ -788,7 +788,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         # Open the sigma image if given.
         if sigma is not None:
             file_new_copy(sigma, out[0], mode='NEW_COPY', overwrite=True)
-            out.append(image_open(sigma))
+            out.append(image_open(sigma, mode='update'))
             # has to be a float
             sigmatype = type_max(np.float, outtype)
         else:
@@ -1513,7 +1513,8 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                     # only the spots we want to remove the min points
                     torep = np.where(totlow >= 1.)
                     torep += (mins[np.where(totlow >= 1.)],)
-                    data[torep] = np.nan
+                    data[torep] = np.inf
+                    rbad[torep] = True
                     totlow -= 1.
                 data[rbad] = np.nan
 
@@ -1531,7 +1532,8 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                     # only the spots we want to remove the max points
                     torep = np.where(tothigh >= 1.)
                     torep += (maxs[np.where(tothigh >= 1.)],)
-                    data[torep] = np.nan
+                    data[torep] = -np.inf
+                    rbad[torep] = True
                     tothigh -= 1.
                 data[rbad] = np.nan
         elif reject == 'pclip':
@@ -1609,9 +1611,65 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                     nrem -= len(torem)
 
         if grow > 0.:
-            pass
+            print('grow needs to be implemented')
+            sys.exit(1)
+            # grow is only 1-D in IRAF. along the first? dimension?
+            # badpts = np.isnan(data)
 
-        # XXX: this is where the icombiner function ends
+        if method == 'average':
+            # same shape as data, but all ones except for the NaNs
+            fullwts = data * 0. + 1.
+            # fill in the actual wts values, keeping the NaNs
+            fullwts *= wts
+            totsum = np.nansum(data * fullwts, axis=-1)
+            totwts = np.nansum(fullwts, axis=-1)
+            # compute the average
+            avg = np.zeros_like(totsum)
+            avg[totwts > 0.] = totsum[totwts > 0.] / totwts[totwts > 0.]
+            # fill in empty spots with the blank value
+            avg[totwts == 0.] = blank
+        else:
+            npts = (~np.isnan(data)).sum(axis=-1)
+            # compute the median
+            avg = np.nanmedian(data, axis=-1)
+            # fill in empty spots with the blank value
+            avg[npts == 0.] = blank
+        # save the final result to the output image
+        out[0][0].data = avg
+        out[0].flush()
+
+        if out[1] is not None:
+            npts = (~np.isnan(data)).sum(axis=-1)
+            nbad = np.ones_like(npts) * nimages
+            # how many bad pixels there were
+            nbad -= npts
+            out[1][0].data = nbad
+            out[1].flush()
+
+        if out[2] is not None:
+            # Compute the sigma image line.
+            # The estimated sigma includes a correction for the
+            # finite population. Weights are used if desired.
+            npts = (~np.isnan(data)).sum(axis=-1)
+            # same shape as data, but all ones except for the NaNs
+            fullwts = data * 0. + 1.
+            # fill in the actual wts values, keeping the NaNs
+            fullwts *= wts
+
+            sigcor = np.where(npts > 1, npts/(npts - 1), [1])
+            wtsum = (data - avg[..., np.newaxis])**2 * fullwts
+            wtsum = np.nansum(wtsum, axis=-1)
+            totwts = np.nansum(fullwts, axis=-1)
+
+            sigma = np.zeros_like(wtsum)
+            pos = totwts > 0.
+            sigma[totwts > 0.] = np.sqrt(sigcor[pos] * wtsum[pos] / totwts[pos])
+            sigma[totwts == 0.] = blank
+
+            out[2][0].data = sigma
+            out[2].flush()
+
+        # this is where the icombiner function ends
 
         # close the input images
         for ifile in imin:

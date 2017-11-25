@@ -3,7 +3,7 @@ from astropy.io import fits
 __all__ = ['image_open', 'image_close']
 
 
-def image_open(image):
+def image_open(image, mode='readonly'):
     """
     Supposed to be a function that handles opening images and returning
     data/headers etc in one consistent format. Currently only supports FITS
@@ -12,6 +12,7 @@ def image_open(image):
     Parameters
     ----------
     image
+    mode
 
     Returns
     -------
@@ -20,7 +21,7 @@ def image_open(image):
     hdulist = None
     ftype = ''
     try:
-        hdulist = fits.open(image)
+        hdulist = fits.open(image, mode=mode)
         ftype = 'fits'
     except IOError:
         print("Error reading image {0} ...".format(image))
