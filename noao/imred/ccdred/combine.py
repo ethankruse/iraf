@@ -1330,9 +1330,9 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             data -= zeros
 
         # end of ic_gdatar
-        if reject in ['ccdclip', 'crreject', 'sigclip']:
+        if reject in ['ccdclip', 'crreject', 'sigclip', 'avsigclip']:
             minclip = 2
-            if reject == 'sigclip':
+            if reject in ['sigclip', 'avsigclip']:
                 minclip = 3
             # number of good points to use
             npts = (~np.isnan(data)).sum(axis=-1)
@@ -1340,6 +1340,46 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                 minkeep = np.where(npts + nkeep > 0, npts + nkeep, [0])
             else:
                 minkeep = np.where(npts < nkeep, npts, [nkeep])
+
+            finsig = 0.
+            if reject == 'avsigclip':
+                if mclip:
+                    # XXX: catch RuntimeWarning for all nan rows
+                    meds = np.nanmedian(data, axis=-1)
+                else:
+                    totals = np.nansum(data, axis=-1)
+                    # if there are 3+ data points, use the min/max removed avg
+                    adjnpts = npts * 1
+                    # this adjustment method will fail if there are infinities
+                    totals[adjnpts >= 3] -= np.nanmin(data[adjnpts >= 3],
+                                                      axis=-1)
+                    totals[adjnpts >= 3] -= np.nanmax(data[adjnpts >= 3],
+                                                      axis=-1)
+                    adjnpts[adjnpts >= 3] -= 2
+                    meds = totals / adjnpts
+                # Compute the poisson scaled average sigma about the median.
+                # There must be at least three pixels at each point to define
+                # the mean sigma.  Corrections for differences in the image
+                # scale factors are selected by the doscale1 flag.
+                if doscale1:
+                    rr = (meds[..., np.newaxis] + zeros) / scales
+                    rr[rr < 1.] = 1.
+                    ss = (data - meds[..., np.newaxis])**2. / rr
+                else:
+                    rr = np.where(meds > 1., meds, [1.])
+                    ss = ((data - meds[..., np.newaxis])**2. /
+                          rr[..., np.newaxis])
+                ss = np.nansum(ss, axis=-1)
+                n2 = npts >= 3
+                # XXX: in IRAF this sum is only done along each "row", or along
+                # the first dimension since that's what ic_gdatar and impnlr
+                # deal with
+                # Here is the final sigma.
+                if np.sum(n2) > 1:
+                    finsig = np.sqrt(np.sum(ss[n2]) / (np.sum(n2) - 1))
+                else:
+                    # don't do any clipping, so effectively ignore everything
+                    finsig = np.inf
 
             finished = np.zeros_like(npts, dtype=bool)
             finished[(npts < minclip) | (npts <= minkeep)] = True
@@ -1389,6 +1429,19 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                                      ss[..., np.newaxis])
                         bad = ((negresids >= lsigma) |
                                (-1. * negresids >= hsigma))
+                elif reject == 'avsigclip':
+                    if doscale1:
+                        rr = (meds[..., np.newaxis] + zeros) / scales
+                        rr[rr < 1.] = 1.
+                        ss = np.sqrt(rr) * finsig
+                        negresids = (meds[..., np.newaxis] - data) / ss
+                    else:
+                        rr = np.where(meds > 1., meds, [1.])
+                        ss = np.sqrt(rr) * finsig
+                        negresids = ((meds[..., np.newaxis] - data) /
+                                     ss[..., np.newaxis])
+                    bad = ((negresids > lsigma) |
+                           (-1. * negresids > hsigma))
                 else:
                     if doscale1:
                         rescale = scales * (meds[..., np.newaxis] + zeros)
@@ -1555,9 +1608,8 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                         data[inds + (torem,)] = np.nan
                     nrem -= len(torem)
 
-        elif reject == 'avsigclip':
+        if grow > 0.:
             pass
-
 
         # XXX: this is where the icombiner function ends
 
