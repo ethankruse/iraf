@@ -8,9 +8,6 @@ import re
 
 __all__ = ['combine', 'Instrument', 'ccdtypes', 'get_header_value']
 
-# XXX: deal with hdulist assuming we have a fits file. trace all image_open and
-# see if what I do is fits specific.
-
 
 class Instrument(object):
     """
@@ -386,7 +383,7 @@ def ic_mopen(in_images, out_images, nimages, mtype, mvalue, instrument):
     mtype = mtype.strip().lower()
 
     if mtype not in ['none', 'goodvalue', 'badvalue', 'goodbits', 'badbits']:
-        print('masktype {0} not recognized. Assuming "none".'.format(mtype))
+        print(f'masktype {mtype} not recognized. Assuming "none".')
         mtype = 'none'
 
     # Check for special cases.  The BOOLEAN type is used when only
@@ -584,7 +581,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
 
     method = method.strip().lower()
     if method not in ['average', 'median']:
-        print('Combine method not recognized: {0}'.format(method))
+        print(f'Combine method not recognized: {method}')
         sys.exit(1)
 
     for image in inputs:
@@ -658,17 +655,17 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             comb = ''
 
         base, ext = os.path.splitext(outroot)
-        output = '{0}{1}{2}{3}'.format(base, comb, iset, ext)
+        output = f'{base}{comb}{iset}{ext}'
 
         if plroot is not None:
             base, ext = os.path.splitext(plroot)
-            plfile = '{0}{1}{2}{3}'.format(base, comb, iset, ext)
+            plfile = f'{base}{comb}{iset}{ext}'
         else:
             plfile = None
 
         if sigroot is not None:
             base, ext = os.path.splitext(sigroot)
-            sigma = '{0}{1}{2}{3}'.format(base, comb, iset, ext)
+            sigma = f'{base}{comb}{iset}{ext}'
         else:
             sigma = None
 
@@ -708,7 +705,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         reject = reject.lower().strip()
         rejectopts = "none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip"
         if reject not in rejectopts.split('|'):
-            print('Could not recognize reject parameter {0}'.format(reject))
+            print(f'Could not recognize reject parameter {reject}')
             sys.exit(1)
         # define	REJECT	"|none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip|"
         if reject == 'pclip':
@@ -883,7 +880,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                         kk = max(kk, offarr[jj, ii])
                         ll = min(ll,
                                  offarr[jj, ii] + imin[jj][0].data.shape[ii])
-                    section += '{0:d}:{1:d},'.format(kk, ll)
+                    section += f'{kk:d}:{ll:d},'
                 section = section[:-1]
                 section += ']'
                 oimref = out[0]
@@ -1026,10 +1023,10 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             logtxt = ''
             now = datetime.datetime.now()
             now = now.strftime('%Y-%m-%d %H:%M:%S')
-            logtxt += '{0} : IMCOMBINE\n'.format(now)
-            logtxt += '  combine = {0}, '.format(method)
-            logtxt += 'scale = {0}, zero = {1}, '.format(scale, zero)
-            logtxt += 'weight = {0}\n'.format(weight)
+            logtxt += f'{now} : IMCOMBINE\n'
+            logtxt += f'  combine = {method}, '
+            logtxt += f'scale = {scale}, zero = {zero}, '
+            logtxt += f'weight = {weight}\n'
 
             # REJECT "|none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip|"
             if reject == 'minmax':
@@ -1041,39 +1038,38 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                 ostr = '  reject = ccdclip, mclip = {0}, nkeep = {1:d}\n'
                 logtxt += ostr.format(mclip, nkeep)
                 if isinstance(rdnoise, str):
-                    ostr = '  rdnoise = {0}'.format(rdnoise)
+                    ostr = f'  rdnoise = {rdnoise}'
                 else:
-                    ostr = '  rdnoise = {0:g}'.format(rdnoise)
+                    ostr = f'  rdnoise = {rdnoise:g}'
                 if isinstance(gain, str):
-                    ostr += ', gain = {0}, '.format(gain)
+                    ostr += f', gain = {gain}, '
                 else:
-                    ostr += ', gain = {0:g}, '.format(gain)
+                    ostr += f', gain = {gain:g}, '
                 if isinstance(snoise, str):
-                    ostr += 'snoise = {0}, '.format(snoise)
+                    ostr += f'snoise = {snoise}, '
                 else:
-                    ostr += 'snoise = {0:g}, '.format(snoise)
-                ostr += 'lsigma = {0:g}, hsigma = {1:g}\n'.format(lsigma,
-                                                                  hsigma)
+                    ostr += f'snoise = {snoise:g}, '
+                ostr += f'lsigma = {lsigma:g}, hsigma = {hsigma:g}\n'
                 logtxt += ostr
             elif reject == 'crreject':
                 ostr = '  reject = crreject, mclip = {0}, nkeep = {1:d}\n'
                 logtxt += ostr.format(mclip, nkeep)
                 if isinstance(rdnoise, str):
-                    ostr = '  rdnoise = {0}'.format(rdnoise)
+                    ostr = f'  rdnoise = {rdnoise}'
                 else:
-                    ostr = '  rdnoise = {0:g}'.format(rdnoise)
+                    ostr = f'  rdnoise = {rdnoise:g}'
                 if isinstance(gain, str):
-                    ostr += ', gain = {0}, '.format(gain)
+                    ostr += f', gain = {gain}, '
                 else:
-                    ostr += ', gain = {0:g}, '.format(gain)
+                    ostr += f', gain = {gain:g}, '
                 if isinstance(snoise, str):
-                    ostr += 'snoise = {0}, '.format(snoise)
+                    ostr += f'snoise = {snoise}, '
                 else:
-                    ostr += 'snoise = {0:g}, '.format(snoise)
-                ostr += 'hsigma = {0:g}\n'.format(hsigma)
+                    ostr += f'snoise = {snoise:g}, '
+                ostr += f'hsigma = {hsigma:g}\n'
                 logtxt += ostr
             elif reject == 'pclip':
-                ostr = '  reject = pclip, nkeep = {0:d}\n'.format(nkeep)
+                ostr = f'  reject = pclip, nkeep = {nkeep:d}\n'
                 logtxt += ostr
                 ostr = '  pclip = {0:g}, lsigma = {1:g}, hsigma = {2:g}\n'
                 logtxt += ostr.format(pclip, lsigma, hsigma)
@@ -1089,21 +1085,21 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                 logtxt += ostr.format(lsigma, hsigma)
 
             if reject != 'none' and grow > 0:
-                logtxt += '  grow = {0:d}\n'.format(grow)
+                logtxt += f'  grow = {grow:d}\n'
 
             if dothresh:
                 if lthreshold > -np.inf and hthreshold < np.inf:
                     ostr = '  lthreshold = {0:g}, hthreshold = {1:g}\n'
                     ostr = ostr.format(lthreshold, hthreshold)
                 elif lthreshold > -np.inf:
-                    ostr = '  lthreshold = {0:g}\n'.format(lthreshold)
+                    ostr = f'  lthreshold = {lthreshold:g}\n'
                 else:
-                    ostr = '  hthreshold = {0:g}\n'.format(hthreshold)
+                    ostr = f'  hthreshold = {hthreshold:g}\n'
                 logtxt += ostr
 
-            logtxt += '  blank = {0:g}\n'.format(blank)
+            logtxt += f'  blank = {blank:g}\n'
             if len(statsec) > 0:
-                logtxt += '  statsec = {0}\n'.format(statsec)
+                logtxt += f'  statsec = {statsec}\n'
 
             if masktype != 'none':
                 print('Mask types not yet supported')
@@ -1165,52 +1161,50 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
 
             for ii in np.arange(nimages):
                 if stack:
-                    stc = 'stck{0:04d}'.format(ii)
+                    stc = f'stck{ii:04d}'
                     vl = get_header_value(imin[ii], instrument, stc)
                     if vl is not None:
-                        ostr = '  {0:21s}'.format(vl)
+                        ostr = f'  {vl:21s}'
                     else:
-                        ostr = '  {0:16s}[{1:03d}]'
-                        ostr = ostr.format(imin[ii].filename(), ii)
+                        ostr = f'  {imin[ii].filename():16s}[{ii:03d}]'
                 elif project:
-                    ostr = '  {0:16s}[{1:03d}]'
-                    ostr = ostr.format(imin[ii].filename(), ii)
+                    ostr = f'  {imin[ii].filename():16s}[{ii:03d}]'
                 else:
-                    ostr = '  {0:21s}'.format(imin[ii].filename())
+                    ostr = f'  {imin[ii].filename():21s}'
                 if dop['ncombine']:
-                    ostr += ' {0:6d}'.format(ncombine[ii])
+                    ostr += f' {ncombine[ii]:6d}'
                 if dop['exptime']:
-                    ostr += ' {0:6.1f}'.format(exptime[ii])
+                    ostr += f' {exptime[ii]:6.1f}'
                 if dop['mode']:
-                    ostr += ' {0:7.5g}'.format(modes[ii])
+                    ostr += f' {modes[ii]:7.5g}'
                 if dop['median']:
-                    ostr += ' {0:7.5g}'.format(medians[ii])
+                    ostr += f' {medians[ii]:7.5g}'
                 if dop['mean']:
-                    ostr += ' {0:7.5g}'.format(means[ii])
+                    ostr += f' {means[ii]:7.5g}'
                 if dop['rdn']:
                     rval = get_header_value(imin[ii], instrument, rdnoise)
-                    ostr += ' {0:7g}'.format(rval)
+                    ostr += f' {rval:7g}'
                 if dop['gain']:
                     rval = get_header_value(imin[ii], instrument, gain)
-                    ostr += ' {0:6g}'.format(rval)
+                    ostr += f' {rval:6g}'
                 if dop['sn']:
                     rval = get_header_value(imin[ii], instrument, snoise)
-                    ostr += ' {0:6g}'.format(rval)
+                    ostr += f' {rval:6g}'
                 if doscale:
-                    ostr += ' {0:6.3f}'.format(1./scales[ii])
+                    ostr += f' {1./scales[ii]:6.3f}'
                 if dozero:
-                    ostr += ' {0:7.5g}'.format(-zeros[ii])
+                    ostr += f' {-zeros[ii]:7.5g}'
                 if dowts:
-                    ostr += ' {0:6.3f}'.format(wts[ii])
+                    ostr += f' {wts[ii]:6.3f}'
                 if not aligned:
                     nd = np.array(out[0][0].data.shape)
                     # number of dimensions in out array
                     nd = len(nd[nd > 1])
                     if nd == 1:
-                        ostr += ' {0:9d}'.format(offarr[ii, 0])
+                        ostr += f' {offarr[ii, 0]:9d}'
                     else:
                         use = offarr[ii, :]
-                        strs = [' {0:4d}'.format(ixx) for ixx in use]
+                        strs = [f' {ixx:4d}' for ixx in use]
                         for istr in strs:
                             ostr += istr
                 if dop['mask']:
@@ -1225,10 +1219,10 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             logtxt += ostr
 
             if out[1] is not None:
-                logtxt += '  Pixel list image = {0}\n'.format(out[1].filename())
+                logtxt += f'  Pixel list image = {out[1].filename()}\n'
 
             if out[2] is not None:
-                logtxt += '  Sigma image = {0}\n'.format(out[1].filename())
+                logtxt += f'  Sigma image = {out[2].filename()}\n'
 
             if verbose:
                 print(logtxt)
@@ -1748,7 +1742,7 @@ def ic_stat(imin, imref, section, offarr, project, nim, masktype,
 
     if data.size < 1:
         # this is going to break for things other than fits
-        print('Image section contains no pixels: {0}'.format(imin.filename()))
+        print(f'Image section contains no pixels: {imin.filename()}')
         sys.exit(1)
 
     mean = data.mean()
@@ -1836,13 +1830,13 @@ def ic_gscale(param, dic, inp, exptime, values, nimages, instrument, project):
         stype = 'file'
         tmp = np.loadtxt(param[1:])
         if len(tmp.shape) != 1:
-            print("Could not understand values in {0}".format(param[1:]))
+            print(f"Could not understand values in {param[1:]}")
             sys.exit(1)
         if tmp.size < nimages:
-            print("Insufficient values in {0}".format(param[1:]))
+            print(f"Insufficient values in {param[1:]}")
             sys.exit(1)
         if tmp.size > nimages:
-            print("Warning: Ignoring additional values in {0}".format(param[1:]))
+            print(f"Warning: Ignoring additional values in {param[1:]}")
         values[:] = tmp[:nimages]
     elif param[0] == '!':
         stype = 'keyword'
@@ -1861,6 +1855,6 @@ def ic_gscale(param, dic, inp, exptime, values, nimages, instrument, project):
                 tmp = np.where(exptime < 0.001)[0]
                 values[tmp] = 0.001
         else:
-            print("Unknown scale, zero, or weight type: {0}".format(param))
+            print(f"Unknown scale, zero, or weight type: {param}")
             sys.exit(1)
     return stype
