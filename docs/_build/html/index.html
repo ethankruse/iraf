@@ -1,0 +1,231 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Welcome to AIRAF’s documentation! &#8212; AIRAF 1.0 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true,
+        SOURCELINK_SUFFIX: '.txt'
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="welcome-to-airaf-s-documentation">
+<h1>Welcome to AIRAF’s documentation!<a class="headerlink" href="#welcome-to-airaf-s-documentation" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+</div>
+</div>
+<div class="section" id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></li>
+<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
+</ul>
+<span class="target" id="module-iraf.noao.imred.ccdred.combine"></span><dl class="function">
+<dt id="iraf.noao.imred.ccdred.combine.combine">
+<code class="descclassname">iraf.noao.imred.ccdred.combine.</code><code class="descname">combine</code><span class="sig-paren">(</span><em>images</em>, <em>output</em>, <em>*</em>, <em>plfile=None</em>, <em>sigma=None</em>, <em>ccdtype=None</em>, <em>subsets=False</em>, <em>delete=False</em>, <em>method='average'</em>, <em>reject='none'</em>, <em>project=False</em>, <em>outtype=None</em>, <em>offsets='none'</em>, <em>masktype='none'</em>, <em>maskvalue=0.0</em>, <em>blank=0.0</em>, <em>scale=None</em>, <em>zero=None</em>, <em>weight=None</em>, <em>statsec=None</em>, <em>lthreshold=None</em>, <em>hthreshold=None</em>, <em>nlow=1</em>, <em>nhigh=1</em>, <em>nkeep=1</em>, <em>mclip=True</em>, <em>lsigma=3.0</em>, <em>hsigma=3.0</em>, <em>rdnoise=0.0</em>, <em>gain=1.0</em>, <em>snoise=0.0</em>, <em>sigscale=0.1</em>, <em>pclip=-0.5</em>, <em>grow=0</em>, <em>instrument=None</em>, <em>logfile=None</em>, <em>verbose=False</em>, <em>ssfile=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/iraf/noao/imred/ccdred/combine.html#combine"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#iraf.noao.imred.ccdred.combine.combine" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="docutils">
+<dt>images :</dt>
+<dd>List of images to combine</dd>
+<dt>output :</dt>
+<dd>List of output images</dd>
+<dt>plfile :</dt>
+<dd>List of output pixel list files (optional)</dd>
+<dt>sigma :</dt>
+<dd>List of sigma images (optional)</dd>
+<dt>ccdtype  :</dt>
+<dd>CCD image type to combine (optional)</dd>
+<dt>subsets :</dt>
+<dd>Combine images by subset parameter?</dd>
+<dt>delete :</dt>
+<dd>Delete input images after combining?</dd>
+<dt>method <span class="classifier-delimiter">:</span> <span class="classifier">“average|median”</span></dt>
+<dd>Type of combine operation</dd>
+<dt>reject <span class="classifier-delimiter">:</span> <span class="classifier">“none|minmax|ccdclip|crreject|sigclip|avsigclip|pclip”</span></dt>
+<dd>Type of rejection</dd>
+<dt>project :</dt>
+<dd>Project highest dimension of input images?</dd>
+<dt>outtype :</dt>
+<dd>Output image pixel datatype (e.g. np.float64).
+Default None gives the output image the datatype of the inputs.
+Will also revert to the input type if outtype is too low.
+E.g. inputs have int64 and outtype is int32.</dd>
+<dt>offsets :</dt>
+<dd>Input image offsets. ‘none, wcs, grid, or file name’</dd>
+<dt>masktype <span class="classifier-delimiter">:</span> <span class="classifier">“none|goodvalue|badvalue|goodbits|badbits”</span></dt>
+<dd>Mask type</dd>
+<dt>maskvalue :</dt>
+<dd>Mask value</dd>
+<dt>blank :</dt>
+<dd>Value if there are no pixels</dd>
+<dt>scale :</dt>
+<dd>Image scaling</dd>
+<dt>zero :</dt>
+<dd>Image zero point offset</dd>
+<dt>weight :</dt>
+<dd>Image weights</dd>
+<dt>statsec :</dt>
+<dd>Image section for computing statistics</dd>
+<dt>lthreshold :</dt>
+<dd>Lower threshold</dd>
+<dt>hthreshold :</dt>
+<dd>Upper threshold</dd>
+<dt>nlow :</dt>
+<dd>minmax: Number of low pixels to reject</dd>
+<dt>nhigh :</dt>
+<dd>minmax: Number of high pixels to reject</dd>
+<dt>nkeep :</dt>
+<dd>Minimum to keep (pos) or maximum to reject (neg)</dd>
+<dt>mclip :</dt>
+<dd>Use median in sigma clipping algorithms?</dd>
+<dt>lsigma :</dt>
+<dd>Lower sigma clipping factor</dd>
+<dt>hsigma :</dt>
+<dd>Upper sigma clipping factor</dd>
+<dt>rdnoise :</dt>
+<dd>ccdclip: CCD readout noise (electrons).
+Either a number or string of the keyword to pull the number
+from the image header file.</dd>
+<dt>gain :</dt>
+<dd>ccdclip: CCD gain (electrons/DN)
+Either a number or string of the keyword to pull the number
+from the image header file.</dd>
+<dt>snoise :</dt>
+<dd>ccdclip: Sensitivity noise (fraction)
+Either a number or string of the keyword to pull the number
+from the image header file.</dd>
+<dt>sigscale :</dt>
+<dd>Tolerance for sigma clipping scaling corrections</dd>
+<dt>pclip :</dt>
+<dd>Percentile clipping parameter</dd>
+<dt>grow :</dt>
+<dd>Radius (pixels) for 1D neighbor rejection</dd>
+</dl>
+<p>instrument
+logfile
+verbose :</p>
+<blockquote>
+<div>Print log information to the standard output?</div></blockquote>
+<p>ssfile</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="iraf.noao.imred.ccdred.combine.Instrument">
+<em class="property">class </em><code class="descclassname">iraf.noao.imred.ccdred.combine.</code><code class="descname">Instrument</code><span class="sig-paren">(</span><em>name=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/iraf/noao/imred/ccdred/combine.html#Instrument"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#iraf.noao.imred.ccdred.combine.Instrument" title="Permalink to this definition">¶</a></dt>
+<dd><p>Instrument object.</p>
+<dl class="method">
+<dt id="iraf.noao.imred.ccdred.combine.Instrument.translate">
+<code class="descname">translate</code><span class="sig-paren">(</span><em>key</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/iraf/noao/imred/ccdred/combine.html#Instrument.translate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#iraf.noao.imred.ccdred.combine.Instrument.translate" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="iraf.noao.imred.ccdred.combine.ccdtypes">
+<code class="descclassname">iraf.noao.imred.ccdred.combine.</code><code class="descname">ccdtypes</code><span class="sig-paren">(</span><em>hdulist</em>, <em>instrument</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/iraf/noao/imred/ccdred/combine.html#ccdtypes"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#iraf.noao.imred.ccdred.combine.ccdtypes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the header value of ‘imagetyp’ (or instrument equivalent).
+If that (instrument converted) value is one of
+“object|zero|dark|flat|illum|fringe|other|comp” return that.
+Otherwise return ‘unknown’ unless the header does not contain any
+‘imagetyp’ and the instrument doesn’t have a default value for it. Then
+return ‘none’.</p>
+<p>hdulist
+instrument : Instrument</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="iraf.noao.imred.ccdred.combine.get_header_value">
+<code class="descclassname">iraf.noao.imred.ccdred.combine.</code><code class="descname">get_header_value</code><span class="sig-paren">(</span><em>hdulist</em>, <em>instrument</em>, <em>key</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/iraf/noao/imred/ccdred/combine.html#get_header_value"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#iraf.noao.imred.ccdred.combine.get_header_value" title="Permalink to this definition">¶</a></dt>
+<dd><p>The equivalent of IRAF’s hdmg*. (e.g. hdmgstr)</p>
+<p>hdulist
+instrument
+key</p>
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="#">AIRAF</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2017, Ethan Kruse.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.6.3</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+      |
+      <a href="_sources/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
