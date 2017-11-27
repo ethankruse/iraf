@@ -70,7 +70,7 @@ def make_fits(path):
     return path
 
 
-def set_header_value(hdulist, instrument, key, value):
+def set_header_value(hdulist, instrument, key, value, comment=None):
     """
     The equivalent of IRAF's hdmput*. (e.g. hdmputi, hdmputr)
 
@@ -80,6 +80,7 @@ def set_header_value(hdulist, instrument, key, value):
     instrument
     key
     value
+    comment
 
     Returns
     -------
@@ -92,12 +93,12 @@ def set_header_value(hdulist, instrument, key, value):
     found = False
     for hdu in hdulist:
         if key in hdu.header:
-            hdu.header.set(key, value)
+            hdu.header.set(key, value, comment)
             found = True
             break
     # if it's not in any headers, put it in the first one
     if not found:
-        hdulist[0].header.set(key, value)
+        hdulist[0].header.set(key, value, comment)
     return
 
 
@@ -345,18 +346,30 @@ def ic_setout(inputs, output, nimages, project, offsets):
 
 
 # this is meant to be equivalent to immap (output, NEW_COPY, Memi[in]) in IRAF
-def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True):
+def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True,
+                  instrument=None):
     if mode != 'NEW_COPY':
         print('other modes of file_new_copy not supported.')
         return
 
-    # XXX: check this part. Need to add lines to history files, etc.
     # Also this only works for FITS files.
     if in_header.__filetype__ == 'fits':
         in_header.writeto(outstr, overwrite=overwrite)
-        # XXX: are some header parameters added/changed at this stage?
-        # see sys/imio/immapz.x
-
+        if instrument is None:
+            instrument = Instrument()
+        # update header parameters in the new file
+        hdulist = image_open(outstr, mode='update')
+        # XXX: update this with a real package name at some point
+        orval = 'AIRAF in Python'
+        orcomm = 'FITS file originator'
+        set_header_value(hdulist, instrument, 'origin', orval, orcomm)
+        import datetime
+        dtval = datetime.datetime.now().isoformat()
+        dtcomm = 'Date FITS file was generated'
+        set_header_value(hdulist, instrument, 'date', dtval, dtcomm)
+        lmcomm = 'Time of last modification'
+        set_header_value(hdulist, instrument, 'iraf-tlm', dtval, lmcomm)
+        image_close(hdulist)
     else:
         err = 'file_new_copy of file type {0} not yet implemented.'
         print(err.format(in_header.__filetype__))
@@ -741,12 +754,11 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             tmp = image_open(im)
             imin.append(tmp)
 
-        print(output)
-
         out = []
 
         # Map the output image and set dimensions and offsets.
-        file_new_copy(output, imin[0], mode='NEW_COPY', overwrite=True)
+        file_new_copy(output, imin[0], mode='NEW_COPY', overwrite=True,
+                      instrument=instrument)
         out.append(image_open(output, mode='update'))
 
         # start of ic_setout
@@ -776,7 +788,8 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                     tail = '.'.join(tail.split('.')[:-1])
             tail += '.pl'
             plfile = os.path.join(base, tail)
-            file_new_copy(plfile, out[0], mode='NEW_COPY', overwrite=True)
+            file_new_copy(plfile, out[0], mode='NEW_COPY', overwrite=True,
+                          instrument=instrument)
             out.append(image_open(plfile, mode='update'))
         else:
             out.append(None)
@@ -784,7 +797,8 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         sigmatype = None
         # Open the sigma image if given.
         if sigma is not None:
-            file_new_copy(sigma, out[0], mode='NEW_COPY', overwrite=True)
+            file_new_copy(sigma, out[0], mode='NEW_COPY', overwrite=True,
+                          instrument=instrument)
             out.append(image_open(sigma, mode='update'))
             # has to be a float
             sigmatype = type_max(np.float, outtype)
