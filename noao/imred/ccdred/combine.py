@@ -473,7 +473,7 @@ def type_max(type1, type2):
     sys.exit(1)
 
 
-def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
+def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             subsets=False, delete=False, method='average',
             reject='none', project=False, outtype=None, offsets='none',
             masktype='none', maskvalue=0., blank=0., scale=None, zero=None,
@@ -492,7 +492,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         List of output images
     plfile :
         List of output pixel list files (optional)
-    sigma :
+    sigmafile :
         List of sigma images (optional)
     ccdtype  :
         CCD image type to combine (optional)
@@ -649,8 +649,8 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         plroot = plfile.strip()
     else:
         plroot = None
-    if sigma is not None:
-        sigroot = sigma.strip()
+    if sigmafile is not None:
+        sigroot = sigmafile.strip()
     else:
         sigroot = None
 
@@ -678,17 +678,12 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
 
         if sigroot is not None:
             base, ext = os.path.splitext(sigroot)
-            sigma = f'{base}{comb}{iset}{ext}'
+            sigmafile = f'{base}{comb}{iset}{ext}'
         else:
-            sigma = None
+            sigmafile = None
 
         # icombine starts here
-        """
-        # Combine all images from the (subset) list.
-        call icombine (Memc[Memi[images+i-1]], Memi[nimages+i-1],
-        Memc[output], Memc[plfile], Memc[sigma],
-        Memc[logfile], NO, delete))
-        """
+
         # Set number of images to combine.
         if project:
             if len(iimages) > 1:
@@ -776,18 +771,6 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
 
         # Open pixel list file if given.
         if plfile is not None:
-            # XXX: this won't work if we're introducing 'sections' of files too
-            # need to have a 'return the file without the sections' function
-            # e.g. imgimage in IRAF
-
-            # make sure it is a .pl file
-            base, tail = os.path.split(plfile)
-            if len(tail) > 3:
-                # remove the suffix if it has one
-                if len(tail.split('.')) > 1:
-                    tail = '.'.join(tail.split('.')[:-1])
-            tail += '.pl'
-            plfile = os.path.join(base, tail)
             file_new_copy(plfile, out[0], mode='NEW_COPY', overwrite=True,
                           instrument=instrument)
             out.append(image_open(plfile, mode='update'))
@@ -796,10 +779,10 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
 
         sigmatype = None
         # Open the sigma image if given.
-        if sigma is not None:
-            file_new_copy(sigma, out[0], mode='NEW_COPY', overwrite=True,
+        if sigmafile is not None:
+            file_new_copy(sigmafile, out[0], mode='NEW_COPY', overwrite=True,
                           instrument=instrument)
-            out.append(image_open(sigma, mode='update'))
+            out.append(image_open(sigmafile, mode='update'))
             # has to be a float
             sigmatype = type_max(np.float, outtype)
         else:
@@ -1310,7 +1293,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
         # start of ic_gdatar
         oshp = out[0][0].data.shape
         oshp += (nimages,)
-        data = np.zeros(oshp)
+        data = np.zeros(oshp, dtype=float)
         # set bad values
         data[:] = np.nan
         # easy case, no offsets to deal with
@@ -1643,7 +1626,7 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             # fill in empty spots with the blank value
             avg[npts == 0.] = blank
         # save the final result to the output image
-        out[0][0].data = avg
+        out[0][0].data = avg.astype(outtype)
         out[0].flush()
 
         if out[1] is not None:
@@ -1669,12 +1652,13 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
             wtsum = np.nansum(wtsum, axis=-1)
             totwts = np.nansum(fullwts, axis=-1)
 
-            sigma = np.zeros_like(wtsum)
+            osigma = np.zeros_like(wtsum, dtype=sigmatype)
             pos = totwts > 0.
-            sigma[totwts > 0.] = np.sqrt(sigcor[pos] * wtsum[pos] / totwts[pos])
-            sigma[totwts == 0.] = blank
+            osigma[totwts > 0.] = np.sqrt(sigcor[pos] * wtsum[pos] /
+                                          totwts[pos])
+            osigma[totwts == 0.] = blank
 
-            out[2][0].data = sigma
+            out[2][0].data = osigma
             out[2].flush()
 
         # this is where the icombiner function ends
@@ -1688,6 +1672,10 @@ def combine(images, output, *, plfile=None, sigma=None, ccdtype=None,
                 image_close(ifile)
         if logfd is not None:
             logfd.close()
+        # delete the input images if requested
+        if delete:
+            for ifile in imin:
+                os.remove(ifile)
 
     return
 

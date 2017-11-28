@@ -2,9 +2,10 @@ import numpy as np
 from astropy.io import fits
 import iraf
 import os
+import copy
 
 # explicitly call combine with every parameter set to what we want
-defaultargs = {'plfile': None, 'sigma': None, 'ccdtype': None,
+defaultargs = {'plfile': None, 'sigmafile': None, 'ccdtype': None,
                'subsets': False, 'delete': False, 'method': 'average',
                'reject': 'none', 'project': False, 'outtype': None,
                'offsets': 'none', 'masktype': 'none', 'maskvalue': 0.,
@@ -17,13 +18,14 @@ defaultargs = {'plfile': None, 'sigma': None, 'ccdtype': None,
                'ssfile': None}
 
 
-def test_combine_basic(tmpdir):
+# combine_dir is set up in conftest.py
+def test_combine_basic(combine_dir):
     # create some simple files for testing
     nimg = 5
     nx = 20
     ny = 30
     inputs = []
-    basedir = str(tmpdir.mkdir("combine"))
+    basedir = str(combine_dir)
     arr = None
     for ii in np.arange(nimg):
         arr = np.ones((nx, ny), dtype=float)
@@ -42,6 +44,47 @@ def test_combine_basic(tmpdir):
     outfile = os.path.join(basedir, 'testout_me.fits')
 
     iraf.combine(iraflist, outfile, **defaultargs)
+
+    outim = fits.open(outfile)
+    assert outim[0].data.shape == (nx, ny)
+    assert np.allclose(outim[0].data, arr)
+    # need to check name instead of dtype because of endianness problems
+    # np.dtype('>f4') != np.dtype('<f4') but both have .name == 'float32'
+    assert arr.dtype.name == outim[0].data.dtype.name
+
+    outim.close()
+
+
+def test_combine_plfile(combine_dir):
+    # create some simple files for testing
+    nimg = 5
+    nx = 20
+    ny = 30
+    inputs = []
+    basedir = str(combine_dir)
+    arr = None
+    for ii in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=float)
+        if ii == 0:
+            arr[1, 1] = 8
+        hdu = fits.PrimaryHDU(arr)
+        inim = os.path.join(basedir, f'testimg{ii:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+
+    # for the IRAF list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    iraflist = '@' + inlist
+
+    outfile = os.path.join(basedir, 'testout_me.fits')
+    plfile = os.path.join(basedir, 'testout_pl.fits')
+    myargs = copy.deepcopy(defaultargs)
+    myargs['plfile'] = plfile
+
+    iraf.combine(iraflist, outfile, **myargs)
 
     outim = fits.open(outfile)
     assert outim[0].data.shape == (nx, ny)
