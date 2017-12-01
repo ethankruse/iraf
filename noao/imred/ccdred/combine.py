@@ -570,6 +570,15 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
     Returns
     -------
 
+    Rejection methods:
+    none: all pixels used.
+
+    minmax: nhigh and nlow pixels are rejected no matter what.
+    Can be either fractions of number of images (nhigh < 1) or
+    integer number of images to remove.
+
+    ccdclip
+
     """
     offsets = offsets.strip().lower()
 
@@ -1370,6 +1379,9 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                     finsig = np.sqrt(np.sum(ss[n2]) / (np.sum(n2) - 1))
                 else:
                     # don't do any clipping, so effectively ignore everything
+                    finsig = np.inf
+                # avoid divide by 0 if all images are the same
+                if finsig == 0.:
                     finsig = np.inf
 
             finished = np.zeros_like(npts, dtype=bool)
