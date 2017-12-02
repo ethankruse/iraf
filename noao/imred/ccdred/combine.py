@@ -775,6 +775,16 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
 
         if outtype is None:
             outtype = intype
+        else:
+            outtype = outtype.strip().lower()
+            otypes = "short|ushort|integer|long|real|double".split('|')
+            ndtypes = [np.short, np.ushort, np.int_, np.int_,
+                       np.single, np.double]
+            if outtype in otypes:
+                outtype = ndtypes[otypes.index(outtype)]
+            else:
+                print(f'Unrecognized outtype: {outtype}')
+                sys.exit(1)
         # make sure the output type will work given the input
         outtype = type_max(intype, outtype)
 

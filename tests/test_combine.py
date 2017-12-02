@@ -17,7 +17,9 @@ defaultargs = {'plfile': None, 'sigmafile': None, 'ccdtype': None,
                'instrument': None, 'logfile': None, 'verbose': False,
                'ssfile': None}
 
-dtypes = []
+# iraf outtype values and the numpy equivalent (excluding long == int)
+dtypestr = ['short', 'ushort', 'integer', 'real', 'double']
+dtypes = [np.short, np.ushort, np.int_, np.single, np.double]
 
 
 def simple_inputs(nimg, nx, ny, basedir):
@@ -60,7 +62,52 @@ def test_basic(combine_dir):
 
 
 def test_reject_none(combine_dir):
-    pass
+    basedir = str(combine_dir)
+    # create some simple files for testing
+    # use an even number to test the trickier median case
+    nimg = 6
+    nx = 20
+    ny = 30
+    methods = ['median', 'average']
+
+    for ii, itype in enumerate(dtypes):
+        inputs = []
+        innums = []
+        for jj in np.arange(nimg)+1:
+            innum = jj**2
+            # this makes the mean 15.66, which rounds up to make sure we're
+            # handling int data types right
+            if jj == 6:
+                innum += 3
+            innums.append(innum)
+            arr = np.ones((nx, ny), dtype=itype) * innum
+            hdu = fits.PrimaryHDU(arr)
+            inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+            hdu.writeto(inim, overwrite=True)
+            inputs.append(inim)
+        innums = np.array(innums)
+        # for the IRAF list
+        inlist = os.path.join(basedir, 'infiles.txt')
+        with open(inlist, 'w') as ff:
+            for ifile in inputs:
+                ff.write(ifile + '\n')
+        iraflist = '@' + inlist
+        outfile = os.path.join(basedir, 'testout_me.fits')
+
+        for imethod in methods:
+            myargs = copy.deepcopy(defaultargs)
+            myargs['method'] = imethod
+            myargs['outtype'] = dtypestr[ii]
+            iraf.combine(iraflist, outfile, **myargs)
+
+            outim = fits.open(outfile)
+            # this is the simple average and median calculations we
+            # should be doing
+            if imethod == 'average':
+                assert np.allclose(outim[0].data, itype(innums.mean()))
+            else:
+                assert np.allclose(outim[0].data, itype(np.median(innums)))
+            outim.close()
 
 
 def test_reject_minmax(combine_dir):
