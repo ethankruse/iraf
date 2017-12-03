@@ -727,12 +727,13 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         # define	REJECT	"|none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip|"
         if reject == 'pclip':
             if pclip == 0.:
-                print("Pclip parameter can not be zero when reject=='pclip'")
-                return
+                estr = "pclip parameter can not be zero when reject=='pclip'"
+                raise Exception(estr)
 
             ii = nimages // 2
             if np.abs(pclip) < 1.:
                 pclip *= ii
+            # pclip has to be at least 1 image away from the median value
             if pclip < 0.:
                 pclip = min(-1, max(-ii, int(pclip)))
             else:
@@ -1348,10 +1349,10 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                 minclip = 3
             # number of good points to use
             npts = (~np.isnan(data)).sum(axis=-1)
-            if nkeep < 0:
-                minkeep = np.where(npts + nkeep > 0, npts + nkeep, [0])
-            else:
-                minkeep = np.where(npts < nkeep, npts, [nkeep])
+            # if nkeep < 0:
+            # minkeep = np.where(npts + nkeep > 0, npts + nkeep, [0])
+            # else:
+            minkeep = np.where(npts < nkeep, npts, [nkeep])
 
             finsig = 0.
             if reject == 'avsigclip':
@@ -1554,10 +1555,10 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         elif reject == 'pclip':
             minclip = 3
             npts = (~np.isnan(data)).sum(axis=-1)
-            if nkeep < 0:
-                minkeep = np.where(npts + nkeep > 0, npts + nkeep, [0])
-            else:
-                minkeep = np.where(npts < nkeep, npts, [nkeep])
+            # if nkeep < 0:
+            # minkeep = np.where(npts + nkeep > 0, npts + nkeep, [0])
+            # else:
+            minkeep = np.where(npts < nkeep, npts, [nkeep])
 
             # Set sign of pclip parameter
             if pclip < 0.:
@@ -1569,6 +1570,8 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             # the median value or the rightmost of the 2 median values
             n2 = npts // 2
 
+            # pclip should be an integer already, so can probably get
+            # rid of the rounding
             if pclip < 0.:
                 # whether or not we have an even number of points
                 even = (npts % 2) == 0

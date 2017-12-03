@@ -159,6 +159,58 @@ def test_reject_minmax(combine_dir):
                     iraf.combine(iraflist, outfile, **myargs)
 
 
+def test_reject_pclip(combine_dir):
+    basedir = str(combine_dir)
+    # create some simple files for testing
+    nx = 20
+    ny = 30
+    innums = np.array([5, 5, 18, 19, 20, 21, 22, 23, 40, 40])
+    pclips = [-2, 2]
+    nkeeps = [2, -2]
+
+    # test with an even and odd number of images for the median/pclip values
+    for nimg in [9, 10]:
+        inputs = []
+        for jj in np.arange(nimg):
+            arr = np.ones((nx, ny), dtype=np.double) * innums[jj]
+            hdu = fits.PrimaryHDU(arr)
+            inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+            hdu.writeto(inim, overwrite=True)
+            inputs.append(inim)
+        # for the IRAF list
+        inlist = os.path.join(basedir, 'infiles.txt')
+        with open(inlist, 'w') as ff:
+            for ifile in inputs:
+                ff.write(ifile + '\n')
+        iraflist = '@' + inlist
+        outfile = os.path.join(basedir, 'testout_me.fits')
+
+        for iclip in pclips:
+            for ikeep in nkeeps:
+                myargs = copy.deepcopy(defaultargs)
+                myargs['method'] = 'average'
+                myargs['reject'] = 'pclip'
+                myargs['nkeep'] = ikeep
+                myargs['pclip'] = iclip
+                myargs['lsigma'] = 3.
+                myargs['hsigma'] = 3.
+                # need to test pclip +/-, nkeep +/-,
+                # and where you try to remove
+                # equal numbers that put you below nkeep,
+                #  also nimages even and odd
+
+                iraf.combine(iraflist, outfile, **myargs)
+
+                if ikeep > 0:
+                    imean = innums[2:-2].mean()
+                else:
+                    imean = innums[:-2].mean()
+
+                outim = fits.open(outfile)
+                assert np.allclose(outim[0].data, imean)
+                outim.close()
+
+
 def test_plfile(combine_dir):
     basedir = str(combine_dir)
     # create some simple files for testing
