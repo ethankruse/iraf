@@ -3,6 +3,7 @@ from astropy.io import fits
 import iraf
 import os
 import copy
+import pytest
 
 # explicitly call combine with every parameter set to what we want
 defaultargs = {'plfile': None, 'sigmafile': None, 'ccdtype': None,
@@ -54,10 +55,6 @@ def test_basic(combine_dir):
 
     outim = fits.open(outfile)
     assert outim[0].data.shape == (nx, ny)
-    # need to check name instead of dtype because of endianness problems
-    # np.dtype('>f4') != np.dtype('<f4') but both have .name == 'float32'
-    # assert arr.dtype.name == outim[0].data.dtype.name
-
     outim.close()
 
 
@@ -73,6 +70,7 @@ def test_reject_none(combine_dir):
     for ii, itype in enumerate(dtypes):
         inputs = []
         innums = []
+        arr = None
         for jj in np.arange(nimg)+1:
             innum = jj**2
             # this makes the mean 15.66, which rounds up to make sure we're
@@ -107,11 +105,58 @@ def test_reject_none(combine_dir):
                 assert np.allclose(outim[0].data, itype(innums.mean()))
             else:
                 assert np.allclose(outim[0].data, itype(np.median(innums)))
+            # need to check name instead of dtype because of endianness problems
+            # np.dtype('>f4') != np.dtype('<f4') but both have name == 'float32'
+            assert arr.dtype.name == outim[0].data.dtype.name
             outim.close()
 
 
 def test_reject_minmax(combine_dir):
-    pass
+    basedir = str(combine_dir)
+    # create some simple files for testing
+    # use an even number to test nlow + nhigh == nimages
+    nimg = 6
+    nx = 20
+    ny = 30
+    inputs = []
+    innums = []
+
+    for jj in np.arange(nimg) + 1:
+        innum = jj ** 2
+        innums.append(innum)
+        arr = np.ones((nx, ny), dtype=np.double) * innum
+        hdu = fits.PrimaryHDU(arr)
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+    innums = np.array(innums)
+    # for the IRAF list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    iraflist = '@' + inlist
+    outfile = os.path.join(basedir, 'testout_me.fits')
+
+    myargs = copy.deepcopy(defaultargs)
+    myargs['method'] = 'average'
+    myargs['reject'] = 'minmax'
+
+    for ilow in np.arange(nimg//2+1):
+        for ihigh in np.arange(nimg//2+1):
+            myargs['nlow'] = ilow
+            myargs['nhigh'] = ihigh
+
+            if ihigh + ilow < nimg:
+                iraf.combine(iraflist, outfile, **myargs)
+
+                outim = fits.open(outfile)
+                imean = innums[ilow:nimg-ihigh].mean()
+                assert np.allclose(outim[0].data, imean)
+                outim.close()
+            else:
+                with pytest.raises(Exception):
+                    iraf.combine(iraflist, outfile, **myargs)
 
 
 def test_plfile(combine_dir):

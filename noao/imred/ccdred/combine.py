@@ -749,8 +749,8 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             if ii + jj == 0:
                 reject = 'none'
             elif ii + jj >= nimages:
-                print("Bad minmax rejection parameters")
-                return
+                raise Exception(f"Bad minmax rejection parameters: {nlow:.2f}"
+                                f" + {nhigh:.2f} > 1")
 
         imin = []
         # Map the input image(s).
@@ -1312,7 +1312,9 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         # start of ic_gdatar
         oshp = out[0][0].data.shape
         oshp += (nimages,)
-        data = np.zeros(oshp, dtype=float)
+        # do all calculations at the highest possible precision of
+        # output data types, then downgrade later if requested
+        data = np.zeros(oshp, dtype=np.double)
         # set bad values
         data[:] = np.nan
         # easy case, no offsets to deal with
