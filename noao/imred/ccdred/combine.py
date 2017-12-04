@@ -173,7 +173,7 @@ def ccdtypes(hdulist, instrument):
     return typ
 
 
-def ccdsubset(hdulist, instrument, ssfile):
+def ccdsubset(hdulist, instrument):
 
     if not isinstance(instrument, Instrument):
         print('ccdsubset not given an Instrument object.')
@@ -377,9 +377,9 @@ def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True,
     return
 
 
-def ic_mopen(in_images, out_images, nimages, mtype, mvalue, instrument):
+def ic_mopen(in_images, mtype, mvalue, instrument):
     # MASKTYPES	"|none|goodvalue|badvalue|goodbits|badbits|"
-    npix = out_images[0][0].data.shape[0]
+    # npix = out_images[0][0].data.shape[0]
     """
     # pointer to pms and bufs for each input image
     # pms are the pointers to each image's pixel masks
@@ -480,8 +480,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             weight=None, statsec=None, lthreshold=None, hthreshold=None,
             nlow=1, nhigh=1, nkeep=1, mclip=True, lsigma=3.0,
             hsigma=3.0, rdnoise=0., gain=1., snoise=0., sigscale=0.1,
-            pclip=-0.5, grow=0, instrument=None, logfile=None, verbose=False,
-            ssfile=None):
+            pclip=-0.5, grow=0, instrument=None, logfile=None, verbose=False):
     """
 
     Parameters
@@ -565,7 +564,6 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
     logfile
     verbose :
         Print log information to the standard output?
-    ssfile
 
     Returns
     -------
@@ -622,7 +620,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             continue
 
         if subsets:
-            subsetstr = ccdsubset(hdulist, instrument, ssfile)
+            subsetstr = ccdsubset(hdulist, instrument)
             # As far as I can tell, the subset and extn list is the same.
             # extn = subsetstr
         else:
@@ -813,7 +811,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
 
         # XXX: this currently is useless except to make sure masktype == 'none'
         # Open masks.
-        masktype = ic_mopen(imin, out, nimages, masktype, maskvalue, instrument)
+        masktype = ic_mopen(imin, masktype, maskvalue, instrument)
 
         # Open the log file.
         logfd = None
@@ -878,19 +876,21 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         domedian = 'median' in [stype, ztype, wtype]
         domean = 'mean' in [stype, ztype, wtype]
 
-        if domode or domedian or domean:
-            # statsec options: "|input|output|overlap|"
-            if statsec is None:
-                statsec = ''
-            statsec = statsec.strip().lower()
+        # statsec options: "|input|output|overlap|"
+        if statsec is None:
+            statsec = ''
+        statsec = statsec.strip().lower()
 
-            oimref = None
+        if domode or domedian or domean:
+            # oimref stuff only needed if it needs to be an argument to
+            # ic_stat again
+            # oimref = None
             section = statsec
             if statsec == 'input':
                 section = ''
             elif statsec == 'output':
                 section = ''
-                oimref = out[0]
+                # oimref = out[0]
             elif statsec == 'overlap':
                 section = '['
                 for ii in np.arange(out[0][0].data.ndim):
@@ -903,10 +903,10 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                     section += f'{kk:d}:{ll:d},'
                 section = section[:-1]
                 section += ']'
-                oimref = out[0]
+                # oimref = out[0]
 
             for ii in np.arange(nimages):
-                mn, md, mode = ic_stat(imin[ii], oimref, section, offarr,
+                mn, md, mode = ic_stat(imin[ii], section, offarr,
                                        project, ii, masktype, dothresh,
                                        lthreshold, hthreshold, domode=domode)
                 if domode:
@@ -1251,18 +1251,11 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
 
         doscale = (doscale or dozero)
         # end of the icscale function
-        keepids = False
-        if method == 'average' and dowts:
-            keepids = True
-        elif method == 'median':
-            dowts = False
-
-        docombine = True
 
         # Set rejection algorithm specific parameters
         if reject in ['ccdclip', 'crreject']:
             # the column order is readnoise, gain, snoise
-            nm = np.zeros((nimages,3))
+            nm = np.zeros((nimages, 3))
             if isinstance(rdnoise, str):
                 for ii in np.arange(nimages):
                     nm[ii, 0] = get_header_value(imin[ii], instrument, rdnoise)
@@ -1286,31 +1279,9 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             else:
                 nm[:, 2] = snoise
 
-            if not keepids:
-                if doscale1 or grow > 0:
-                    keepids = True
-                else:
-                    # see if every row is the same as the first row
-                    for ii in np.arange(nimages-1)+1:
-                        if (nm[ii, :] != nm[0, :]).any():
-                            keepids = True
-                            break
             if reject == 'crreject':
                 lsigma = np.inf
-        elif reject == 'minmax':
-            mclip = False
-            if grow > 0:
-                keepids = True
-        elif reject == 'pclip':
-            mclip = True
-            if grow > 0:
-                keepids = True
-        elif reject in ['sigclip', 'avsigclip']:
-            if doscale1 or grow > 0:
-                keepids = True
-        else:
-            # case 'none'
-            mclip = False
+        elif reject == 'none':
             grow = 0
 
         # start of ic_gdatar
@@ -1599,6 +1570,9 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             # Define sigma for clipping
             oinds = np.meshgrid(*[np.arange(dd) for dd in meds.shape],
                                 indexing='ij')
+            # to fix PyCharm type hinting being wrong for now.
+            # meaningless statement in reality
+            oinds = list(oinds)
             oinds.append(n3)
             msigma = tt * (data[oinds] - meds)
             # skip over ones where sigma is 0 or there's not enough pixels
@@ -1713,7 +1687,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
     return
 
 
-def ic_stat(imin, imref, section, offarr, project, nim, masktype,
+def ic_stat(imin, section, offarr, project, nim, masktype,
             dothresh, lower, upper, domode=False):
     # Determine the image section parameters.  This must be in terms of
     # the data image pixel coordinates though the section may be specified
