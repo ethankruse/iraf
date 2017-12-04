@@ -194,10 +194,6 @@ def test_reject_pclip(combine_dir):
                 myargs['pclip'] = iclip
                 myargs['lsigma'] = 3.
                 myargs['hsigma'] = 3.
-                # need to test pclip +/-, nkeep +/-,
-                # and where you try to remove
-                # equal numbers that put you below nkeep,
-                #  also nimages even and odd
 
                 iraf.combine(iraflist, outfile, **myargs)
 
@@ -205,6 +201,62 @@ def test_reject_pclip(combine_dir):
                     imean = innums[2:-2].mean()
                 else:
                     imean = innums[:-2].mean()
+
+                outim = fits.open(outfile)
+                assert np.allclose(outim[0].data, imean)
+                outim.close()
+
+
+def test_reject_ccdclip_crreject(combine_dir):
+    basedir = str(combine_dir)
+    # create some simple files for testing
+    nx = 20
+    ny = 30
+    innums = np.array([3., 3., 30., 30.1, 30.2, 30.3, 30.4, 30.7])
+    nimg = len(innums)
+    inputs = []
+    mclip = [True, False]
+    rejects = ['ccdclip', 'crreject']
+    nkeeps = [1, -1]
+    # nm: the column order is readnoise, gain, snoise (defaults 0,1,0)
+    # things to test: mclip, lthreshold, hthreshold
+    # default sigma is just sqrt(median)
+
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=np.double) * innums[jj]
+        hdu = fits.PrimaryHDU(arr)
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+    # for the IRAF list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    iraflist = '@' + inlist
+    outfile = os.path.join(basedir, 'testout_me.fits')
+
+    for iclip in mclip:
+        for ireject in rejects:
+            for ikeep in nkeeps:
+                myargs = copy.deepcopy(defaultargs)
+                myargs['method'] = 'average'
+                myargs['reject'] = ireject
+                myargs['nkeep'] = ikeep
+                myargs['mclip'] = iclip
+                # this tests mclip = False and how we calcluate the averages.
+                # points will only be removed if the min/max values are
+                # removed before calculating the average
+                # if mclip = True, this has no effect, things are removed
+                # anyway
+                myargs['lsigma'] = 4.3
+
+                iraf.combine(iraflist, outfile, **myargs)
+
+                if ikeep < 0 or ireject == 'crreject':
+                    imean = innums.mean()
+                else:
+                    imean = innums[2:].mean()
 
                 outim = fits.open(outfile)
                 assert np.allclose(outim[0].data, imean)

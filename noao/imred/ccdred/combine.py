@@ -663,6 +663,9 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
     else:
         sigroot = None
 
+    # ignore NaN operations
+    olderr = np.seterr(invalid='ignore')
+
     # XXX: make sure we're not changing input values in each loop.
     # Combine each input subset.
     for zz, iset in enumerate(subset):
@@ -1357,7 +1360,6 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             finsig = 0.
             if reject == 'avsigclip':
                 if mclip:
-                    # XXX: catch RuntimeWarning for all nan rows
                     meds = np.nanmedian(data, axis=-1)
                 else:
                     totals = np.nansum(data, axis=-1)
@@ -1401,7 +1403,6 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             finished[(npts < minclip) | (npts <= minkeep)] = True
             while not finished.all():
                 if mclip:
-                    # XXX: catch RuntimeWarning for all nan rows
                     meds = np.nanmedian(data, axis=-1)
                 else:
                     totals = np.nansum(data, axis=-1)
@@ -1471,8 +1472,8 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
 
                     negresids = (meds[..., np.newaxis] - data) / ss
                     # these don't pass the cut
-                    bad = ((negresids >= lthreshold) |
-                           (-1. * negresids >= hthreshold))
+                    bad = ((negresids >= lsigma) |
+                           (-1. * negresids >= hsigma))
 
                 # number that are bad in a given pixel
                 totbad = bad.sum(axis=-1)
@@ -1494,7 +1495,11 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                         torem = np.where(np.isclose(maxresid,
                                                     maxresid.max()))[0]
                         # only remove all equal values if doing so doesn't
-                        #  put us below the limit
+                        # put us below the limit
+                        # NOTE: I believe this is a "bug" in IRAF. See this
+                        # implementation around line 860 in iccclip.x. Same
+                        # logic is applied in icsclip and icaclip. I think
+                        # this is the correct way to handle it.
                         if len(torem) <= nrem:
                             data[inds + (torem,)] = np.nan
                         nrem -= len(torem)
@@ -1704,6 +1709,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             for ifile in imin:
                 os.remove(ifile)
 
+    np.seterr(invalid=olderr['invalid'])
     return
 
 
