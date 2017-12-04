@@ -15,8 +15,7 @@ defaultargs = {'plfile': None, 'sigmafile': None, 'ccdtype': None,
                'nlow': 1, 'nhigh': 1, 'nkeep': 1, 'mclip': True,
                'lsigma': 3.0, 'hsigma': 3.0, 'rdnoise': 0., 'gain': 1.,
                'snoise': 0., 'sigscale': 0.1, 'pclip': -0.5, 'grow': 0,
-               'instrument': None, 'logfile': None, 'verbose': False,
-               'ssfile': None}
+               'instrument': None, 'logfile': None, 'verbose': False}
 
 # iraf outtype values and the numpy equivalent (excluding long == int)
 dtypestr = ['short', 'ushort', 'integer', 'real', 'double']
@@ -261,6 +260,56 @@ def test_reject_ccdclip_crreject(combine_dir):
                 outim = fits.open(outfile)
                 assert np.allclose(outim[0].data, imean)
                 outim.close()
+
+
+def test_reject_sigclip(combine_dir):
+    basedir = str(combine_dir)
+    # create some simple files for testing
+    nx = 20
+    ny = 30
+    innums = np.array([3., 3., 30., 30.1, 30.2, 30.3, 30.4, 30.7])
+    nimg = len(innums)
+    inputs = []
+    mclip = [True, False]
+    nkeeps = [1, -1]
+    # nm: the column order is readnoise, gain, snoise (defaults 0,1,0)
+    # things to test: mclip, lthreshold, hthreshold
+    # default sigma is just sqrt(median)
+
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=np.double) * innums[jj]
+        hdu = fits.PrimaryHDU(arr)
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+    # for the IRAF list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    iraflist = '@' + inlist
+    outfile = os.path.join(basedir, 'testout_me.fits')
+
+    for iclip in mclip:
+        for ikeep in nkeeps:
+            myargs = copy.deepcopy(defaultargs)
+            myargs['method'] = 'average'
+            myargs['reject'] = 'sigclip'
+            myargs['nkeep'] = ikeep
+            myargs['mclip'] = iclip
+            # need it this low since the sigma is so huge at first
+            myargs['lsigma'] = 1.7
+
+            iraf.combine(iraflist, outfile, **myargs)
+
+            if ikeep < 0:
+                imean = innums.mean()
+            else:
+                imean = innums[2:].mean()
+
+            outim = fits.open(outfile)
+            assert np.allclose(outim[0].data, imean)
+            outim.close()
 
 
 def test_plfile(combine_dir):

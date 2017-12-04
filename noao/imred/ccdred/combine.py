@@ -1469,8 +1469,10 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                         # put us below the limit
                         # NOTE: I believe this is a "bug" in IRAF. See this
                         # implementation around line 860 in iccclip.x. Same
-                        # logic is applied in icsclip and icaclip. I think
-                        # this is the correct way to handle it.
+                        # logic is applied in icsclip and icaclip. But
+                        # IRAF is only wrong for the mclip version,
+                        # not the average clip verison. I think
+                        # this is the correct way to handle it consistently.
                         if len(torem) <= nrem:
                             data[inds + (torem,)] = np.nan
                         nrem -= len(torem)

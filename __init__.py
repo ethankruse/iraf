@@ -5,4 +5,3 @@ from .plot import *
 from . import sys
 
 __version__ = "0.1"
-
