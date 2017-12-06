@@ -344,7 +344,7 @@ def test_reject_avsigclip(combine_dir):
             myargs['nkeep'] = ikeep
             myargs['mclip'] = iclip
             # need it this low since the sigma is so huge at first
-            myargs['lsigma'] = 1.7
+            myargs['lsigma'] = 1.85
 
             iraf.combine(iraflist, outfile, **myargs)
 
