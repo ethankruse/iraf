@@ -272,9 +272,6 @@ def test_reject_sigclip(combine_dir):
     inputs = []
     mclip = [True, False]
     nkeeps = [1, -1]
-    # nm: the column order is readnoise, gain, snoise (defaults 0,1,0)
-    # things to test: mclip, lthreshold, hthreshold
-    # default sigma is just sqrt(median)
 
     for jj in np.arange(nimg):
         arr = np.ones((nx, ny), dtype=np.double) * innums[jj]
@@ -309,6 +306,55 @@ def test_reject_sigclip(combine_dir):
 
             outim = fits.open(outfile)
             assert np.allclose(outim[0].data, imean)
+            outim.close()
+
+
+def test_reject_avsigclip(combine_dir):
+    basedir = str(combine_dir)
+    # create some simple files for testing
+    nx = 20
+    ny = 30
+    innums = np.array([3., 3., 30., 30.01, 30.02, 30.03, 30.04, 30.07])
+    nimg = len(innums)
+    inputs = []
+    mclip = [True, False]
+    nkeeps = [1, -1]
+
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=np.double) * innums[jj]
+        # make each row in the first dimension different
+        arr += np.arange(nx)[:, np.newaxis]
+        hdu = fits.PrimaryHDU(arr)
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+    # for the IRAF list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    iraflist = '@' + inlist
+    outfile = os.path.join(basedir, 'testout_me.fits')
+
+    for iclip in mclip:
+        for ikeep in nkeeps:
+            myargs = copy.deepcopy(defaultargs)
+            myargs['method'] = 'average'
+            myargs['reject'] = 'avsigclip'
+            myargs['nkeep'] = ikeep
+            myargs['mclip'] = iclip
+            # need it this low since the sigma is so huge at first
+            myargs['lsigma'] = 1.7
+
+            iraf.combine(iraflist, outfile, **myargs)
+
+            if ikeep < 0:
+                imean = innums.mean()
+            else:
+                imean = innums[2:].mean()
+
+            outim = fits.open(outfile)
+            assert np.allclose(outim[0].data[:, 0], imean + np.arange(nx))
             outim.close()
 
 

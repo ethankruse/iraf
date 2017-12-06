@@ -1327,8 +1327,8 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             # minkeep = np.where(npts + nkeep > 0, npts + nkeep, [0])
             # else:
             minkeep = np.where(npts < nkeep, npts, [nkeep])
-
-            finsig = 0.
+            # XXX IRAF axis
+            finsig = np.zeros_like(np.sum(npts, axis=1), dtype=float)
             if reject == 'avsigclip':
                 if mclip:
                     meds = np.nanmedian(data, axis=-1)
@@ -1357,18 +1357,28 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                           rr[..., np.newaxis])
                 ss = np.nansum(ss, axis=-1)
                 n2 = npts >= 3
+                # don't contribute pixels with less than 3 data points to the
+                # sigma calculations
+                clippts = npts * 1
+                clippts[~n2] = 0
+                ss[~n2] = 0
                 # XXX: in IRAF this sum is only done along each "row", or along
                 # the first dimension since that's what ic_gdatar and impnlr
                 # deal with
                 # Here is the final sigma.
-                if np.sum(n2) > 1:
-                    finsig = np.sqrt(np.sum(ss[n2]) / (np.sum(n2) - 1))
+                if n2.any():
+                    # XXX IRAF axis LOOK UP C v F ordering and how to fix.
+                    # MAYBE JUST USE -1 AS AXIS? TRY WITH 3D ARRAY.
+                    finsig = np.sqrt(np.sum(ss, axis=1) /
+                                     (np.sum(clippts, axis=1) - 1))
                 else:
+                    # XXX IRAF axis
                     # don't do any clipping, so effectively ignore everything
-                    finsig = np.inf
+                    finsig = np.ones_like(np.sum(npts, axis=1), dtype=float)
+                    finsig *= np.inf
                 # avoid divide by 0 if all images are the same
-                if finsig == 0.:
-                    finsig = np.inf
+                finsig[finsig == 0.] = np.inf
+                print(finsig)
 
             finished = np.zeros_like(npts, dtype=bool)
             finished[(npts < minclip) | (npts <= minkeep)] = True
@@ -1421,11 +1431,13 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                     if doscale1:
                         rr = (meds[..., np.newaxis] + zeros) / scales
                         rr[rr < 1.] = 1.
-                        ss = np.sqrt(rr) * finsig
+                        # XXX IRAF axis.
+                        ss = np.sqrt(rr) * finsig[:, np.newaxis]
                         negresids = (meds[..., np.newaxis] - data) / ss
                     else:
                         rr = np.where(meds > 1., meds, [1.])
-                        ss = np.sqrt(rr) * finsig
+                        # XXX IRAF axis
+                        ss = np.sqrt(rr) * finsig[:, np.newaxis]
                         negresids = ((meds[..., np.newaxis] - data) /
                                      ss[..., np.newaxis])
                     bad = ((negresids > lsigma) |
