@@ -34,7 +34,7 @@ def simple_inputs(nimg, nx, ny, basedir):
 
 
 # combine_dir is set up in conftest.py
-def test_basic(combine_dir):
+def test_combine_basic(combine_dir):
     basedir = str(combine_dir)
     # create some simple files for testing
     nx = 20
@@ -57,7 +57,7 @@ def test_basic(combine_dir):
     outim.close()
 
 
-def test_reject_none(combine_dir):
+def test_reject_none_outtype(combine_dir):
     basedir = str(combine_dir)
     # create some simple files for testing
     # use an even number to test the trickier median case
@@ -354,8 +354,74 @@ def test_reject_avsigclip(combine_dir):
                 imean = innums[2:].mean()
 
             outim = fits.open(outfile)
-            assert np.allclose(outim[0].data[:, 0], imean + np.arange(nx))
+            # make sure we're doing the summing in the right dimension
+            outarr = np.ones(ny) * imean + np.arange(nx)[:, np.newaxis]
+            assert np.allclose(outim[0].data, outarr)
             outim.close()
+
+
+def test_delete(combine_dir):
+    basedir = str(combine_dir)
+    nx = 20
+    ny = 30
+    inputs = simple_inputs(5, nx, ny, basedir)
+    # for the IRAF list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    iraflist = '@' + inlist
+    outfile = os.path.join(basedir, 'testout_me.fits')
+    myargs = copy.deepcopy(defaultargs)
+
+    myargs['delete'] = False
+    iraf.combine(iraflist, outfile, **myargs)
+    assert os.path.exists(outfile)
+    for ifile in inputs:
+        assert os.path.exists(ifile)
+
+    myargs['delete'] = True
+    iraf.combine(iraflist, outfile, **myargs)
+    assert os.path.exists(outfile)
+    for ifile in inputs:
+        assert not os.path.exists(ifile)
+
+
+def test_blank(combine_dir):
+    basedir = str(combine_dir)
+    # create some simple files for testing
+    nx = 20
+    ny = 30
+    nimg = 6
+    inputs = []
+    blank = -3.
+
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=float) + 20.
+        arr[0, :] = np.nan
+        hdu = fits.PrimaryHDU(arr)
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+    # for the IRAF list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    iraflist = '@' + inlist
+    outfile = os.path.join(basedir, 'testout_me.fits')
+
+    myargs = copy.deepcopy(defaultargs)
+    myargs['blank'] = blank
+
+    iraf.combine(iraflist, outfile, **myargs)
+
+    outim = fits.open(outfile)
+    # first row is always "blank"
+    assert np.allclose(outim[0].data[0, :], blank)
+    assert (outim[0].data[1:, :] > 0.).all()
+    # assert np.allclose(outim[0].data[:, 0], imean + np.arange(nx))
+    outim.close()
 
 
 def test_plfile(combine_dir):

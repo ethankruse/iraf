@@ -1690,7 +1690,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             logfd.close()
         # delete the input images if requested
         if delete:
-            for ifile in imin:
+            for ifile in iimages:
                 os.remove(ifile)
 
     np.seterr(invalid=olderr['invalid'])
