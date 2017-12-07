@@ -1643,7 +1643,6 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             avg[npts == 0.] = blank
         # save the final result to the output image
         out[0][0].data = avg.astype(outtype)
-        out[0].flush()
 
         if out[1] is not None:
             npts = (~np.isnan(data)).sum(axis=-1)
@@ -1651,7 +1650,6 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             # how many bad pixels there were
             nbad -= npts
             out[1][0].data = nbad
-            out[1].flush()
 
         if out[2] is not None:
             # Compute the sigma image line.
@@ -1675,7 +1673,6 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             osigma[totwts == 0.] = blank
 
             out[2][0].data = osigma
-            out[2].flush()
 
         # this is where the icombiner function ends
 

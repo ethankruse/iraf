@@ -17,9 +17,9 @@ defaultargs = {'plfile': None, 'sigmafile': None, 'ccdtype': None,
                'snoise': 0., 'sigscale': 0.1, 'pclip': -0.5, 'grow': 0,
                'instrument': None, 'logfile': None, 'verbose': False}
 
-# iraf outtype values and the numpy equivalent (excluding long == int)
-dtypestr = ['short', 'ushort', 'integer', 'real', 'double']
-dtypes = [np.short, np.ushort, np.int_, np.single, np.double]
+# left to test: sigmafile, ccdtype, subsets, project, offsets,
+# masktype, maskvalue, scale, zero, weight, statsec, rdnoise,
+# gain, snoise, sigscale, grow, logfile, verbose
 
 
 def simple_inputs(nimg, nx, ny, basedir):
@@ -59,6 +59,10 @@ def test_combine_basic(combine_dir):
 
 def test_reject_none_outtype(combine_dir):
     basedir = str(combine_dir)
+    # iraf outtype values and the numpy equivalent (excluding long == int)
+    dtypestr = ['short', 'ushort', 'integer', 'real', 'double']
+    dtypes = [np.short, np.ushort, np.int_, np.single, np.double]
+
     # create some simple files for testing
     # use an even number to test the trickier median case
     nimg = 6
@@ -387,7 +391,7 @@ def test_delete(combine_dir):
         assert not os.path.exists(ifile)
 
 
-def test_blank(combine_dir):
+def test_threshold_blank(combine_dir):
     basedir = str(combine_dir)
     # create some simple files for testing
     nx = 20
@@ -395,10 +399,11 @@ def test_blank(combine_dir):
     nimg = 6
     inputs = []
     blank = -3.
+    lthresh = [2, 4]
+    hthresh = [6, 3]
 
     for jj in np.arange(nimg):
-        arr = np.ones((nx, ny), dtype=float) + 20.
-        arr[0, :] = np.nan
+        arr = np.ones((nx, ny), dtype=float) * (jj + 1)
         hdu = fits.PrimaryHDU(arr)
         inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
         hdu.writeto(inim, overwrite=True)
@@ -414,14 +419,24 @@ def test_blank(combine_dir):
     myargs = copy.deepcopy(defaultargs)
     myargs['blank'] = blank
 
-    iraf.combine(iraflist, outfile, **myargs)
+    nums = np.arange(nimg) + 1
 
-    outim = fits.open(outfile)
-    # first row is always "blank"
-    assert np.allclose(outim[0].data[0, :], blank)
-    assert (outim[0].data[1:, :] > 0.).all()
-    # assert np.allclose(outim[0].data[:, 0], imean + np.arange(nx))
-    outim.close()
+    for lt in lthresh:
+        for ht in hthresh:
+            myargs['lthreshold'] = lt
+            myargs['hthreshold'] = ht
+
+            iraf.combine(iraflist, outfile, **myargs)
+
+            outim = fits.open(outfile)
+
+            valid = np.where((nums <= ht) & (nums >= lt))[0]
+            if valid.size > 0:
+                assert np.allclose(outim[0].data, nums[valid].mean())
+            else:
+                assert np.allclose(outim[0].data, blank)
+
+            outim.close()
 
 
 def test_plfile(combine_dir):
@@ -429,7 +444,8 @@ def test_plfile(combine_dir):
     # create some simple files for testing
     nx = 20
     ny = 30
-    inputs = simple_inputs(5, nx, ny, basedir)
+    nimg = 5
+    inputs = simple_inputs(nimg, nx, ny, basedir)
 
     # for the IRAF list
     inlist = os.path.join(basedir, 'infiles.txt')
@@ -442,7 +458,16 @@ def test_plfile(combine_dir):
     plfile = os.path.join(basedir, 'testout_pl.fits')
     myargs = copy.deepcopy(defaultargs)
     myargs['plfile'] = plfile
+    myargs['reject'] = 'minmax'
+    myargs['nhigh'] = 0
 
-    iraf.combine(iraflist, outfile, **myargs)
-    # XXX: need to figure out what this is
-    assert 1
+    nlows = np.arange(nimg)
+    for ilow in nlows:
+        myargs['nlow'] = ilow
+        iraf.combine(iraflist, outfile, **myargs)
+        outim = fits.open(plfile)
+        assert np.allclose(outim[0].data, ilow)
+        # need to check name instead of dtype because of endianness problems
+        # np.dtype('>f4') != np.dtype('<f4') but both have name == 'float32'
+        assert outim[0].data.dtype.name[:3] == 'int'
+        outim.close()
