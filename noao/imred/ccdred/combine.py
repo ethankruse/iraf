@@ -33,8 +33,10 @@ class Instrument(object):
 
         if name is None or name.strip().lower() == 'default':
             # insert how to interpret things
-            # XXX: filter or filters?
-            self.definitions['subset'] = 'filter'
+            # XXX: filter or filters? This isn't used?
+            # IRAF default to just 'subset' = 'subset'?
+            # self.definitions['subset'] = 'filter'
+            # where did these come from?
             self.definitions['bias'] = 'zero'
             self.definitions['dome flat'] = 'flat'
             self.definitions['projector flat'] = 'flat'
@@ -578,8 +580,6 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
     ccdclip
 
     """
-    offsets = offsets.strip().lower()
-
     # was given a string or something else, so set up the instrument object
     if not isinstance(instrument, Instrument):
         instrument = Instrument(instrument)
@@ -601,8 +601,12 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
 
     method = method.strip().lower()
     if method not in ['average', 'median']:
-        print(f'Combine method not recognized: {method}')
-        sys.exit(1)
+        raise Exception(f'Combine method not recognized: {method}')
+
+    reject = reject.lower().strip()
+    rejectopts = "none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip"
+    if reject not in rejectopts.split('|'):
+        raise Exception(f'Could not recognize reject parameter {reject}')
 
     for image in inputs:
         # open the image
@@ -664,9 +668,23 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
     # ignore NaN operations
     olderr = np.seterr(invalid='ignore')
 
+    # don't overwrite these values for subsequent subsets
+    origoffsets = offsets
+    origmasktype = masktype
+    orignlow = nlow * 1
+    orignhigh = nhigh * 1
+    orignkeep = nkeep * 1
+    origpclip = pclip * 1
+
     # XXX: make sure we're not changing input values in each loop.
     # Combine each input subset.
     for zz, iset in enumerate(subset):
+        offsets = origoffsets
+        masktype = origmasktype
+        nlow = orignlow * 1
+        nhigh = orignhigh * 1
+        nkeep = orignkeep * 1
+        pclip = origpclip * 1
 
         iimages = images[zz]
 
@@ -720,11 +738,6 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         # rejected.  The number of low and high pixel rejected, however,
         # are converted to a fraction of the valid pixels.
 
-        reject = reject.lower().strip()
-        rejectopts = "none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip"
-        if reject not in rejectopts.split('|'):
-            print(f'Could not recognize reject parameter {reject}')
-            sys.exit(1)
         # define	REJECT	"|none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip|"
         if reject == 'pclip':
             if pclip == 0.:
@@ -768,6 +781,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         out.append(image_open(output, mode='update'))
 
         # start of ic_setout
+
         aligned, offarr = ic_setout(imin, out, nimages, project, offsets)
 
         # Determine the highest precedence datatype and set output datatype.
@@ -775,20 +789,22 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         for im in imin:
             intype = type_max(intype, im[0].data.dtype)
 
-        if outtype is None:
-            outtype = intype
+        # don't overwrite input outtype for subsequent subsets
+        oouttype = outtype
+        if oouttype is None:
+            oouttype = intype
         else:
-            outtype = outtype.strip().lower()
+            oouttype = oouttype.strip().lower()
             otypes = "short|ushort|integer|long|real|double".split('|')
             ndtypes = [np.short, np.ushort, np.int_, np.int_,
                        np.single, np.double]
-            if outtype in otypes:
-                outtype = ndtypes[otypes.index(outtype)]
+            if oouttype in otypes:
+                oouttype = ndtypes[otypes.index(oouttype)]
             else:
-                print(f'Unrecognized outtype: {outtype}')
+                print(f'Unrecognized outtype: {oouttype}')
                 sys.exit(1)
         # make sure the output type will work given the input
-        outtype = type_max(intype, outtype)
+        oouttype = type_max(intype, oouttype)
 
         # Open pixel list file if given.
         if plfile is not None:
@@ -805,7 +821,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                           instrument=instrument)
             out.append(image_open(sigmafile, mode='update'))
             # has to be a float
-            sigmatype = type_max(np.float, outtype)
+            sigmatype = type_max(np.float, oouttype)
         else:
             out.append(None)
 
@@ -1642,7 +1658,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             # fill in empty spots with the blank value
             avg[npts == 0.] = blank
         # save the final result to the output image
-        out[0][0].data = avg.astype(outtype)
+        out[0][0].data = avg.astype(oouttype)
 
         if out[1] is not None:
             npts = (~np.isnan(data)).sum(axis=-1)

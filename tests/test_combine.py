@@ -571,9 +571,9 @@ def test_subsets(combine_dir):
             arr += 20.
         hdu = fits.PrimaryHDU(arr)
         if jj < 3:
-            hdu.header['filter'] = 'red'
+            hdu.header['subset'] = 'red'
         else:
-            hdu.header['filter'] = 'blue'
+            hdu.header['subset'] = 'blue'
         inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
         hdu.writeto(inim, overwrite=True)
         inputs.append(inim)
@@ -589,8 +589,15 @@ def test_subsets(combine_dir):
     myargs['subsets'] = True
 
     iraf.combine(iraflist, outfile, **myargs)
-    outim = fits.open(outfile)
 
-    assert np.allclose(outim[0].data, 5)
+    filters = ['red', 'blue']
+    meds = [25, 5]
+    comb = '.'
+    base, ext = os.path.splitext(outfile)
 
-    outim.close()
+    for ii, ifilter in enumerate(filters):
+        output = f'{base}{comb}{ifilter}{ext}'
+        outim = fits.open(output)
+
+        assert np.allclose(outim[0].data, meds[ii])
+        outim.close()
