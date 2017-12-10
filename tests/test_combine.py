@@ -17,7 +17,7 @@ defaultargs = {'plfile': None, 'sigmafile': None, 'ccdtype': None,
                'snoise': 0., 'sigscale': 0.1, 'pclip': -0.5, 'grow': 0,
                'instrument': None, 'logfile': None, 'verbose': False}
 
-# left to test: sigmafile, ccdtype, subsets, project, offsets,
+# left to test: subsets, project, offsets,
 # masktype, maskvalue, scale, zero, weight, statsec, rdnoise,
 # gain, snoise, sigscale, grow, logfile, verbose
 
@@ -471,3 +471,126 @@ def test_plfile(combine_dir):
         # np.dtype('>f4') != np.dtype('<f4') but both have name == 'float32'
         assert outim[0].data.dtype.name[:3] == 'int'
         outim.close()
+
+
+# XXX: need to test weights here
+def test_sigmafile(combine_dir):
+    basedir = str(combine_dir)
+    # create some simple files for testing
+    nx = 20
+    ny = 30
+    nimg = 5
+    blank = -3.
+    hthresh = 20.
+
+    inputs = []
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=float) * (jj + 1)
+        arr[0, :] = 50.
+        hdu = fits.PrimaryHDU(arr)
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+    # for the IRAF list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    iraflist = '@' + inlist
+    outfile = os.path.join(basedir, 'testout_me.fits')
+    sigmafile = os.path.join(basedir, 'testout_sigma.fits')
+
+    myargs = copy.deepcopy(defaultargs)
+    myargs['sigmafile'] = sigmafile
+    myargs['hthreshold'] = hthresh
+    myargs['blank'] = blank
+
+    iraf.combine(iraflist, outfile, **myargs)
+    outim = fits.open(sigmafile)
+
+    inps = np.arange(nimg) + 1
+
+    assert np.allclose(outim[0].data[1:, :], inps.std(ddof=1))
+    assert np.allclose(outim[0].data[0, :], blank)
+    # need to check name instead of dtype because of endianness problems
+    # np.dtype('>f4') != np.dtype('<f4') but both have name == 'float32'
+    assert outim[0].data.dtype.name[:5] == 'float'
+    outim.close()
+
+
+def test_ccdtype(combine_dir):
+    basedir = str(combine_dir)
+    # create some simple files for testing
+    nx = 20
+    ny = 30
+    nimg = 5
+
+    inputs = []
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=float) * 5
+        if jj == 0:
+            arr += 20.
+        hdu = fits.PrimaryHDU(arr)
+        if jj == 0:
+            hdu.header['imagetyp'] = 'zero'
+        else:
+            hdu.header['imagetyp'] = 'object'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+    # for the IRAF list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    iraflist = '@' + inlist
+    outfile = os.path.join(basedir, 'testout_me.fits')
+
+    myargs = copy.deepcopy(defaultargs)
+    myargs['ccdtype'] = 'object'
+
+    iraf.combine(iraflist, outfile, **myargs)
+    outim = fits.open(outfile)
+
+    assert np.allclose(outim[0].data, 5)
+
+    outim.close()
+
+
+def test_subsets(combine_dir):
+    basedir = str(combine_dir)
+    # create some simple files for testing
+    nx = 20
+    ny = 30
+    nimg = 6
+
+    inputs = []
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=float) * 5
+        if jj < 3:
+            arr += 20.
+        hdu = fits.PrimaryHDU(arr)
+        if jj < 3:
+            hdu.header['filter'] = 'red'
+        else:
+            hdu.header['filter'] = 'blue'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+    # for the IRAF list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    iraflist = '@' + inlist
+    outfile = os.path.join(basedir, 'testout_me.fits')
+
+    myargs = copy.deepcopy(defaultargs)
+    myargs['subsets'] = True
+
+    iraf.combine(iraflist, outfile, **myargs)
+    outim = fits.open(outfile)
+
+    assert np.allclose(outim[0].data, 5)
+
+    outim.close()

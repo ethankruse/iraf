@@ -1668,9 +1668,9 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
 
             osigma = np.zeros_like(wtsum, dtype=sigmatype)
             pos = totwts > 0.
-            osigma[totwts > 0.] = np.sqrt(sigcor[pos] * wtsum[pos] /
-                                          totwts[pos])
-            osigma[totwts == 0.] = blank
+            osigma[pos] = np.sqrt(sigcor[pos] * wtsum[pos] /
+                                  totwts[pos])
+            osigma[~pos] = blank
 
             out[2][0].data = osigma
 
