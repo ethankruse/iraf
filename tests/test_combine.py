@@ -17,9 +17,9 @@ defaultargs = {'plfile': None, 'sigmafile': None, 'ccdtype': None,
                'snoise': 0., 'sigscale': 0.1, 'pclip': -0.5, 'grow': 0,
                'instrument': None, 'logfile': None, 'verbose': False}
 
-# left to test: subsets, project, offsets,
-# masktype, maskvalue, scale, zero, weight, statsec, rdnoise,
-# gain, snoise, sigscale, grow, logfile, verbose
+# left to test: project, offsets,
+# masktype, maskvalue, scale, zero, weight, statsec,
+# sigscale, grow, logfile, verbose
 
 
 def simple_inputs(nimg, nx, ny, basedir):
@@ -601,3 +601,85 @@ def test_subsets(combine_dir):
 
         assert np.allclose(outim[0].data, meds[ii])
         outim.close()
+
+
+def test_rdnoise_gain_snoise(combine_dir):
+    basedir = str(combine_dir)
+    # create some simple files for testing
+    nx = 20
+    ny = 30
+    nimg = 6
+
+    rdnoise = 5.
+    gain = 2.
+    snoise = 0.05
+    baseval = 100
+
+    inputs = []
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=float) * baseval
+        if jj == nimg - 1:
+            arr += 30.
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['rdnoise'] = rdnoise + 0.1 * jj
+        hdu.header['gain'] = gain + 0.1 * jj
+        hdu.header['snoise'] = snoise + 0.01 * jj
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+    # for the IRAF list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    iraflist = '@' + inlist
+    outfile = os.path.join(basedir, 'testout_me.fits')
+
+    myargs = copy.deepcopy(defaultargs)
+    myargs['mclip'] = True
+    myargs['reject'] = 'ccdclip'
+
+    rdnoises = [rdnoise, 'rdnoise']
+    gains = [gain, 'gain']
+    snoises = [snoise, 'snoise']
+    data = np.ones(nimg) * baseval
+    data[-1] += 30.
+
+    for ird in rdnoises:
+        for igain in gains:
+            for isn in snoises:
+                myargs['rdnoise'] = ird
+                myargs['gain'] = igain
+                myargs['snoise'] = isn
+
+                if ird == rdnoise:
+                    rds = rdnoise
+                else:
+                    rds = rdnoise + 0.1 * (nimg - 1)
+                if igain == gain:
+                    gns = gain
+                else:
+                    gns = gain + 0.1 * (nimg - 1)
+                if isn == snoise:
+                    sns = snoise
+                else:
+                    sns = snoise + 0.01 * (nimg - 1)
+
+                sigma = np.sqrt((rds / gns) ** 2. + baseval / gns +
+                                (sns * baseval) ** 2.)
+
+                myargs['hsigma'] = (30. / sigma) - 0.01
+
+                iraf.combine(iraflist, outfile, **myargs)
+
+                outim = fits.open(outfile)
+                assert np.allclose(outim[0].data, data[:-1].mean())
+                outim.close()
+
+                myargs['hsigma'] = (30. / sigma) + 0.01
+
+                iraf.combine(iraflist, outfile, **myargs)
+
+                outim = fits.open(outfile)
+                assert np.allclose(outim[0].data, data.mean())
+                outim.close()

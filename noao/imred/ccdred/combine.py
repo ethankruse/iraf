@@ -676,9 +676,9 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
     orignkeep = nkeep * 1
     origpclip = pclip * 1
 
-    # XXX: make sure we're not changing input values in each loop.
     # Combine each input subset.
     for zz, iset in enumerate(subset):
+        # restore these values to the inputs
         offsets = origoffsets
         masktype = origmasktype
         nlow = orignlow * 1
@@ -1285,7 +1285,9 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                 nm[:, 1] = gain
             max_real = 0.99e37
             small = 1e4 / max_real
-            # adjust the readnoise values? don't let it be actually 0?
+            # adjust the readnoise values to be (readnoise / gain)**2
+            # which is what is actually used in the sigma calcluation.
+            # don't let it be 0.
             rdsq = (nm[:, 0]/nm[:, 1])**2
             nm[:, 0] = np.where(rdsq > small, rdsq, [small])
 
