@@ -1,0 +1,17 @@
+language: python
+
+ matrix:
+    include:
+        # Linux, Python 3.6
+        - os: linux
+          env: PYTHON_VERSION=3.6 # NUMPY_VERSION=1.11
+
+        # OSX
+        - os: osx
+          env: PYTHON_VERSION=3.6
+
+install:
+    - source .ci/travis.sh
+
+script:
+    - pytest --cov iraf --verbose

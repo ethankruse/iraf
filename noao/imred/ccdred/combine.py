@@ -986,7 +986,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             zeros -= zmean
             # Because of finite arithmetic it is possible for the zero offsets
             # to be nonzero even when they are all equal.  Just for the sake of
-            # a nice log set the zero offsets in this case.
+            # a nice log message set the zero offsets in this case.
             allclose = True
             for ii in np.arange(zeros.size):
                 if not np.isclose([zeros[ii]], [0.]):

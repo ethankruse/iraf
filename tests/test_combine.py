@@ -683,3 +683,46 @@ def test_rdnoise_gain_snoise(combine_dir):
                 outim = fits.open(outfile)
                 assert np.allclose(outim[0].data, data.mean())
                 outim.close()
+
+
+def test_scale(combine_dir):
+    basedir = str(combine_dir)
+    # create some simple files for testing
+    nx = 20
+    ny = 30
+    nimg = 5
+    base = 100
+    dt = 10
+
+    stypes = "mode|median|mean|exposure".split('|')
+    stypes.extend(('@FILE', '!KEYWORD'))
+
+    inputs = []
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=float) * base * (jj + 1)
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['']
+        if jj == 0:
+            hdu.header['imagetyp'] = 'zero'
+        else:
+            hdu.header['imagetyp'] = 'object'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+    # for the IRAF list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    iraflist = '@' + inlist
+    outfile = os.path.join(basedir, 'testout_me.fits')
+
+    myargs = copy.deepcopy(defaultargs)
+    myargs['ccdtype'] = 'object'
+
+    iraf.combine(iraflist, outfile, **myargs)
+    outim = fits.open(outfile)
+
+    assert np.allclose(outim[0].data, 5)
+
+    outim.close()
