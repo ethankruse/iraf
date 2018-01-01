@@ -22,4 +22,4 @@ conda install -q numpy scipy matplotlib h5py setuptools pytest pytest-cov pip as
 # pip install coveralls
 
 # Build the extension
-# python setup.py develop
+python setup.py develop
