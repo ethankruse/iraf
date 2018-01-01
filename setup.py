@@ -6,6 +6,7 @@ from setuptools import setup
 builtins.__IRAF_SETUP__ = True
 import iraf
 
+# XXX: all of this needs to be looked at and reworked and added before release
 setup(
     name="iraf",
     version=iraf.__version__,
