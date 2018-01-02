@@ -684,6 +684,7 @@ def test_rdnoise_gain_snoise(combine_dir):
                 assert np.allclose(outim[0].data, data.mean())
                 outim.close()
 
+
 """
 def test_scale(combine_dir):
     basedir = str(combine_dir)

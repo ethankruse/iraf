@@ -1,6 +1,5 @@
 #!/bin/bash -x
 
-# http://conda.pydata.org/docs/travis.html#the-travis-yml-file
 if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
   wget https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -O ~/miniconda.sh;
 else
