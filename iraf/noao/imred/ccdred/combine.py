@@ -12,6 +12,9 @@ __all__ = ['combine', 'Instrument', 'ccdtypes', 'get_header_value']
 class Instrument(object):
     """
     Instrument object.
+
+    Provides header translations between IRAF standards and the values
+    used by specific telescopes or instruments.
     """
     """
     To learn about instruments, look into
@@ -31,21 +34,17 @@ class Instrument(object):
     def __init__(self, name=None):
         self.definitions = {}
 
+        # create the default instrument translations
         if name is None or name.strip().lower() == 'default':
-            # insert how to interpret things
-            # XXX: filter or filters? This isn't used?
-            # IRAF default to just 'subset' = 'subset'?
-            # self.definitions['subset'] = 'filter'
-            # where did these come from?
+            # XXX: where did these come from? What else needs to be added?
             self.definitions['bias'] = 'zero'
             self.definitions['dome flat'] = 'flat'
             self.definitions['projector flat'] = 'flat'
             self.definitions['comparison'] = 'comp'
             self.definitions['sky flat'] = 'object'
-
+        # load a specific instrument
         else:
-            print(f'Instrument {name} not implemented yet.')
-            sys.exit(1)
+            raise Exception(f'Instrument {name} not implemented yet.')
 
     def translate(self, key):
         # if it's a string, strip the value and put it in lowercase.
@@ -57,35 +56,26 @@ class Instrument(object):
         if key in self.definitions:
             return self.definitions[key]
         else:
+            # XXX: return original key or stripped/lowercase version?
             return key
-
-    """
-    Set up an Instrument class with a translate() function or something.
-    Maybe more like to_default() or from_default() 
-    """
-
-
-def make_fits(path):
-    splits = path.split('.')
-    if splits[-1] not in ['fits', 'fit']:
-        path += '.fits'
-    return path
 
 
 def set_header_value(hdulist, instrument, key, value, comment=None):
     """
+    Add a header key/value to an image, or modify the existing value if the
+    key already exists. Optional ability to add a comment describing the
+    field. If comment is None, the existing comment will remain. To clear
+    the comment, set comment to the empty string ''.
+
     The equivalent of IRAF's hdmput*. (e.g. hdmputi, hdmputr)
 
     Parameters
     ----------
     hdulist
-    instrument
-    key
+    instrument : Instrument
+    key : str
     value
-    comment
-
-    Returns
-    -------
+    comment : str
 
     """
     # what is the header key in the instrument's language
@@ -106,6 +96,8 @@ def set_header_value(hdulist, instrument, key, value, comment=None):
 
 def get_header_value(hdulist, instrument, key):
     """
+    Retrieve the value of a header key.
+
     The equivalent of IRAF's hdmg*. (e.g. hdmgstr)
 
     Parameters
@@ -116,6 +108,7 @@ def get_header_value(hdulist, instrument, key):
 
     Returns
     -------
+    value
 
     """
     # what is the header key in the instrument's language
@@ -144,6 +137,7 @@ def get_header_value(hdulist, instrument, key):
 def ccdtypes(hdulist, instrument):
     """
     Get the header value of 'imagetyp' (or instrument equivalent).
+
     If that (instrument converted) value is one of
     "object|zero|dark|flat|illum|fringe|other|comp" return that.
     Otherwise return 'unknown' unless the header does not contain any
@@ -161,8 +155,7 @@ def ccdtypes(hdulist, instrument):
     """
 
     if not isinstance(instrument, Instrument):
-        print('ccdtypes not given an Instrument object.')
-        sys.exit(1)
+        raise Exception('ccdtypes not given an Instrument object.')
 
     options = "object|zero|dark|flat|illum|fringe|other|comp".split('|')
     typ = get_header_value(hdulist, instrument, 'imagetyp')
@@ -176,10 +169,22 @@ def ccdtypes(hdulist, instrument):
 
 
 def ccdsubset(hdulist, instrument):
+    """
+    Get the subset identifier as the header value of 'subset' (or instrument
+    equivalent).
+
+    Parameters
+    ----------
+    hdulist
+    instrument
+
+    Returns
+    -------
+
+    """
 
     if not isinstance(instrument, Instrument):
-        print('ccdsubset not given an Instrument object.')
-        sys.exit(1)
+        raise Exception('ccdsubset not given an Instrument object.')
 
     subsetstr = get_header_value(hdulist, instrument, 'subset')
 
@@ -196,7 +201,8 @@ def ccdsubset(hdulist, instrument):
     # This bit was a translation of the original IRAF ccdsubset function
     # that uses the subsets file and turns things into shorter subset strings
     # while also making sure there aren't overlaps. This all seems unnecessary
-    # and we should just use the full subset string as the identifier.
+    # and we should just use the full subset string as the identifier. No
+    # point in maintaining some subsets file.
 
     import shlex
     
@@ -269,36 +275,31 @@ def ccdsubset(hdulist, instrument):
 
 
 def ic_setout(inputs, output, nimages, project, offsets):
+    """
+    Set output image size and offsets of input images.
+
+    Parameters
+    ----------
+    inputs
+    output
+    nimages
+    project
+    offsets
+
+    Returns
+    -------
+
+    """
 
     indim = len(inputs[0][0].data.shape)
     outdim = len(output[0][0].data.shape)
 
     if project:
         outdim = indim - 1
-        # XXX: IM_NDIM(out[1]) = outdim
     else:
         for im in inputs:
             if len(im[0].data.shape) != outdim:
-                print("Image dimensions are not the same")
-                sys.exit(1)
-
-    """
-    # Set the reference point to that of the first image.
-    # Open an MWCS descriptor on an image
-    mw = mw_openim (in[1])
-    # Get the value of a MWCS interface parameter.
-    mwdim = mw_stati (mw, MW_NPHYSDIM)
-    # Get the linear part of the Wterm, i.e., the physical and world
-    # coordinates of the reference point and the CD matrix.
-    call mw_gwtermd (mw, Memd[lref], Memd[wref], Memd[cd], mwdim)
-    # Set up a coordinate transformation (CTRAN) descriptor.
-    ct = mw_sctran (mw, "world", "logical", 0)
-    # Transform a single N-dimensional point
-    call mw_ctrand (ct, Memd[wref], Memd[lref], mwdim)
-    call mw_ctfree (ct)
-    if (project)
-        Memd[lref+outdim] = 1
-    """
+                raise Exception("Input image dimensions are not the same")
 
     # Parse the user offset string.  If "none" then there are no offsets.
     # If "wcs" then set the offsets based on the image WCS.
@@ -347,19 +348,36 @@ def ic_setout(inputs, output, nimages, project, offsets):
     return aligned, offsetsarr
 
 
-# this is meant to be equivalent to immap (output, NEW_COPY, Memi[in]) in IRAF
 def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True,
                   instrument=None):
+    """
+    Copy a file, adding appropriate header info about IRAF sourcing.
+
+    Meant to be equivalent to immap (output, NEW_COPY, Memi[in]) in IRAF.
+
+    Parameters
+    ----------
+    outstr
+    in_header
+    mode
+    overwrite
+    instrument
+
+    Returns
+    -------
+
+    """
     if mode != 'NEW_COPY':
         print('other modes of file_new_copy not supported.')
         return
 
-    # Also this only works for FITS files.
-    if in_header.__filetype__ == 'fits':
+    ftype = in_header.__filetype__
+    if ftype == 'fits':
+        # do the actual writing of the copy
         in_header.writeto(outstr, overwrite=overwrite)
         if instrument is None:
             instrument = Instrument()
-        # update header parameters in the new file
+        # update header parameters in the new file without altering the old
         hdulist = image_open(outstr, mode='update')
         # XXX: update this with a real package name at some point
         orval = 'AIRAF in Python'
@@ -373,33 +391,30 @@ def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True,
         set_header_value(hdulist, instrument, 'iraf-tlm', dtval, lmcomm)
         image_close(hdulist)
     else:
-        err = 'file_new_copy of file type {0} not yet implemented.'
-        print(err.format(in_header.__filetype__))
-        sys.exit(1)
+        raise Exception(f'file_new_copy of file type {ftype} not yet '
+                        f'implemented.')
     return
 
 
 def ic_mopen(in_images, mtype, mvalue, instrument):
-    # MASKTYPES	"|none|goodvalue|badvalue|goodbits|badbits|"
-    # npix = out_images[0][0].data.shape[0]
     """
-    # pointer to pms and bufs for each input image
-    # pms are the pointers to each image's pixel masks
-    call calloc (pms, nimages, TY_POINTER)
-    # bufs is just an array of 1s of length npix?
-    call calloc (bufs, nimages, TY_POINTER)
-    # for every input image, create an array of ones of length npix
-    do i = 1, nimages {
-        call malloc (Memi[bufs+i-1], npix, TY_INT)
-        call amovki (1, Memi[Memi[bufs+i-1]], npix)
-    }
-    """
+    Open mask.
 
+    Parameters
+    ----------
+    in_images
+    mtype
+    mvalue
+    instrument
+
+    Returns
+    -------
+
+    """
     mtype = mtype.strip().lower()
 
     if mtype not in ['none', 'goodvalue', 'badvalue', 'goodbits', 'badbits']:
-        print(f'masktype {mtype} not recognized. Assuming "none".')
-        mtype = 'none'
+        raise Exception(f'masktype {mtype} not recognized.')
 
     # Check for special cases.  The BOOLEAN type is used when only
     # zero and nonzero are significant; i.e. the actual mask values are
@@ -419,31 +434,30 @@ def ic_mopen(in_images, mtype, mvalue, instrument):
     # header and open it saving the descriptor in the pms array.
     # Empty masks (all good) are treated as if there was no mask image.
     npms = 0
-    if mtype != 'none':
-        for im in in_images:
+    pms = []
+
+    for im in in_images:
+        if mtype != 'none':
             fname = get_header_value(im, instrument, 'BPM')
             if fname is None:
+                pms.append(None)
                 continue
 
-            # XXX: implement this
-            print('pixel maps not yet implemented.')
-            sys.exit(1)
-
+            pm = image_open(fname)
+            if np.allclose(pm[0].data, 0) and not invert:
+                image_close(pm)
+                pm = None
+            else:
+                npms += 1
+            pms.append(pm)
+        else:
+            pms.append(None)
     # If no mask images are found and the mask parameters imply that
     # good values are 0 then use the special case of no masks.
     if npms == 0 and not invert:
         mtype = 'none'
 
-    """
-    # Set up mask structure.
-    call calloc (icm, ICM_LEN, TY_STRUCT)
-    ICM_TYPE(icm) = mtype
-    ICM_VALUE(icm) = mvalue
-    ICM_BUFS(icm) = bufs
-    ICM_PMS(icm) = pms
-
-    """
-    return mtype
+    return mtype, pms
 
 
 def type_max(type1, type2):
@@ -825,9 +839,8 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         else:
             out.append(None)
 
-        # XXX: this currently is useless except to make sure masktype == 'none'
         # Open masks.
-        masktype = ic_mopen(imin, masktype, maskvalue, instrument)
+        masktype, pms = ic_mopen(imin, masktype, maskvalue, instrument)
 
         # Open the log file.
         logfd = None
@@ -1707,6 +1720,10 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         if delete:
             for ifile in iimages:
                 os.remove(ifile)
+        # close the mask images
+        for pm in pms:
+            if pm is not None:
+                image_close(pm)
 
     np.seterr(invalid=olderr['invalid'])
     return
