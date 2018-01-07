@@ -398,7 +398,7 @@ def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True,
 
 def ic_mopen(in_images, mtype, mvalue, instrument):
     """
-    Open mask.
+    Open pixel mask files.
 
     Parameters
     ----------
@@ -461,6 +461,18 @@ def ic_mopen(in_images, mtype, mvalue, instrument):
 
 
 def type_max(type1, type2):
+    """
+    Return the datatype of highest precedence.
+
+    Parameters
+    ----------
+    type1
+    type2
+
+    Returns
+    -------
+
+    """
     right = np.can_cast(type1, type2, casting='safe')
     left = np.can_cast(type2, type1, casting='safe')
 
@@ -485,8 +497,7 @@ def type_max(type1, type2):
                 return np.dtype(iint)
     """
     errstr = "Unrecognized dtype or cannot safely cast between {0} and {1}."
-    print(errstr.format(type1, type2))
-    sys.exit(1)
+    raise Exception(errstr.format(type1, type2))
 
 
 def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
@@ -594,11 +605,22 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
     ccdclip
 
     """
+    # basic error checking before we start manipulating files
+    method = method.strip().lower()
+    if method not in ['average', 'median']:
+        raise Exception(f'Combine method not recognized: {method}')
+
+    reject = reject.lower().strip()
+    rejectopts = "none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip"
+    if reject not in rejectopts.split('|'):
+        raise Exception(f'Could not recognize reject parameter {reject}')
+
     # was given a string or something else, so set up the instrument object
     if not isinstance(instrument, Instrument):
         instrument = Instrument(instrument)
 
     # start of IRAF cmb_images.
+
     inputs = file_handler(images)
 
     if len(inputs) == 0:
@@ -613,19 +635,8 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
     # subset names
     subset = []
 
-    method = method.strip().lower()
-    if method not in ['average', 'median']:
-        raise Exception(f'Combine method not recognized: {method}')
-
-    reject = reject.lower().strip()
-    rejectopts = "none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip"
-    if reject not in rejectopts.split('|'):
-        raise Exception(f'Could not recognize reject parameter {reject}')
-
     for image in inputs:
-        # open the image
         hdulist = image_open(image)
-
         if hdulist is None:
             continue
 
@@ -639,11 +650,10 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
 
         if subsets:
             subsetstr = ccdsubset(hdulist, instrument)
-            # As far as I can tell, the subset and extn list is the same.
-            # extn = subsetstr
         else:
             subsetstr = ''
 
+        # add the file to the correct subset list
         if subsetstr not in subset:
             subset.append(subsetstr)
             images.append([image])
@@ -652,7 +662,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
 
         image_close(hdulist)
 
-    # end of cmb_images code.
+    # end of IRAF cmb_images
 
     if len(images) == 0:
         print("No images to combine.")
@@ -679,12 +689,13 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
     else:
         sigroot = None
 
-    # ignore NaN operations
+    # ignore NaN operation warnings
     olderr = np.seterr(invalid='ignore')
 
     # don't overwrite these values for subsequent subsets
     origoffsets = offsets
     origmasktype = masktype
+    origreject = reject
     orignlow = nlow * 1
     orignhigh = nhigh * 1
     orignkeep = nkeep * 1
@@ -695,6 +706,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         # restore these values to the inputs
         offsets = origoffsets
         masktype = origmasktype
+        reject = origreject
         nlow = orignlow * 1
         nhigh = orignhigh * 1
         nkeep = orignkeep * 1
@@ -703,7 +715,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         iimages = images[zz]
 
         # this apparently isn't done in IRAF, but I like separating the two
-        # parts with a '.' if they both exist
+        # parts with a '.' if there is a subset string we're appending
         if len(iset) > 0:
             comb = '.'
         else:
@@ -743,7 +755,6 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             nimages = len(iimages)
 
         # Convert the nkeep parameter if needed.
-        # XXX: do we want to do this here or wait until later?
         if nkeep < 0:
             nkeep = max(0, nimages + nkeep)
 
@@ -752,7 +763,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         # rejected.  The number of low and high pixel rejected, however,
         # are converted to a fraction of the valid pixels.
 
-        # define	REJECT	"|none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip|"
+        # REJECT	"|none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip|"
         if reject == 'pclip':
             if pclip == 0.:
                 estr = "pclip parameter can not be zero when reject=='pclip'"
@@ -793,8 +804,6 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         file_new_copy(output, imin[0], mode='NEW_COPY', overwrite=True,
                       instrument=instrument)
         out.append(image_open(output, mode='update'))
-
-        # start of ic_setout
 
         aligned, offarr = ic_setout(imin, out, nimages, project, offsets)
 
@@ -847,8 +856,6 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         if logfile is not None:
             logfd = open(logfile, 'a')
 
-        # Memi[in], out, Memi[offsets], nimages
-        # icombiner(imin, out, offsets, nimages)
         # this is where the icombiner function starts
 
         # icombiner seems to just be a bunch of memory handling to see if the
@@ -857,7 +864,6 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         # to ic_combiner.
 
         # beginning of ic_scale
-        # call ic_scale (in, out, offsets, scales, zeros, wts, nimages)
 
         # Set the defaults.
         ncombine = np.ones(nimages).astype(int)
@@ -1354,9 +1360,6 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                 minclip = 3
             # number of good points to use
             npts = (~np.isnan(data)).sum(axis=-1)
-            # if nkeep < 0:
-            # minkeep = np.where(npts + nkeep > 0, npts + nkeep, [0])
-            # else:
             minkeep = np.where(npts < nkeep, npts, [nkeep])
 
             finsig = np.zeros_like(np.sum(npts, axis=-1), dtype=float)
@@ -1572,9 +1575,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         elif reject == 'pclip':
             minclip = 3
             npts = (~np.isnan(data)).sum(axis=-1)
-            # if nkeep < 0:
-            # minkeep = np.where(npts + nkeep > 0, npts + nkeep, [0])
-            # else:
+
             minkeep = np.where(npts < nkeep, npts, [nkeep])
 
             # Set sign of pclip parameter
@@ -1725,6 +1726,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             if pm is not None:
                 image_close(pm)
 
+    # return numpy error reporting to its previous state
     np.seterr(invalid=olderr['invalid'])
     return
 
