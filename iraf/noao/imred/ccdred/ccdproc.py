@@ -1,5 +1,5 @@
 from iraf.utils import file_handler
-from iraf import Instrument
+from .combine import Instrument
 # import numpy as np
 # import os
 # import sys
