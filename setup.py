@@ -17,7 +17,8 @@ setup(
     description="Astronomical Image Reduction and Analysis Facility",
     long_description=open("README.rst").read(),
     packages=['iraf'],
-    install_requires=["numpy", "matplotlib", "scipy", "astropy", "h5py"],
+    install_requires=["numpy", "matplotlib", "scipy", "astropy", "h5py",
+                      "pytest"],
     classifiers=[
         "Intended Audience :: Developers",
         "Intended Audience :: Science/Research",

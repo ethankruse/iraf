@@ -6,7 +6,8 @@ from iraf.sys import image_open, image_close
 import re
 
 
-__all__ = ['combine', 'Instrument', 'ccdtypes', 'get_header_value']
+__all__ = ['combine', 'Instrument', 'ccdtypes', 'get_header_value',
+           'Instrument']
 
 
 class Instrument(object):
