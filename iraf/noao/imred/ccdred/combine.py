@@ -1,7 +1,6 @@
 from iraf.utils import file_handler
 import numpy as np
 import os
-import sys
 from iraf.sys import image_open, image_close
 import re
 
@@ -311,14 +310,11 @@ def ic_setout(inputs, output, nimages, project, offsets):
         reloff = True
     # XXX: implement these
     elif offsets.lower() == 'wcs':
-        print('WCS offsets not implemented yet.')
-        sys.exit(1)
+        raise Exception('WCS offsets not implemented yet.')
     elif offsets.lower() == 'grid':
-        print('grid offsets not implemented yet.')
-        sys.exit(1)
+        raise Exception('grid offsets not implemented yet.')
     else:
-        print('Manual file offsets not implemented yet.')
-        sys.exit(1)
+        raise Exception('Manual file offsets not implemented yet.')
 
     aligned = True
 
@@ -343,8 +339,7 @@ def ic_setout(inputs, output, nimages, project, offsets):
     # Update the WCS.
     # XXX: do this
     if project or not aligned or not reloff:
-        print("WCS updates to output files not implemented yet!")
-        sys.exit(1)
+        raise Exception("WCS updates to output files not implemented yet!")
 
     return aligned, offsetsarr
 
@@ -825,8 +820,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             if oouttype in otypes:
                 oouttype = ndtypes[otypes.index(oouttype)]
             else:
-                print(f'Unrecognized outtype: {oouttype}')
-                sys.exit(1)
+                raise Exception(f'Unrecognized outtype: {oouttype}')
         # make sure the output type will work given the input
         oouttype = type_max(intype, oouttype)
 
@@ -1158,8 +1152,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                 logtxt += f'  statsec = {statsec}\n'
 
             if masktype != 'none':
-                print('Mask types not yet supported')
-                sys.exit(1)
+                raise Exception('Mask types not yet supported')
 
             dop = {'ncombine': False, 'exptime': False, 'mode': False,
                    'median': False, 'mean': False, 'mask': False, 'rdn': False,
@@ -1176,8 +1169,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                 if means[ii] != means[0]:
                     dop['mean'] = True
                 if masktype != 'none':
-                    print('Mask types not yet supported')
-                    sys.exit(1)
+                    raise Exception('Mask types not yet supported')
             if reject == 'ccdclip' or reject == 'crreject':
                 if isinstance(rdnoise, str):
                     dop['rdn'] = True
@@ -1264,8 +1256,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                         for istr in strs:
                             ostr += istr
                 if dop['mask']:
-                    print('Mask types not yet supported')
-                    sys.exit(1)
+                    raise Exception('Mask types not yet supported')
                 ostr += '\n'
                 logtxt += ostr
 
@@ -1335,13 +1326,11 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             for ii in np.arange(nimages):
                 data[..., ii] = imin[ii][0].data
         else:
-            print('need to handle offsets in combine')
-            sys.exit(1)
+            raise Exception('need to handle offsets in combine')
 
         # remove the data points with bad mask values (set to nan)
         if masktype != 'none':
-            print('need to implement mask types')
-            sys.exit(1)
+            raise Exception('need to implement mask types')
 
         # Apply threshold if needed
         if dothresh:
@@ -1651,8 +1640,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                     nrem -= len(torem)
 
         if grow > 0.:
-            print('grow needs to be implemented')
-            sys.exit(1)
+            raise Exception('grow needs to be implemented')
             # grow is only 1-D in IRAF. along the first? dimension?
             # badpts = np.isnan(data)
 
@@ -1757,8 +1745,7 @@ def ic_stat(imin, section, offarr, project, nim, masktype,
     # vb = shape (length) of reference image, and dv = 1.
     # call ic_section (section, Memi[va], Memi[vb], Memi[dv], ndim)
     if len(section) > 0:
-        print('statsec: overlap not yet implemented.')
-        sys.exit(1)
+        raise Exception('statsec: overlap not yet implemented.')
 
     oends = ends * 1
     # adjust based on the offsets, but be wary of the bounds
@@ -1773,11 +1760,10 @@ def ic_stat(imin, section, offarr, project, nim, masktype,
     # thresholded pixels are ignored.
 
     if masktype != 'none':
-        print('need to implement bad pixel masks in ic_stat')
         # need to carry in the pixel masks to this function,
         # then check that pixels aren't included in the masks before
         # adding them to the stats
-        sys.exit(1)
+        raise Exception('need to implement bad pixel masks in ic_stat')
 
     # NOTE: this may not work if project is True
     # get the subgrid of points we want
@@ -1795,9 +1781,8 @@ def ic_stat(imin, section, offarr, project, nim, masktype,
         data = data[(data >= lower) & (data <= upper)]
 
     if data.size < 1:
-        # this is going to break for things other than fits
-        print(f'Image section contains no pixels: {imin.filename()}')
-        sys.exit(1)
+        # this is going to break for things other than fits files
+        raise Exception(f'Image section contains no pixels: {imin.filename()}')
 
     mean = data.mean()
     median = np.median(data)
@@ -1884,11 +1869,9 @@ def ic_gscale(param, dic, inp, exptime, values, nimages, instrument, project):
         stype = 'file'
         tmp = np.loadtxt(param[1:])
         if len(tmp.shape) != 1:
-            print(f"Could not understand values in {param[1:]}")
-            sys.exit(1)
+            raise Exception(f"Could not understand values in {param[1:]}")
         if tmp.size < nimages:
-            print(f"Insufficient values in {param[1:]}")
-            sys.exit(1)
+            raise Exception(f"Insufficient values in {param[1:]}")
         if tmp.size > nimages:
             print(f"Warning: Ignoring additional values in {param[1:]}")
         values[:] = tmp[:nimages]
@@ -1909,6 +1892,5 @@ def ic_gscale(param, dic, inp, exptime, values, nimages, instrument, project):
                 tmp = np.where(exptime < 0.001)[0]
                 values[tmp] = 0.001
         else:
-            print(f"Unknown scale, zero, or weight type: {param}")
-            sys.exit(1)
+            raise Exception(f"Unknown scale, zero, or weight type: {param}")
     return stype
