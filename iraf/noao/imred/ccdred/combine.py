@@ -6,7 +6,7 @@ import re
 
 
 __all__ = ['combine', 'Instrument', 'ccdtypes', 'get_header_value',
-           'Instrument']
+           'Instrument', 'ccdsubset']
 
 
 class Instrument(object):
