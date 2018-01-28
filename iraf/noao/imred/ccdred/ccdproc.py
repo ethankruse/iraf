@@ -1,9 +1,10 @@
 from iraf.utils import file_handler
 from .combine import Instrument, ccdtypes, ccdsubset, get_header_value
+from .combine import file_new_copy, type_max
 import numpy as np
-# import os
-# import sys
+import os
 from iraf.sys import image_open, image_close
+import tempfile
 
 __all__ = ['ccdproc']
 
@@ -81,7 +82,54 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
             zero=None, dark=None, flat=None, illum=None, fringe=None,
             minreplace=1., scantype='shortscan', nscan=1, interactive=False,
             function='legendre', order=1, sample='*', naverage=1, niterate=1,
-            low_reject=3., high_reject=3., grow=0., instrument=None):
+            low_reject=3., high_reject=3., grow=0., instrument=None,
+            pixeltype="real real"):
+    """
+
+    Parameters
+    ----------
+    images
+    output
+    ccdtype
+    noproc
+    fixpix
+    overscan
+    trim
+    zerocor
+    darkcor
+    flatcor
+    illumcor
+    fringecor
+    readcor
+    scancor
+    readaxis
+    fixfile
+    biassec
+    trimsec
+    zero
+    dark
+    flat
+    illum
+    fringe
+    minreplace
+    scantype
+    nscan
+    interactive
+    function
+    order
+    sample
+    naverage
+    niterate
+    low_reject
+    high_reject
+    grow
+    instrument
+    pixeltype
+
+    Returns
+    -------
+
+    """
     inputs = file_handler(images)
     # XXX: is output required? What happens if you don't give it one?
     outputs = file_handler(output)
@@ -138,7 +186,50 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
 
     # end of cal_open
 
+    origccdtype = ccdtype
+
     # Process each image.
-    for image in inputs:
+    for imct, image in enumerate(inputs):
         if noproc:
             print(f'{image}:\n')
+
+        imin = image_open(image)
+        if imin is None:
+            continue
+
+        ccdtype = ccdtypes(imin, instrument)
+        if ccdtype != origccdtype:
+            image_close(imin)
+            continue
+
+        # Set output image.
+        if len(outputs) > 0:
+            outtmp = False
+            outim = outputs[imct]
+        else:
+            outtmp = True
+            outims = tempfile.NamedTemporaryFile(delete=False)
+            outims.close()
+            outim = outims.name
+
+        file_new_copy(outim, imin, mode='NEW_COPY', overwrite=True,
+                      instrument=instrument)
+
+        if pixeltype is not None and len(pixeltype) > 0:
+            otyp = pixeltype.split()[0]
+
+            otypes = "short|ushort|integer|long|real|double".split('|')
+            ndtypes = [np.short, np.ushort, np.int_, np.int_,
+                       np.single, np.double]
+            if otyp in otypes:
+                outtype = ndtypes[otypes.index(otyp)]
+            else:
+                raise Exception(f'Unrecognized pixeltype: {otyp}')
+            # make sure the output type will work given the input
+            outtype = type_max(imin[0].data.dtype, outtype)
+        else:
+            outtype = imin[0].data.dtype
+
+        image_close(imin)
+        if outtmp:
+            os.remove(outim)
