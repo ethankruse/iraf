@@ -40,7 +40,7 @@ def file_handler(filelist):
     # XXX: this does not allow for image subsections,
     #  e.g. imagename[x1:x2,y1:y2]
     # How should that be handled?
-    
+
     if filelist is None:
         return []
     # make the input string a list
