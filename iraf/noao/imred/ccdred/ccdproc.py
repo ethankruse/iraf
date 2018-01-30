@@ -1,12 +1,13 @@
 from iraf.utils import file_handler
 from .combine import Instrument, ccdtypes, ccdsubset, get_header_value
-from .combine import file_new_copy, type_max
+from .combine import file_new_copy, type_max, set_header_value
 import numpy as np
 import os
 from iraf.sys import image_open, image_close
 import tempfile
+import datetime
 
-__all__ = ['ccdproc']
+__all__ = ['ccdproc', 'ccd_section']
 
 
 class CCD(object):
@@ -24,10 +25,10 @@ class CCD(object):
     """
     def __init__(self):
         # CCD data coordinates
-        self.c1 = 0  # CCD starting column
-        self.c2 = 0  # CCD starting column
-        self.l1 = 0  # CCD starting line
-        self.l2 = 0  # CCD ending line
+        self.ccdc1 = 0  # CCD starting column
+        self.ccdc2 = 0  # CCD starting column
+        self.ccdl1 = 0  # CCD starting line
+        self.ccdl2 = 0  # CCD ending line
 
         # Input data
         self.inim = None  # Input image pointer
@@ -109,7 +110,7 @@ class CCD(object):
         self.illumscale = 0  # Illumination scale factor
         self.minreplace = 0  # Minimum replacement value
         self.mean = 0  # Mean of output image
-        self.cor = 0  # Overall correction flag
+        self.cor = False  # Overall correction flag
         # Individual correction flags
         self.cors = {'fixpix': False, 'trim': False, 'overscan': False,
                      'zerocor': False, 'darkcor': False, 'flatcor': False,
@@ -183,6 +184,85 @@ def cal_list(list1, listtype, instrument, calimages, nscans, caltypes, subsets,
         image_close(image)
 
 
+def ccd_section(section):
+    """
+    CCD_SECTION -- Parse a 2D image section into its elements.
+    1. The default values must be set by the caller.
+    2. A null image section is OK.
+    3. The first nonwhitespace character must be '['.
+    4. The last interpreted character must be ']'.
+
+    If they are not explicitly given, default values for the first index are 0,
+    and default step size is 1. However, None is returned for the last index
+    and must be filled in by the caller.
+
+    E.g. [:, 1:20] will return (0, None, 1, 1, 20, 1)
+
+    HOWEVER if nothing is given (input is either None or empty string) then
+    the first index will also be None.
+
+    E.g. '  ' will return (None, None, 1, None, None, 1)
+
+    Parameters
+    ----------
+    section
+
+    Returns
+    -------
+    Tuple of 6 parameters: first dimension start, stop, step and second
+    dimension start, stop, step
+
+    """
+    if section is None:
+        return None, None, 1, None, None, 1
+
+    section = section.strip()
+    if len(section) == 0:
+        return None, None, 1, None, None, 1
+
+    # XXX: need to check this function against the IRAF version and see how
+    # compatible they are
+
+    if section[0] != '[' and section[-1] != ']':
+        raise Exception(f"Error in 2D image section specification {section}")
+    # remove the brackets
+    osection = section
+    section = section[1:-1]
+    dims = section.split(',')
+    if len(dims) != 2:
+        raise Exception(f"Error in 2D image section specification {osection}")
+    ret = []
+    for dim in dims:
+        dim = dim.strip()
+        split = dim.split(':')
+        if len(split) == 1:
+            start = 0
+            end = None
+            step = 1
+        elif len(split) == 2 or len(split) == 3:
+            step = 1
+            try:
+                start = int(split[0])
+            except ValueError:
+                start = 0
+            try:
+                end = int(split[1])
+            except ValueError:
+                end = None
+            if len(split) == 3:
+                try:
+                    step = int(split[2])
+                except ValueError:
+                    step = 1
+        else:
+            raise Exception(
+                f"Error in 2D image section specification {osection}")
+        ret.append(start)
+        ret.append(end)
+        ret.append(step)
+    return ret
+
+
 def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
             overscan=True, trim=True, zerocor=True, darkcor=True, flatcor=True,
             illumcor=False, fringecor=False, readcor=False, scancor=False,
@@ -191,7 +271,7 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
             minreplace=1., scantype='shortscan', nscan=1, interactive=False,
             function='legendre', order=1, sample='*', naverage=1, niterate=1,
             low_reject=3., high_reject=3., grow=0., instrument=None,
-            pixeltype="real"):
+            pixeltype="real", logfile=None, verbose=False):
     """
 
     Parameters
@@ -233,6 +313,8 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
     grow
     instrument
     pixeltype
+    logfile
+    verbose
 
     pixeltype is supposed to be a string of 2 words:
     Output and calculation pixel datatypes, e.g. 'real real'. But for ccdproc
@@ -300,6 +382,11 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
     # end of cal_open
 
     origccdtype = ccdtype
+
+    # Open the log file.
+    logfd = None
+    if logfile is not None:
+        logfd = open(logfile, 'a')
 
     # Process each image.
     for imct, image in enumerate(inputs):
@@ -369,20 +456,168 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
         # in python
         nc = ccd.inim[0].data.shape[-1]
         nl = ccd.inim[0].data.shape[-2]
-        # The default data section is the entire image.
-        c1 = 0
-        c2 = nc-1
-        l1 = 0
-        l2 = nl-1
-        cs = 1
-        ls = 1
 
+        # The default data section is the entire image.
         datasec = get_header_value(ccd.inim, instrument, 'datasec')
+        c1, c2, cs, l1, l2, ls = ccd_section(datasec)
+        # XXX: should these be nc or nc - 1. also check upper bounds on
+        # exception below
+        if c1 is None:
+            c1 = 0
+        if c2 is None:
+            c2 = nc
+        if l1 is None:
+            l1 = 0
+        if l2 is None:
+            l2 = nl
+        if c1 < 0 or c2 > nc or cs != 1 or l1 < 0 or l2 > nl or ls != 1:
+            raise Exception(f"Error in datasec parameter: {datasec}")
+
+        ccd.inc1 = c1
+        ccd.inc2 = c2
+        ccd.inl1 = l1
+        ccd.inl2 = l2
+
+        # The default trim section is the data section.
+        # Defer limit checking until actually used.
+        ts = trimsec
+        if trimsec == 'image':
+            ts = get_header_value(ccd.inim, instrument, 'trimsec')
+        c1, c2, cs, l1, l2, ls = ccd_section(ts)
+        if c1 is None:
+            c1 = ccd.inc1
+        if c2 is None:
+            c2 = ccd.inc2
+        if l1 is None:
+            l1 = ccd.inl1
+        if l2 is None:
+            l2 = ccd.inl2
+        if cs != 1 or ls != 1:
+            raise Exception(f"Error in trimsec parameter: {ts}")
+
+        ccd.trimc1 = c1
+        ccd.trimc2 = c2
+        ccd.triml1 = l1
+        ccd.triml2 = l2
+
+        # The default bias section is the whole image.
+        bs = biassec
+        if biassec == 'image':
+            bs = get_header_value(ccd.inim, instrument, 'biassec')
+        c1, c2, cs, l1, l2, ls = ccd_section(bs)
+        # XXX: should these be nc or nc - 1.
+        if c1 is None:
+            c1 = 0
+        if c2 is None:
+            c2 = nc
+        if l1 is None:
+            l1 = 0
+        if l2 is None:
+            l2 = nl
+        if cs != 1 or ls != 1:
+            raise Exception(f"Error in biassec parameter: {bs}")
+
+        ccd.biasc1 = c1
+        ccd.biasc2 = c2
+        ccd.biasl1 = l1
+        ccd.biasl2 = l2
+
+        # The default ccd section is the size of the data section.
+        ccs = get_header_value(ccd.inim, instrument, 'ccdsec')
+        c1, c2, cs, l1, l2, ls = ccd_section(ccs)
+        if c1 is None:
+            c1 = 0
+        # XXX: check this size
+        if c2 is None:
+            c2 = ccd.inc2 - ccd.inc1 + 1
+        if l1 is None:
+            l1 = 0
+        if l2 is None:
+            l2 = ccd.inl2 - ccd.inl1 + 1
+        if cs != 1 or ls != 1:
+            raise Exception(f"Error in ccdsec parameter: {ccs}")
+
+        ccd.ccdc1 = c1
+        ccd.ccdc2 = c2
+        ccd.ccdl1 = l1
+        ccd.ccdl2 = l2
+
+        if (ccd.inc2 - ccd.inc1 != ccd.ccdc2 - ccd.ccdc1 or
+                ccd.inl2 - ccd.inl1 != ccd.ccdl2 - ccd.ccdl1):
+            raise Exception("Size of DATASEC and CCDSEC do not agree")
+
+        # The default output data section is the input data section.
+        ccd.outc1 = ccd.inc1
+        ccd.outc2 = ccd.inc2
+        ccd.outl1 = ccd.inl1
+        ccd.outl2 = ccd.inl2
+
+        # Set the physical WCS to be CCD coordinates.
+        # XXX: need to implement a bunch of WCS stuff here.
 
         # end set_sections
+
+        # begin set_trim
+        # XXX: ccdflag (IN_IM(ccd), "trim")
+        if trim and False:
+            # Check trim section.
+            # XXX: check these upper limits
+            if (ccd.trimc1 < 0 or ccd.trimc2 > nc or ccd.triml1 < 0 or
+                    ccd.triml2 > nl):
+                estr = f"Error in trim section: image={ccd.inim.filename()}" \
+                        f"[{nc},{nl}], trimsec=[{ccd.trimc1}:{ccd.trimc2}," \
+                        f"{ccd.triml1}:{ccd.triml2}]"
+                raise Exception(estr)
+            # If no processing is desired print trim section and return.
+            if noproc:
+                ostr = f"  [TO BE DONE] Trim section is [{ccd.trimc1}:" \
+                       f"{ccd.trimc2},{ccd.triml1}:{ccd.triml2}]."
+                print(ostr)
+            else:
+                xt1 = max(0, ccd.trimc1 - ccd.inc1)
+                xt2 = min(0, ccd.trimc2 - ccd.inc2)
+                yt1 = max(0, ccd.triml1 - ccd.inl1)
+                yt2 = min(0, ccd.triml2 - ccd.inl2)
+
+                ccd.ccdc1 += xt1
+                ccd.ccdc2 += xt2
+                ccd.ccdl1 += yt1
+                ccd.ccdl2 += yt2
+
+                ccd.inc1 += xt1
+                ccd.inc2 += xt2
+                ccd.inl1 += yt1
+                ccd.inl2 += yt2
+
+                ccd.outc1 = ccd.inc1 - ccd.trimc1 + 1
+                ccd.outc2 = ccd.inc2 - ccd.trimc1 + 1
+                ccd.outl1 = ccd.inl1 - ccd.triml1 + 1
+                ccd.outl2 = ccd.inl2 - ccd.triml1 + 1
+
+                ccd.cors['trim'] = True
+                ccd.cor = True
+
+                ostr = f"Trim data section is [{ccd.trimc1:d}:{ccd.trimc2:d}," \
+                       f"{ccd.triml1:d}:{ccd.triml2:d}]"
+
+                now = datetime.datetime.now()
+                now = now.strftime('%Y-%m-%d %H:%M:%S')
+
+                ostr = f'{now} {ostr}'
+                logstr = f'{ccd.inim.filename()}: {ostr}\n'
+                if verbose:
+                    print(logstr)
+                if logfd is not None:
+                    logfd.write(logstr)
+                # XXX: this can't be what is actually put in the header right?
+                set_header_value(ccd.inim, instrument, 'trim', logstr)
+
+        # end set_trim
 
         image_close(imin)
         image_close(out)
         if outtmp:
             # XXX: will eventually need to copy to input parameters
             os.remove(outim)
+    if logfd is not None:
+        logfd.close()
