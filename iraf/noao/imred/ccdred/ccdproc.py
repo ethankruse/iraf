@@ -99,7 +99,7 @@ class CCD(object):
         self.biasc2 = 0
         self.biasl1 = 0
         self.biasl2 = 0
-
+        # XXX: change this to 'line' or 'column' I think
         self.readaxis = 1  # Read out axis (1=cols, 2=lines)
         self.calctype = np.double  # Calculation data type
         self.overscantype = 0  # Overscan type
@@ -263,14 +263,44 @@ def ccd_section(section):
     return ret
 
 
+def logstring(instring, inim, verbose, logfd):
+    """
+    Meant to be the same as calling timelog() then ccdlog() in ccdproc.
+    These prepend the time and image name to the input string
+
+    Parameters
+    ----------
+    instring
+    inim
+    verbose
+    logfd
+
+    Returns
+    -------
+
+    """
+    # the timelog() part
+    now = datetime.datetime.now()
+    now = now.strftime('%Y-%m-%d %H:%M:%S')
+    ostr = f'{now} {instring}'
+
+    # the ccdlog() part
+    ostr = f'{inim.filename()}: {ostr}'
+    if verbose:
+        print(ostr)
+    if logfd is not None:
+        logfd.write(ostr + '\n')
+    return ostr
+
+
 def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
             overscan=True, trim=True, zerocor=True, darkcor=True, flatcor=True,
             illumcor=False, fringecor=False, readcor=False, scancor=False,
             readaxis='line', fixfile=None, biassec=None, trimsec=None,
             zero=None, dark=None, flat=None, illum=None, fringe=None,
             minreplace=1., scantype='shortscan', nscan=1, interactive=False,
-            function='legendre', order=1, sample='*', naverage=1, niterate=1,
-            low_reject=3., high_reject=3., grow=0., instrument=None,
+            overscan_function='legendre', order=1, sample='*', naverage=1,
+            niterate=1, low_reject=3., high_reject=3., grow=0., instrument=None,
             pixeltype="real", logfile=None, verbose=False):
     """
 
@@ -303,7 +333,7 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
     scantype
     nscan
     interactive
-    function
+    overscan_function
     order
     sample
     naverage
@@ -559,6 +589,8 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
 
         # begin set_trim
         # XXX: ccdflag (IN_IM(ccd), "trim")
+        # also, this all just deals with the ccd object, could pull this out
+        # into its own function.
         if trim and False:
             # Check trim section.
             # XXX: check these upper limits
@@ -600,19 +632,96 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
                 ostr = f"Trim data section is [{ccd.trimc1:d}:{ccd.trimc2:d}," \
                        f"{ccd.triml1:d}:{ccd.triml2:d}]"
 
-                now = datetime.datetime.now()
-                now = now.strftime('%Y-%m-%d %H:%M:%S')
-
-                ostr = f'{now} {ostr}'
-                logstr = f'{ccd.inim.filename()}: {ostr}\n'
-                if verbose:
-                    print(logstr)
-                if logfd is not None:
-                    logfd.write(logstr)
+                logstr = logstring(ostr, ccd.inim, verbose, logfd)
                 # XXX: this can't be what is actually put in the header right?
-                set_header_value(ccd.inim, instrument, 'trim', logstr)
+                set_header_value(ccd.outim, instrument, 'trim', logstr)
 
         # end set_trim
+
+        # begin set_fixpix
+        # XXX: ccdflag (IN_IM(ccd), "fixpix")
+        if fixpix and False:
+            # Get the bad pixel file.  If the name is "image" then get the file
+            # name from the image header or symbol table.
+            fx = fixfile
+            if fixfile == 'image':
+                fx = get_header_value(ccd.inim, instrument, 'fixfile')
+
+            # If no processing is desired print message and return.
+            if noproc:
+                print(f"  [TO BE DONE] Bad pixel file is {fx}")
+            else:
+                # Map the bad pixel image and return on an error.
+                # XXX: this function does some complicated stuff. need to work
+                # it all out
+                # im = xt_pmmap (Memc[image], IN_IM(ccd), Memc[image], SZ_FNAME)
+                bpm = image_open(fx)
+
+                ccd.maskim = bpm
+                # XXX: not entirely sure what imstati (im, IM_PMDES) is doing
+                ccd.maskpm = bpm
+                # XXX: need to interpret xt_fpinit (MASK_PM(ccd), 2, 3)
+                ccd.maskfp = None
+
+                ccd.cor = True
+                ccd.cors['fixpix'] = True
+
+                # Log the operation.
+                ostr = f"Bad pixel file is {fx}"
+                logstr = logstring(ostr, ccd.inim, verbose, logfd)
+                # XXX: this can't be what is actually put in the header right?
+                set_header_value(ccd.outim, instrument, 'fixpix', logstr)
+
+        # end set_fixpix
+
+        # begin set_overscan
+        # XXX: ccdflag (IN_IM(ccd), "overscan"))
+        if overscan and False:
+            # Check bias section.
+            # XXX: check both of these limits
+            if (ccd.biasc1 < 0 or ccd.biasc2 > nc or ccd.biasl1 < 0 or
+                    ccd.biasl2 > nl):
+                estr = f"Error in bias section: image={ccd.inim.filename()}" \
+                       f"[{nc},{nl}], biassec=[{ccd.biasc1}:{ccd.biasc2}," \
+                       f"{ccd.biasl1}:{ccd.biasl2}]"
+                raise Exception(estr)
+            if (ccd.biasc1 == 0 and ccd.biasc2 == nc and ccd.biasl1 == 0 and
+                    ccd.biasl2 == nl):
+                estr = "Bias section not specified or given as full image"
+                raise Exception(estr)
+            # If no processing is desired then print overscan strip and return.
+            if noproc:
+                ostr = f"  [TO BE DONE] Overscan section is [{ccd.biasc1}:" \
+                       f"{ccd.biasc2},{ccd.biasl1}:{ccd.biasl2}]."
+                print(ostr)
+            else:
+                ostypes = ["mean", "median", "minmax", "chebyshev",
+                           "legendre", "spline3", "spline1"]
+                overscan_function = overscan_function.strip().lower()
+                if overscan_function not in ostypes:
+                    raise Exception(f'Could not recognize overscan function '
+                                    f'{overscan_function}')
+                # Determine the overscan section parameters. The readout axis
+                # determines the type of overscan.  The step sizes are ignored.
+                # The limits in the long dimension are replaced by the trim
+                # limits.
+                if overscan_function in ['mean', 'median', 'minmax']:
+                    oscan = None
+                    # XXX: make sure it's not column
+                    if ccd.readaxis == 'line':
+                        estr = "Overscan function type not allowed with" \
+                               " readaxis of line"
+                        raise Exception(estr)
+                else:
+                    # XXX: make sure it's not line
+                    if ccd.readaxis == 'column':
+                        first = ccd.biasc1
+                        last = ccd.biasc2
+                        navg = last - first + 1
+                        npts = nl
+                    else:
+                        pass
+        # end set_overscan
 
         image_close(imin)
         image_close(out)

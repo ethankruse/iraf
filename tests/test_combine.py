@@ -20,7 +20,7 @@ defaultargs = {'plfile': None, 'sigmafile': None, 'ccdtype': None,
 # left to test: project, offsets,
 # masktype, maskvalue, scale, zero, weight, statsec,
 # sigscale, grow, logfile, verbose
-
+# also test 3D or more dimensions? 1D?
 
 def simple_inputs(nimg, nx, ny, basedir):
     inputs = []
