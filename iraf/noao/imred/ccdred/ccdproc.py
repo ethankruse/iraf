@@ -706,7 +706,7 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
                 # The limits in the long dimension are replaced by the trim
                 # limits.
                 if overscan_function in ['mean', 'median', 'minmax']:
-                    oscan = None
+                    fitoscan = None
                     # XXX: make sure it's not column
                     if ccd.readaxis == 'line':
                         estr = "Overscan function type not allowed with" \
@@ -717,11 +717,86 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
                     if ccd.readaxis == 'column':
                         first = ccd.biasc1
                         last = ccd.biasc2
-                        navg = last - first + 1
-                        npts = nl
+                        # XXX: need to check everything about this, but
+                        # it's supposed to be the mean in every line between
+                        # c1 and c2
+                        amean = ccd.inim[0].data[:, first:last].mean(axis=0)
+                        # Trim the overscan vector and set the pixel coordinate.
+                        # need to make sure this indexing is right
+                        trimoscan = amean[ccd.inl1:ccd.inl2 + 1]
                     else:
-                        pass
+                        first = ccd.biasl1
+                        last = ccd.biasl2
+                        # XXX: need to check everything about this, but
+                        # it's supposed to be the mean in every column between
+                        # l1 and l2
+                        amean = ccd.inim[0].data[first:last, :].mean(axis=1)
+                        # Trim the overscan vector and set the pixel coordinate.
+                        # need to make sure this indexing is right
+                        trimoscan = amean[ccd.inc1:ccd.inc2+1]
+                    # XXX: fit_overscan() goes here. needs to be implemented
+                    fitoscan = trimoscan * 1
+                # Set the CCD structure overscan parameters.
+                ccd.cors['overscan'] = False
+                ccd.cor = True
+                ccd.overscantype = overscan_function
+                ccd.overscanvec = fitoscan
+
+                # Log the operation.
+                if overscan_function in ['mean', 'median', 'minmax']:
+                    ostr = f"Overscan section is [{ccd.biasc1}:{ccd.biasc2}," \
+                           f"{ccd.biasl1}:{ccd.biasl2}] with " \
+                           f"function={overscan_function}"
+                else:
+                    ostr = f"Overscan section is [{ccd.biasc1}:{ccd.biasc2}," \
+                           f"{ccd.biasl1}:{ccd.biasl2}] with " \
+                           f"mean={fitoscan.mean():g}"
+                logstr = logstring(ostr, ccd.inim, verbose, logfd)
+                # XXX: this can't be what is actually put in the header right?
+                set_header_value(ccd.outim, instrument, 'overscan', logstr)
+
         # end set_overscan
+
+        # "object|zero|dark|flat|illum|fringe|other|comp"
+        # Set processing parameters for the standard CCD image types.
+        if ccdtype not in ['zero']:
+            # begin set_zero
+            # XXX: ccdflag (IN_IM(ccd), "zerocor"))
+            if zerocor and False:
+                # Get the zero level correction image.
+                pass
+            # end set_zero
+            pass
+
+        if ccdtype not in ['zero', 'dark']:
+            # begin set_dark
+
+            # end set_dark
+            pass
+
+        if ccdtype == 'flat':
+            ccd.cors['findmean'] = True
+            ccd.cors['minrep'] = True
+
+        if ccdtype not in ['zero', 'dark', 'flat']:
+            # begin set_flat
+
+            # end set_flat
+            pass
+
+        if ccdtype not in ['zero', 'dark', 'flat', 'illum']:
+            # begin set_illum
+
+            # end set_illum
+
+            # begin set_fringe
+
+            # end set_fringe
+
+            pass
+
+        if ccdtype not in ['zero', 'dark', 'flat', 'illum', 'object', 'comp']:
+            ccd.cors['findmean'] = True
 
         image_close(imin)
         image_close(out)
