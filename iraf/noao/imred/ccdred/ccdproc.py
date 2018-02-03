@@ -184,6 +184,74 @@ def cal_list(list1, listtype, instrument, calimages, nscans, caltypes, subsets,
         image_close(image)
 
 
+def cal_scan(image, nscan, scancor):
+    # CAL_SCAN -- Generate name for scan corrected calibration image.
+    if not scancor or nscan == 1:
+        return image
+    root, ext = os.path.splitext(image)
+    if not np.isfinite(nscan):
+        return f"{root}.1d{ext}"
+    else:
+        return f"{root}.{nscan:d}{ext}"
+
+
+def cal_image(hdulist, instrument, ccdtype, nscan, calibs, scancor):
+    calimages, nscans, caltypes, subsets = calibs
+
+    useind = None
+    if ccdtype in ['zero', 'dark', 'flat', 'illum', 'fringe']:
+        ct = 0
+        for ii, iimage in enumerate(calimages):
+            if caltypes[ii] != ccdtype:
+                continue
+            if ccdtype in ['flat', 'illum', 'fringe']:
+                usub = ccdsubset(hdulist, instrument)
+                if subsets[ii] != usub:
+                    continue
+            ct += 1
+            if ct == 1:
+                useind = ii
+            else:
+                if nscans[ii] == nscans[useind]:
+                    estr = f"Warning: Extra calibration image " \
+                           f"{calimages[ii]} ignored"
+                    print(estr)
+                    # Reset the image type to eliminate further warnings.
+                    caltypes[ii] = 'unknown'
+                elif nscans[useind] != nscan and (nscans[ii] == nscan or
+                                                  nscans[ii] == 1):
+                    useind = ii
+
+    # If no calibration image is found then it is an error.
+    if useind is None:
+        if ccdtype == 'zero':
+            estr = "No zero level calibration image found"
+        elif ccdtype == 'dark':
+            estr = "No dark count calibration image found"
+        elif ccdtype == 'flat':
+            estr = "No flat field calibration image of subset %s found"
+        elif ccdtype in ['flat', 'illum', 'fringe']:
+            usub = ccdsubset(hdulist, instrument)
+            estr = f"No {ccdtype} calibration image of subset {usub} found"
+        else:
+            estr = f"Unrecognized ccdtype: {ccdtype}"
+        raise Exception(estr)
+
+    useim = calimages[useind]
+    if nscan != nscans[useind]:
+        if nscan != 1 and nscans[useind] == 1:
+            useim = cal_scan(useim, nscan, scancor)
+        else:
+            estr = f"Cannot find or create calibration with nscan of {nscan}"
+            raise Exception(estr)
+
+    # Check that the input image is not the same as the calibration image.
+    if os.path.samefile(useim, hdulist.filename()):
+        estr = f"Calibration image {useim} is the same as the input image"
+        raise Exception(estr)
+    return useim
+
+
 def ccd_section(section):
     """
     CCD_SECTION -- Parse a 2D image section into its elements.
@@ -408,6 +476,8 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
                  caltypes, subsets, scantype, nscan, scancor)
     cal_list(inputs, 'unknown', instrument, calimages, nscans,
              caltypes, subsets, scantype, nscan, scancor)
+
+    calibs = (calimages, nscans, caltypes, subsets)
 
     # end of cal_open
 
@@ -737,7 +807,9 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
                     # XXX: fit_overscan() goes here. needs to be implemented
                     fitoscan = trimoscan * 1
                 # Set the CCD structure overscan parameters.
-                ccd.cors['overscan'] = False
+                # XXX: bitwise 1. see ccdred.h
+                # define	O	001B
+                ccd.cors['overscan'] = 1
                 ccd.cor = True
                 ccd.overscantype = overscan_function
                 ccd.overscanvec = fitoscan
@@ -764,9 +836,26 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
             # XXX: ccdflag (IN_IM(ccd), "zerocor"))
             if zerocor and False:
                 # Get the zero level correction image.
-                pass
+                if scancor:
+                    znscan = ccdnscan(ccd.inim, instrument, ccdtype, scantype,
+                                      nscan, scancor)
+                else:
+                    znscan = 1
+
+                cal = cal_image(ccd.inim, instrument, 'zero', nscan, calibs,
+                            scancor)
+                # If no processing is desired print zero correction image
+                #  and return.
+                if noproc:
+                    ot = "  [TO BE DONE] Zero level correction image is {cal}."
+                    print(ot)
+                else:
+                    # Map the image and return on an error.
+                    # Process the zero image if necessary.
+                    # If nscan > 1 then the zero may not yet exist so create it
+                    # from the unscanned zero.
+                    pass
             # end set_zero
-            pass
 
         if ccdtype not in ['zero', 'dark']:
             # begin set_dark
