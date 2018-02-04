@@ -281,6 +281,8 @@ def ccd_section(section):
     dimension start, stop, step
 
     """
+    # XXX: allow for default values so you don't have to do silly checking
+    # every time
     if section is None:
         return None, None, 1, None, None, 1
 
@@ -512,6 +514,9 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
             outims.close()
             outim = outims.name
 
+        # XXX: if noproc = True, IRAF still creates & overwrites an output file?
+        # Then deletes it at the end? Is this true? Should I make the temp file
+        # if noproc somehow?
         file_new_copy(outim, imin, mode='NEW_COPY', overwrite=True,
                       instrument=instrument)
         out = image_open(outim, mode='update')
@@ -843,7 +848,7 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
                     znscan = 1
 
                 cal = cal_image(ccd.inim, instrument, 'zero', nscan, calibs,
-                            scancor)
+                                scancor)
                 # If no processing is desired print zero correction image
                 #  and return.
                 if noproc:
@@ -854,14 +859,179 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
                     # Process the zero image if necessary.
                     # If nscan > 1 then the zero may not yet exist so create it
                     # from the unscanned zero.
-                    pass
+                    # XXX: this bit is more complicated. can call ccdproc
+                    # recursively to create this image.
+                    zeroim = image_open(cal)
+
+                    # Set the processing parameters in the CCD structure.
+                    znc = zeroim[0].data.shape[-1]
+                    znl = zeroim[0].data.shape[-2]
+
+                    zdatasec = get_header_value(zeroim, instrument, 'datasec')
+                    zc1, zc2, zcs, zl1, zl2, zls = ccd_section(zdatasec)
+                    # XXX: should these be nc or nc - 1. also check
+                    # upper bounds on errors below
+                    if zc1 is None:
+                        zc1 = 0
+                    if zc2 is None:
+                        zc2 = znc
+                    if zl1 is None:
+                        zl1 = 0
+                    if zl2 is None:
+                        zl2 = znl
+
+                    if (zc1 < 0 or zc2 > znc or zcs != 1 or zl1 < 0 or
+                            zl2 > znl or zls != 1):
+                        estr = f"Data section error: image={cal}[{znc},{znl}]" \
+                               f", datasec=[{zc1}:{zc2},{zl1}:{zl2}]"
+                        raise Exception(estr)
+
+                    datac1 = zc1
+                    datal1 = zl1
+
+                    zcsec = get_header_value(zeroim, instrument, 'ccdsec')
+                    # XXX: these keep the values from above if None?
+                    zc1, zc2, zcs, zl1, zl2, zls = ccd_section(zcsec)
+
+                    if znc == 1:
+                        zc1 = ccd.ccdc1
+                        zc2 = ccd.ccdc2
+                    if znl == 1:
+                        zl1 = ccd.ccdl1
+                        zl2 = ccd.ccdl2
+                    ccdc1 = zc1
+                    ccdl1 = zl1
+
+                    if (zc1 > ccd.ccdc1 or zc2 < ccd.ccdc2 or
+                            zl1 > ccd.ccdl1 or zl2 < ccd.ccdl2):
+                        estr = f'CCD section error: input=[{ccd.ccdc1}:' \
+                               f'{ccd.ccdc2},{ccd.ccdl1}:{ccd.ccdl2}], ' \
+                               f'{cal}=[{zc1}:{zc2},{zl1}:{zl2}]'
+                        raise Exception(estr)
+
+                    ccd.zeroim = zeroim
+                    ccd.zeroc1 = ccd.ccdc1 - ccdc1 + datac1
+                    ccd.zeroc2 = ccd.ccdc2 - ccdc1 + datac1
+                    ccd.zerol1 = ccd.ccdl1 - ccdl1 + datal1
+                    ccd.zerol2 = ccd.ccdl2 - ccdl1 + datal1
+
+                    # XXX: define	Z	002B	# zero level
+                    ccd.cors['zerocor'] = 2
+                    ccd.cor = True
+
+                    # Log the operation.
+                    ostr = f"Zero level correction image is {cal}"
+                    logstr = logstring(ostr, ccd.inim, verbose, logfd)
+                    # XXX: can't be what is actually put in the header right?
+                    set_header_value(ccd.outim, instrument, 'zerocor', logstr)
+
             # end set_zero
 
         if ccdtype not in ['zero', 'dark']:
             # begin set_dark
+            # XXX: ccdflag (IN_IM(ccd), "darkcor"))
+            if darkcor and False:
+                # Get the dark count correction image name.
+                if scancor:
+                    znscan = ccdnscan(ccd.inim, instrument, ccdtype, scantype,
+                                      nscan, scancor)
+                else:
+                    znscan = 1
+
+                cal = cal_image(ccd.inim, instrument, 'dark', nscan, calibs,
+                                scancor)
+
+                # If no processing is desired print dark count image and return.
+                if noproc:
+                    ot = f"  [TO BE DONE] Dark count correction image is {cal}."
+                    print(ot)
+                else:
+                    # Map the image and return on an error.
+                    # Process the dark count image if necessary.
+                    # If nscan > 1 then the dark may not yet exist so create it
+                    # from the unscanned dark.
+
+                    # XXX: this bit is more complicated. can call ccdproc
+                    # recursively to create this image.
+                    darkim = image_open(cal)
+
+                    # Set the processing parameters in the CCD structure.
+                    dnc = darkim[0].data.shape[-1]
+                    dnl = darkim[0].data.shape[-2]
+
+                    ddatasec = get_header_value(darkim, instrument, 'datasec')
+                    dc1, dc2, dcs, dl1, dl2, dls = ccd_section(ddatasec)
+
+                    # XXX: should these be nc or nc - 1. also check
+                    # upper bounds on errors below
+                    if dc1 is None:
+                        dc1 = 0
+                    if dc2 is None:
+                        dc2 = dnc
+                    if dl1 is None:
+                        dl1 = 0
+                    if dl2 is None:
+                        dl2 = dnl
+
+                    if (dc1 < 0 or dc2 > dnc or dcs != 1 or dl1 < 0 or
+                            dl2 > dnl or dls != 1):
+                        estr = f"Data section error: image={cal}[{dnc},{dnl}]" \
+                               f", datasec=[{dc1}:{dc2},{dl1}:{dl2}]"
+                        raise Exception(estr)
+
+                    datac1 = dc1
+                    datal1 = dl1
+
+                    dcsec = get_header_value(darkim, instrument, 'ccdsec')
+                    # XXX: these keep the values from above if None?
+                    dc1, dc2, dcs, dl1, dl2, dls = ccd_section(dcsec)
+
+                    if dnc == 1:
+                        dc1 = ccd.ccdc1
+                        dc2 = ccd.ccdc2
+                    if dnl == 1:
+                        dl1 = ccd.ccdl1
+                        dl2 = ccd.ccdl2
+                    ccdc1 = dc1
+                    ccdl1 = dl1
+
+                    if (dc1 > ccd.ccdc1 or dc2 < ccd.ccdc2 or
+                            dl1 > ccd.ccdl1 or dl2 < ccd.ccdl2):
+                        estr = f'CCD section error: input=[{ccd.ccdc1}:' \
+                               f'{ccd.ccdc2},{ccd.ccdl1}:{ccd.ccdl2}], ' \
+                               f'{cal}=[{dc1}:{dc2},{dl1}:{dl2}]'
+                        raise Exception(estr)
+
+                    ccd.darkim = darkim
+                    ccd.darkc1 = ccd.ccdc1 - ccdc1 + datac1
+                    ccd.darkc2 = ccd.ccdc2 - ccdc1 + datac1
+                    ccd.darkl1 = ccd.ccdl1 - ccdl1 + datal1
+                    ccd.darkl2 = ccd.ccdl2 - ccdl1 + datal1
+
+                    # Get the dark count integration times.
+                    # Return an error if not found.
+                    dt1 = get_header_value(ccd.inim, instrument, 'darktime')
+                    if dt1 is None:
+                        dt1 = get_header_value(ccd.inim, instrument, 'exptime')
+                    dt2 = get_header_value(darkim, instrument, 'darktime')
+                    if dt2 is None:
+                        dt2 = get_header_value(darkim, instrument, 'exptime')
+                    if dt2 is None or dt2 <= 0.:
+                        raise Exception(f"Dark time is zero for {cal}")
+
+                    ccd.darkscale = dt1 / dt2
+                    # XXX: define	D	004B	# dark count
+                    ccd.cors['darkcor'] = 4
+                    ccd.cor = True
+
+                    # Log the operation.
+                    ostr = f"Dark count correction image is {cal} with " \
+                           f"scale={ccd.darkscale:g}"
+                    logstr = logstring(ostr, ccd.inim, verbose, logfd)
+                    # XXX: can't be what is actually put in the header right?
+                    set_header_value(ccd.outim, instrument, 'darkcor', logstr)
 
             # end set_dark
-            pass
 
         if ccdtype == 'flat':
             ccd.cors['findmean'] = True
@@ -869,28 +1039,320 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
 
         if ccdtype not in ['zero', 'dark', 'flat']:
             # begin set_flat
+            # XXX: ccdflag (IN_IM(ccd), "flatcor"))
+            if flatcor and False:
+                # Get the flat field correction image name.
+                if scancor:
+                    znscan = ccdnscan(ccd.inim, instrument, ccdtype, scantype,
+                                      nscan, scancor)
+                else:
+                    znscan = 1
 
+                cal = cal_image(ccd.inim, instrument, 'flat', nscan, calibs,
+                                scancor)
+
+                # If no processing is desired print flat field image and return.
+                if noproc:
+                    ot = f"  [TO BE DONE] Flat correction image is {cal}."
+                    print(ot)
+                else:
+                    # Map the image and return on an error.
+                    # Process the flat field image if necessary.
+                    # If nscan > 1 then the flat field may not yet exist
+                    # so create it from the unscanned flat field.
+
+                    # XXX: this bit is more complicated. can call ccdproc
+                    # recursively to create this image.
+                    flatim = image_open(cal)
+
+                    # Set the processing parameters in the CCD structure.
+                    fnc = flatim[0].data.shape[-1]
+                    fnl = flatim[0].data.shape[-2]
+
+                    fdatasec = get_header_value(flatim, instrument, 'datasec')
+                    fc1, fc2, fcs, fl1, fl2, fls = ccd_section(fdatasec)
+
+                    # XXX: should these be nc or nc - 1. also check
+                    # upper bounds on errors below
+                    if fc1 is None:
+                        fc1 = 0
+                    if fc2 is None:
+                        fc2 = fnc
+                    if fl1 is None:
+                        fl1 = 0
+                    if fl2 is None:
+                        fl2 = fnl
+
+                    if (fc1 < 0 or fc2 > fnc or fcs != 1 or fl1 < 0 or
+                            fl2 > fnl or fls != 1):
+                        estr = f"Data section error: image={cal}[{fnc},{fnl}]" \
+                               f", datasec=[{fc1}:{fc2},{fl1}:{fl2}]"
+                        raise Exception(estr)
+
+                    datac1 = fc1
+                    datal1 = fl1
+
+                    fcsec = get_header_value(flatim, instrument, 'ccdsec')
+                    # XXX: these keep the values from above if None?
+                    fc1, fc2, fcs, fl1, fl2, fls = ccd_section(fcsec)
+
+                    if fnc == 1:
+                        fc1 = ccd.ccdc1
+                        fc2 = ccd.ccdc2
+                    if fnl == 1:
+                        fl1 = ccd.ccdl1
+                        fl2 = ccd.ccdl2
+                    ccdc1 = fc1
+                    ccdl1 = fl1
+
+                    if (fc1 > ccd.ccdc1 or fc2 < ccd.ccdc2 or
+                            fl1 > ccd.ccdl1 or fl2 < ccd.ccdl2):
+                        estr = f'CCD section error: input=[{ccd.ccdc1}:' \
+                               f'{ccd.ccdc2},{ccd.ccdl1}:{ccd.ccdl2}], ' \
+                               f'{cal}=[{fc1}:{fc2},{fl1}:{fl2}]'
+                        raise Exception(estr)
+
+                    ccd.flatim = flatim
+                    ccd.flatc1 = ccd.ccdc1 - ccdc1 + datac1
+                    ccd.flatc2 = ccd.ccdc2 - ccdc1 + datac1
+                    ccd.flatl1 = ccd.ccdl1 - ccdl1 + datal1
+                    ccd.flatl2 = ccd.ccdl2 - ccdl1 + datal1
+
+                    # If no mean value use 1 as the scale factor.
+                    fscale = get_header_value(flatim, instrument, 'ccdmean')
+                    if fscale is None:
+                        fscale = 1.
+                    ccd.flatscale = fscale
+                    # XXX: define	F	010B	# flat field
+                    ccd.cors['flatcor'] = 10
+                    ccd.cor = True
+
+                    # Log the operation.
+                    ostr = f"Flat field image is {cal} with " \
+                           f"scale={ccd.flatscale:g}"
+                    logstr = logstring(ostr, ccd.inim, verbose, logfd)
+                    # XXX: can't be what is actually put in the header right?
+                    set_header_value(ccd.outim, instrument, 'flatcor', logstr)
             # end set_flat
-            pass
 
         if ccdtype not in ['zero', 'dark', 'flat', 'illum']:
             # begin set_illum
+            # XXX: ccdflag (IN_IM(ccd), "illumcor"))
+            if illumcor and False:
+                # Get the illumcor correction image.
+                cal = cal_image(ccd.inim, instrument, 'illum', 1, calibs,
+                                scancor)
 
+                # If no processing is desired print illumination image
+                # name and return.
+                if noproc:
+                    ot = f"  [TO BE DONE] Illumination correction " \
+                         f"image is {cal}."
+                    print(ot)
+                else:
+                    # Return a warning if the illumination flag is missing.
+                    illumim = image_open(cal)
+                    # XXX: if (!ccdflag (im, "mkillum"))
+                    if False:
+                        estr = "MKILLUM flag missing from illumination image"
+                        raise Exception(estr)
+
+                    # If no mean value for the scale factor compute it.
+                    iscale = get_header_value(illumim, instrument, 'ccdmean')
+                    ccd.illumscale = iscale
+
+                    itime = get_header_value(illumim, instrument, 'ccdmeant')
+                    if itime is None:
+                        # XXX: itime = IM_MTIME(im)
+                        # supposed to be time of last modification?
+                        pass
+
+                    # XXX: itime < IM_MTIME(im)
+                    if iscale is None or itime < 0:
+                        pass
+
+                    iscale = get_header_value(illumim, instrument, 'ccdmean')
+                    if iscale is None:
+                        iscale = 1.
+                    ccd.illumscale = iscale
+
+                    # Set the processing parameters in the CCD structure.
+                    inc = illumim[0].data.shape[-1]
+                    inl = illumim[0].data.shape[-2]
+
+                    idatasec = get_header_value(illumim, instrument, 'datasec')
+                    ic1, ic2, ics, il1, il2, ils = ccd_section(idatasec)
+
+                    # XXX: should these be nc or nc - 1. also check
+                    # upper bounds on errors below
+                    if ic1 is None:
+                        ic1 = 0
+                    if ic2 is None:
+                        ic2 = inc
+                    if il1 is None:
+                        il1 = 0
+                    if il2 is None:
+                        il2 = inl
+
+                    if (ic1 < 0 or ic2 > inc or ics != 1 or il1 < 0 or
+                            il2 > inl or ils != 1):
+                        estr = f"Data section error: image={cal}[{inc},{inl}]" \
+                               f", datasec=[{ic1}:{ic2},{il1}:{il2}]"
+                        raise Exception(estr)
+
+                    datac1 = ic1
+                    datal1 = il1
+
+                    icsec = get_header_value(illumim, instrument, 'ccdsec')
+                    # XXX: these keep the values from above if None?
+                    ic1, ic2, ics, il1, il2, ils = ccd_section(icsec)
+
+                    ccdc1 = ic1
+                    ccdl1 = il1
+
+                    if (ic1 > ccd.ccdc1 or ic2 < ccd.ccdc2 or
+                            il1 > ccd.ccdl1 or il2 < ccd.ccdl2):
+                        estr = f'CCD section error: input=[{ccd.ccdc1}:' \
+                               f'{ccd.ccdc2},{ccd.ccdl1}:{ccd.ccdl2}], ' \
+                               f'{cal}=[{ic1}:{ic2},{il1}:{il2}]'
+                        raise Exception(estr)
+
+                    ccd.illumim = illumim
+                    ccd.illumc1 = ccd.ccdc1 - ccdc1 + datac1
+                    ccd.illumc2 = ccd.ccdc2 - ccdc1 + datac1
+                    ccd.illuml1 = ccd.ccdl1 - ccdl1 + datal1
+                    ccd.illuml2 = ccd.ccdl2 - ccdl1 + datal1
+
+                    # XXX: define	I	020B	# Illumination
+                    ccd.cors['illumcor'] = 20
+                    ccd.cor = True
+
+                    # Log the operation.
+                    ostr = f"Illumination image is {cal} with " \
+                           f"scale={ccd.illumscale:g}"
+                    logstr = logstring(ostr, ccd.inim, verbose, logfd)
+                    # XXX: can't be what is actually put in the header right?
+                    set_header_value(ccd.outim, instrument, 'illumcor', logstr)
             # end set_illum
 
             # begin set_fringe
+            # XXX: ccdflag (IN_IM(ccd), "fringcor"))
+            if fringecor and False:
+                # Get the fringe correction image.
+                cal = cal_image(ccd.inim, instrument, 'fringe', 1, calibs,
+                                scancor)
 
+                # If no processing is desired print fringe image name
+                # and return.
+                if noproc:
+                    ot = f"  [TO BE DONE] Fringe correction image is {cal}."
+                    print(ot)
+                else:
+                    # Return an error if the fringe flag is missing.
+                    fringeim = image_open(cal)
+                    # XXX: if (!ccdflag (im, "mkfringe"))
+                    if False:
+                        estr = "MKFRINGE flag missing from fringe image"
+                        raise Exception(estr)
+
+                    # Set the processing parameters in the CCD structure.
+                    fnc = fringeim[0].data.shape[-1]
+                    fnl = fringeim[0].data.shape[-2]
+
+                    fdatasec = get_header_value(fringeim, instrument, 'datasec')
+                    fc1, fc2, fcs, fl1, fl2, fls = ccd_section(fdatasec)
+
+                    # XXX: should these be nc or nc - 1. also check
+                    # upper bounds on errors below
+                    if fc1 is None:
+                        fc1 = 0
+                    if fc2 is None:
+                        fc2 = fnc
+                    if fl1 is None:
+                        fl1 = 0
+                    if fl2 is None:
+                        fl2 = fnl
+
+                    if (fc1 < 0 or fc2 > fnc or fcs != 1 or fl1 < 0 or
+                            fl2 > fnl or fls != 1):
+                        estr = f"Data section error: image={cal}[{fnc},{fnl}]" \
+                               f", datasec=[{fc1}:{fc2},{fl1}:{fl2}]"
+                        raise Exception(estr)
+
+                    datac1 = fc1
+                    datal1 = fl1
+
+                    fcsec = get_header_value(fringeim, instrument, 'ccdsec')
+                    # XXX: these keep the values from above if None?
+                    fc1, fc2, fcs, fl1, fl2, fls = ccd_section(fcsec)
+
+                    ccdc1 = fc1
+                    ccdl1 = fl1
+
+                    if (fc1 > ccd.ccdc1 or fc2 < ccd.ccdc2 or
+                            fl1 > ccd.ccdl1 or fl2 < ccd.ccdl2):
+                        estr = f'CCD section error: input=[{ccd.ccdc1}:' \
+                               f'{ccd.ccdc2},{ccd.ccdl1}:{ccd.ccdl2}], ' \
+                               f'{cal}=[{fc1}:{fc2},{fl1}:{fl2}]'
+                        raise Exception(estr)
+
+                    # Get the scaling factors.
+                    # If no fringe scale factor assume 1.
+                    fexp1 = get_header_value(ccd.inim, instrument, 'exptime')
+                    fexp2 = get_header_value(fringeim, instrument, 'exptime')
+                    fscl = get_header_value(fringeim, instrument, 'fringscl')
+                    if fscl is None:
+                        fscl = 1.
+
+                    ccd.fringescale = fexp1 / fexp2 * fscl
+
+                    ccd.fringeim = fringeim
+                    ccd.fringec1 = ccd.ccdc1 - ccdc1 + datac1
+                    ccd.fringec2 = ccd.ccdc2 - ccdc1 + datac1
+                    ccd.fringel1 = ccd.ccdl1 - ccdl1 + datal1
+                    ccd.fringel2 = ccd.ccdl2 - ccdl1 + datal1
+
+                    # XXX: define	Q	040B	# Fringe
+                    ccd.cors['fringecor'] = 40
+                    ccd.cor = True
+
+                    # Log the operation.
+                    ostr = f"Fringe image is {cal} with " \
+                           f"scale={ccd.fringescale:g}"
+                    logstr = logstring(ostr, ccd.inim, verbose, logfd)
+                    # XXX: can't be what is actually put in the header right?
+                    set_header_value(ccd.outim, instrument, 'fringcor', logstr)
             # end set_fringe
-
-            pass
 
         if ccdtype not in ['zero', 'dark', 'flat', 'illum', 'object', 'comp']:
             ccd.cors['findmean'] = True
+
+        # Do the processing if the COR flag is set.
+        if ccd.cor:
+            # XXX: doproc(ccd)
+            pass
 
         image_close(imin)
         image_close(out)
         if outtmp:
             # XXX: will eventually need to copy to input parameters
             os.remove(outim)
+
+        if ccd.maskim is not None:
+            image_close(ccd.maskim)
+        if ccd.zeroim is not None:
+            image_close(ccd.zeroim)
+        if ccd.darkim is not None:
+            image_close(ccd.darkim)
+        if ccd.flatim is not None:
+            image_close(ccd.flatim)
+        if ccd.illumim is not None:
+            image_close(ccd.illumim)
+        if ccd.fringeim is not None:
+            image_close(ccd.fringeim)
+
+        # Do special processing on certain image types.
+        # XXX: readcor and ccdmean
+
     if logfd is not None:
         logfd.close()
