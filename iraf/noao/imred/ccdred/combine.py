@@ -7,7 +7,7 @@ import re
 
 __all__ = ['combine', 'Instrument', 'ccdtypes', 'get_header_value',
            'Instrument', 'ccdsubset', 'file_new_copy', 'type_max',
-           'set_header_value']
+           'set_header_value', 'delete_header_value']
 
 
 class Instrument(object):
@@ -119,6 +119,7 @@ def get_header_value(hdulist, instrument, key):
     # go reverse order because we'll typically want the first instance
     # if something is in multiple headers
     for hdu in hdulist[::-1]:
+        # XXX: can't you just use a if key in hdu here?
         try:
             # get the instrument's value in the header
             val = hdu.header[key]
@@ -133,6 +134,30 @@ def get_header_value(hdulist, instrument, key):
         pass
 
     return val
+
+
+def delete_header_value(hdulist, instrument, key):
+    """
+    Delete a header field.
+
+    The equivalent of IRAF's hdmdelf.
+
+    Parameters
+    ----------
+    hdulist
+    instrument
+    key
+
+    """
+    # what is the header key in the instrument's language
+    key = instrument.translate(key)
+
+    # go reverse order because we'll typically want the first instance
+    # if something is in multiple headers
+    for hdu in hdulist:
+        if key in hdu.header:
+            hdu.header.remove(key, remove_all=True)
+    return
 
 
 def ccdtypes(hdulist, instrument):

@@ -1,6 +1,7 @@
 from iraf.utils import file_handler
 from .combine import Instrument, ccdtypes, ccdsubset, get_header_value
 from .combine import file_new_copy, type_max, set_header_value
+from .combine import delete_header_value
 import numpy as np
 import os
 from iraf.sys import image_open, image_close
@@ -99,8 +100,8 @@ class CCD(object):
         self.biasc2 = 0
         self.biasl1 = 0
         self.biasl2 = 0
-        # XXX: change this to 'line' or 'column' I think
-        self.readaxis = 1  # Read out axis (1=cols, 2=lines)
+
+        self.readaxis = 'line'  # Read out axis
         self.calctype = np.double  # Calculation data type
         self.overscantype = 0  # Overscan type
         self.overscanvec = None  # Pointer to overscan vector
@@ -363,6 +364,105 @@ def logstring(instring, inim, verbose, logfd):
     return ostr
 
 
+def process(ccd):
+    # the equivalent of proc1r/proc2r.
+    # the differences occur where the if readaxis == 'line' bits are.
+    # mostly the same function
+
+    # XXX: double check you don't need a +1 to the end and that this is the
+    # right order. is column first?
+    fulloutarr = ccd.inim[0].data[ccd.trimc1:ccd.trimc2, ccd.triml1:ccd.triml2]
+    # XXX: need to deal with xt_fpsr
+    if ccd.maskfp is not None:
+        raise Exception('maskfp not yet implemented')
+    # grab the bit we want to correct
+    outarr = fulloutarr[ccd.outc1:ccd.outc2, ccd.outl1:ccd.outl2]
+
+    # make the overscan correction
+    if ccd.cors['overscan']:
+        overscanc1 = ccd.biasc1 - 1
+        noverscan = ccd.biasc2 - overscanc1
+        # XXX: get the overscan value/vector
+        if ccd.overscantype in ['mean', 'median', 'minmax']:
+            overscan = 1
+        else:
+            overscan = 1
+        outarr -= overscan
+
+    # make the zero correction
+    if ccd.cors['zerocor']:
+        # XXX: for zero and dark and flat, need to check which dimension is 1D
+        # and make sure to broadcast in the appropriate direction
+        # that's the main difference between line and column readaxis
+        if len(ccd.zeroim.shape) == 1:
+            if ccd.readaxis == 'line':
+                zerobuf = ccd.zeroim[0].data[ccd.zeroc1:ccd.zeroc2]
+            else:
+                zerobuf = ccd.zeroim[0].data[ccd.zerol1:ccd.zerol2]
+        else:
+            zerobuf = ccd.zeroim[0].data[ccd.zeroc1:ccd.zeroc2,
+                                         ccd.zerol1:ccd.zerol2]
+        outarr -= zerobuf
+
+    # make the dark correction
+    if ccd.cors['darkcor']:
+        # XXX: for zero and dark and flat, need to check which dimension is 1D
+        # and make sure to broadcast in the appropriate direction
+        # that's the main difference between line and column readaxis
+        if len(ccd.darkim.shape) == 1:
+            if ccd.readaxis == 'line':
+                darkbuf = ccd.darkim[0].data[ccd.darkc1:ccd.darkc2]
+            else:
+                darkbuf = ccd.darkim[0].data[ccd.darkl1:ccd.darkl2]
+            # XXX: Bug in IRAF??
+            if ccd.readaxis == 'line':
+                darkscale = ccd.flatscale
+            else:
+                darkscale = ccd.darkscale
+        else:
+            darkbuf = ccd.darkim[0].data[ccd.darkc1:ccd.darkc2,
+                                         ccd.darkl1:ccd.darkl2]
+            darkscale = ccd.darkscale
+        outarr -= darkbuf * darkscale
+
+    # make the flat field correction
+    if ccd.cors['flatcor']:
+        # XXX: for zero and dark and flat, need to check which dimension is 1D
+        # and make sure to broadcast in the appropriate direction
+        # that's the main difference between line and column readaxis
+        if len(ccd.flatim.shape) == 1:
+            if ccd.readaxis == 'line':
+                flatbuf = ccd.flatim[0].data[ccd.flatc1:ccd.flatc2]
+            else:
+                flatbuf = ccd.flatim[0].data[ccd.flatl1:ccd.flatl2]
+        else:
+            flatbuf = ccd.flatim[0].data[ccd.flatc1:ccd.flatc2,
+                                         ccd.flatl1:ccd.flatl2]
+        outarr *= ccd.flatscale / flatbuf
+
+    # do the illumination correction
+    if ccd.cors['illumcor']:
+        illumbuf = ccd.illumim[0].data[ccd.illumc1:ccd.illumc2,
+                                       ccd.illuml1:ccd.illuml2]
+        outarr *= ccd.illumscale / illumbuf
+
+    # do the fringe correction
+    if ccd.cors['fringecor']:
+        fringebuf = ccd.fringeim[0].data[ccd.fringec1:ccd.fringec2,
+                                         ccd.fringel1:ccd.fringel2]
+        outarr -= ccd.fringescale * fringebuf
+
+    if ccd.cors['minrep']:
+        outarr[np.where(outarr < ccd.minreplace)] = ccd.minreplace
+
+    if ccd.cors['findmean']:
+        ccd.mean = outarr.mean()
+
+    # XXX: is this needed or is fulloutarr updated as a view of outarr?
+    fulloutarr[ccd.outc1:ccd.outc2, ccd.outl1:ccd.outl2] = outarr * 1
+    ccd.outim[0].data = fulloutarr * 1
+
+
 def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
             overscan=True, trim=True, zerocor=True, darkcor=True, flatcor=True,
             illumcor=False, fringecor=False, readcor=False, scancor=False,
@@ -547,8 +647,6 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
         ccd.cors['overscan'] = False
         ccd.cors['trim'] = False
         readaxis = readaxis.strip().lower()
-        # XXX: the readaxis that is set in setproc.x is different from the
-        # comment in ccdred.h. Make sure it's doing the right thing.
         if readaxis in ['line', 'column']:
             ccd.readaxis = readaxis
         else:
@@ -681,6 +779,10 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
                        f"{ccd.trimc2},{ccd.triml1}:{ccd.triml2}]."
                 print(ostr)
             else:
+                # if trim limits are within inc1, clip inc1 to the trim limits,
+                # otherwise leave inc1 alone if trim is wider on either side.
+                # then make sure ccdc1 is adjusted the same so they remain the
+                # same size
                 xt1 = max(0, ccd.trimc1 - ccd.inc1)
                 xt2 = min(0, ccd.trimc2 - ccd.inc2)
                 yt1 = max(0, ccd.triml1 - ccd.inl1)
@@ -696,6 +798,12 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
                 ccd.inl1 += yt1
                 ccd.inl2 += yt2
 
+                # output image has the size of the trim limits.
+                # even if the input data section does not cover it
+                # XXX: check this + 1 since these are indices, probably want
+                # to start at 0
+                # also this gives outc2 - outc1 as the same size as the
+                # inc2 - inc1, but then sets IM_LEN(out) to be the trim lengths
                 ccd.outc1 = ccd.inc1 - ccd.trimc1 + 1
                 ccd.outc2 = ccd.inc2 - ccd.trimc1 + 1
                 ccd.outl1 = ccd.inl1 - ccd.triml1 + 1
@@ -1329,14 +1437,61 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
 
         # Do the processing if the COR flag is set.
         if ccd.cor:
-            # XXX: doproc(ccd)
-            pass
+            process(ccd)
+            # begin set_header
+
+            # Set the data section if it is not the whole image.
+            nc = ccd.outim[0].data.shape[-1]
+            nl = ccd.outim[0].data.shape[-2]
+            # XXX: check these limits
+            if (ccd.outc1 != 0 or ccd.outc2 != nc or ccd.outl1 != 0 or
+                    ccd.outl2 != nl):
+                hstr = f'[{ccd.outc1}:{ccd.outc2},{ccd.outl1}:{ccd.outl2}]'
+                set_header_value(ccd.outim, instrument, 'datasec', hstr)
+            else:
+                delete_header_value(ccd.outim, instrument, 'datasec')
+
+            # Set the CCD section.
+            hstr = f'[{ccd.ccdc1}:{ccd.ccdc2},{ccd.ccdl1}:{ccd.ccdl2}]'
+            set_header_value(ccd.outim, instrument, 'ccdsec', hstr)
+
+            # If trimming update the trim and bias section parameters.
+            if ccd.cors['trim']:
+                delete_header_value(ccd.outim, instrument, 'trimsec')
+                # XXX: check these
+                ccd.biasc1 = max(0, ccd.biasc1 - ccd.trimc1)
+                ccd.biasc2 = min(nc-1, ccd.biasc2 - ccd.trimc1)
+                ccd.biasl1 = max(0, ccd.biasl1 - ccd.triml1)
+                ccd.biasl2 = min(nl-1, ccd.biasl2 - ccd.triml1)
+                if ccd.biasc1 <= ccd.biasc2 and ccd.biasl1 <= ccd.biasl2:
+                    hstr = f'[{ccd.biasc1}:{ccd.biasc2},{ccd.biasl1}:{ccd.biasl2}]'
+                    set_header_value(ccd.outim, instrument, 'biassec', hstr)
+                else:
+                    delete_header_value(ccd.outim, instrument, 'biassec')
+                # XXX: update some WCS stuff here.
+
+            # Set mean value if desired.
+            if ccd.cors['findmean']:
+                set_header_value(ccd.outim, instrument, 'ccdmean', ccd.mean)
+                import time
+                set_header_value(ccd.outim, instrument, 'ccdmeant',
+                                 int(time.time()))
+            # Mark image as processed.
+            # timelog()
+            now = datetime.datetime.now()
+            now = now.strftime('%Y-%m-%d %H:%M:%S')
+            ostr = f'{now} CCD processing done'
+            set_header_value(ccd.outim, instrument, 'ccdproc', ostr)
+            # end set_header
 
         image_close(imin)
         image_close(out)
         if outtmp:
-            # XXX: will eventually need to copy to input parameters
-            os.remove(outim)
+            if ccd.cor:
+                # Replace the input image by the corrected image.
+                os.replace(outim, image)
+            else:
+                os.remove(outim)
 
         if ccd.maskim is not None:
             image_close(ccd.maskim)
