@@ -7,6 +7,7 @@ import os
 from iraf.sys import image_open, image_close
 import tempfile
 import datetime
+import time
 
 __all__ = ['ccdproc', 'ccd_section']
 
@@ -1473,7 +1474,6 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
             # Set mean value if desired.
             if ccd.cors['findmean']:
                 set_header_value(ccd.outim, instrument, 'ccdmean', ccd.mean)
-                import time
                 set_header_value(ccd.outim, instrument, 'ccdmeant',
                                  int(time.time()))
             # Mark image as processed.
@@ -1507,7 +1507,142 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
             image_close(ccd.fringeim)
 
         # Do special processing on certain image types.
-        # XXX: readcor and ccdmean
+        if ccdtype == 'zero' and readcor:
+            if outtmp:
+                readim = image
+            else:
+                readim = outim
+            # begin readcor
+            rim = image_open(readim)
+            # XXX: ccdflag (IN_IM(ccd), "fringcor"))
+            if False:
+                if noproc:
+                    ostr = f"[TO BE DONE] Convert {readim} to readout " \
+                           f"correction "
+                    print(ostr)
+                    image_close(rim)
+                else:
+                    # The default data section is the entire image.
+                    nc = rim[0].data.shape[-1]
+                    nl = rim[0].data.shape[-2]
+
+                    rdatasec = get_header_value(rim, instrument, 'datasec')
+                    inc1, inc2, incs, inl1, inl2, inls = ccd_section(rdatasec)
+
+                    # XXX: should these be nc or nc - 1. also check limits
+                    # in error section below
+                    if inc1 is None:
+                        inc1 = 0
+                    if inc2 is None:
+                        inc2 = nc
+                    if inl1 is None:
+                        inl1 = 0
+                    if inl2 is None:
+                        inl2 = nl
+                    if (inc1 < 0 or inc2 > nc or inl1 < 0 or inl2 > nl or
+                            incs != 1 or inl2 != 1):
+                        raise Exception('Error in DATASEC parameter')
+
+                    # The default ccd section is the data section.
+                    rccdsec = get_header_value(rim, instrument, 'ccdsec')
+                    (ccdc1, ccdc2, ccdcs,
+                     ccdl1, ccdl2, ccdls) = ccd_section(rccdsec)
+                    if ccdc1 is None:
+                        ccdc1 = inc1
+                    if ccdc2 is None:
+                        ccdc2 = inc2
+                    if ccdl1 is None:
+                        ccdl1 = inl1
+                    if ccdl2 is None:
+                        ccdl2 = inl2
+                    if ccdcs != 1 or ccdls != 1:
+                        raise Exception('Error in CCDSEC parameter')
+                    if (inc2 - inc1 != ccdc2 - ccdc1 or
+                            inl2 - inl1 != ccdl2 - ccdl1):
+                        raise Exception('Size of DATASEC and CCDSEC do not '
+                                        'agree')
+
+                    # XXX: make sure the output file deals with the
+                    # 'pixeltype' correctly as in set_output though
+                    outdata = rim[0].data * 1
+
+                    rtmp = tempfile.NamedTemporaryFile(delete=False)
+                    rtmp.close()
+                    newout = rtmp.name
+                    file_new_copy(newout, rim, instrument=instrument)
+                    newhdr = image_open(newout, mode='update')
+                    image_close(rim)
+                    # Average across the readout axis.
+
+                    # zero out the parts not in the data section
+                    # XXX: make sure this is doing the bits I think it is
+                    outdata[:inc1, :inl1] = 0.
+                    outdata[inc2:, inl2:] = 0.
+
+                    # XXX: check which axis to sum over
+                    if readaxis == 'line':
+                        # can't just use mean because there might be fewer
+                        # rows we actually want the mean of and the rest 0s
+                        outdata = outdata.sum(axis=1) / (inl2 - inl1 + 1)
+                        ostr = f'[{inc1}:{inc2}, 1:1]'
+                        set_header_value(newhdr, instrument, 'datasec', ostr)
+                        ostr = f'[{ccdc1}:{ccdc2}, :]'
+                        set_header_value(newhdr, instrument, 'ccdsec', ostr)
+                    else:
+                        outdata = outdata.sum(axis=0) / (inc2 - inc1 + 1)
+                        ostr = f'[1:1, {inl1}:{inl2}]'
+                        set_header_value(newhdr, instrument, 'datasec', ostr)
+                        ostr = f'[:, {ccdl1}:{ccdl2}]'
+                        set_header_value(newhdr, instrument, 'ccdsec', ostr)
+
+                    image_close(newhdr)
+                    os.replace(newout, readim)
+
+                    newout = image_open(readim, mode='update')
+                    # Log the operation.
+                    ostr = "Converted to readout format"
+                    logstr = logstring(ostr, newout, verbose, logfd)
+                    # XXX: can't be what is actually put in the header right?
+                    set_header_value(newout, instrument, 'readcor', logstr)
+
+                    image_close(newout)
+            else:
+                image_close(rim)
+            # end readcor
+
+        if ccdtype == 'flat':
+            if outtmp:
+                readim = image
+            else:
+                readim = outim
+            # begin ccdmean
+
+            # Check if this operation has been done.
+            meanim = image_open(readim, mode='update')
+            cm = get_header_value(meanim, instrument, 'ccdmean')
+            domean = True
+
+            if cm is not None:
+                cmt = get_header_value(meanim, instrument, 'ccdmeant')
+                lastmod = get_header_value(meanim, instrument, 'iraf-tlm')
+                # XXX: somehow compare these times? Or just don't bother and
+                # do it anyway since it won't take any time at all
+                if cmt is None and lastmod is not None and cmt > lastmod:
+                    domean = False
+
+            if domean:
+                if noproc:
+                    ostr = f"  [TO BE DONE] Compute mean of image {readim}"
+                    print(ostr)
+                else:
+                    # Compute and record the mean.
+                    mean = meanim[0].data.mean()
+
+                    set_header_value(meanim, instrument, 'ccdmean', mean)
+                    set_header_value(meanim, instrument, 'ccdmeant',
+                                     int(time.time()))
+            image_close(meanim)
+            # end ccdmean
 
     if logfd is not None:
         logfd.close()
