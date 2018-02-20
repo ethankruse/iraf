@@ -464,7 +464,7 @@ def process(ccd):
     ccd.outim[0].data = fulloutarr * 1
 
 
-def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
+def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             overscan=True, trim=True, zerocor=True, darkcor=True, flatcor=True,
             illumcor=False, fringecor=False, readcor=False, scancor=False,
             readaxis='line', fixfile=None, biassec=None, trimsec=None,
@@ -527,7 +527,6 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
 
     """
     inputs = file_handler(images)
-    # XXX: is output required? What happens if you don't give it one?
     outputs = file_handler(output)
 
     if 0 < len(outputs) != len(inputs):
@@ -539,7 +538,7 @@ def ccdproc(images, output, *, ccdtype='object', noproc=False, fixpix=True,
 
     # this allows interactive to be 4 valued (yes, no, always yes, always no)
     # to allow for not prompting for every image
-    # set_interactive("", interactive)
+    # XXX: set_interactive("", interactive)
 
     # start of cal_open
 

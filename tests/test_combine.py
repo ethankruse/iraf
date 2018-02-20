@@ -22,6 +22,7 @@ defaultargs = {'plfile': None, 'sigmafile': None, 'ccdtype': None,
 # sigscale, grow, logfile, verbose
 # also test 3D or more dimensions? 1D?
 
+
 def simple_inputs(nimg, nx, ny, basedir):
     inputs = []
     for ii in np.arange(nimg):
