@@ -95,17 +95,20 @@ def set_header_value(hdulist, instrument, key, value, comment=None):
     return
 
 
-def get_header_value(hdulist, instrument, key):
+def get_header_value(hdulist, instrument, key, default=False):
     """
     Retrieve the value of a header key.
 
-    The equivalent of IRAF's hdmg*. (e.g. hdmgstr)
+    The equivalent of IRAF's hdmg*. (e.g. hdmgstr) when default is False.
+    When default is True, it returns the instrument default value for the
+    key, equivalent to IRAF's hdmgdef.
 
     Parameters
     ----------
     hdulist
     instrument
     key
+    default
 
     Returns
     -------
@@ -116,17 +119,18 @@ def get_header_value(hdulist, instrument, key):
     key = instrument.translate(key)
     val = None
 
-    # go reverse order because we'll typically want the first instance
-    # if something is in multiple headers
-    for hdu in hdulist[::-1]:
-        # XXX: can't you just use a if key in hdu here?
-        try:
-            # get the instrument's value in the header
-            val = hdu.header[key]
-            # translate that back to our normalized language
-            val = instrument.translate(val)
-        except KeyError:
-            pass
+    if not default:
+        # go reverse order because we'll typically want the first instance
+        # if something is in multiple headers
+        for hdu in hdulist[::-1]:
+            # XXX: can't you just use a if key in hdu here?
+            try:
+                # get the instrument's value in the header
+                val = hdu.header[key]
+                # translate that back to our normalized language
+                val = instrument.translate(val)
+            except KeyError:
+                pass
 
     if val is None:
         # XXX: we need a way to use a default value here if given in the
