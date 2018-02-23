@@ -378,20 +378,21 @@ def process(ccd):
     # the differences occur where the if readaxis == 'line' bits are.
     # mostly the same function
 
-    # XXX: double check you don't need a +1 to the end and that this is the
-    # right order. is column first?
-    fulloutarr = ccd.inim[0].data[ccd.trimc1:ccd.trimc2, ccd.triml1:ccd.triml2]
+    # translate into numpy space. that means instead of [c, l] you do [l, c]
+    # and also that you're 0-indexed and not inclusive of the end anymore.
+    fulloutarr = ccd.inim[0].data[ccd.triml1-1:ccd.triml2,
+                                  ccd.trimc1-1:ccd.trimc2]
     # XXX: need to deal with xt_fpsr
     if ccd.maskfp is not None:
         raise Exception('maskfp not yet implemented')
     # grab the bit we want to correct
-    outarr = fulloutarr[ccd.outc1:ccd.outc2, ccd.outl1:ccd.outl2]
+    outarr = fulloutarr[ccd.outl1-1:ccd.outl2, ccd.outc1-1:ccd.outc2]
 
     # make the overscan correction
     if ccd.cors['overscan']:
         overscanc1 = ccd.biasc1 - 1
         noverscan = ccd.biasc2 - overscanc1
-        # XXX: get the overscan value/vector
+        # XXX: get the overscan value/vector. different for line/column
         if ccd.overscantype in ['mean', 'median', 'minmax']:
             overscan = 1
         else:
@@ -403,14 +404,14 @@ def process(ccd):
         # XXX: for zero and dark and flat, need to check which dimension is 1D
         # and make sure to broadcast in the appropriate direction
         # that's the main difference between line and column readaxis
-        if len(ccd.zeroim.shape) == 1:
+        if len(ccd.zeroim[0].data.shape) == 1:
             if ccd.readaxis == 'line':
                 zerobuf = ccd.zeroim[0].data[ccd.zeroc1:ccd.zeroc2]
             else:
                 zerobuf = ccd.zeroim[0].data[ccd.zerol1:ccd.zerol2]
         else:
-            zerobuf = ccd.zeroim[0].data[ccd.zeroc1:ccd.zeroc2,
-                                         ccd.zerol1:ccd.zerol2]
+            zerobuf = ccd.zeroim[0].data[ccd.zerol1-1:ccd.zerol2,
+                                         ccd.zeroc1-1:ccd.zeroc2]
         outarr -= zerobuf
 
     # make the dark correction
@@ -418,7 +419,7 @@ def process(ccd):
         # XXX: for zero and dark and flat, need to check which dimension is 1D
         # and make sure to broadcast in the appropriate direction
         # that's the main difference between line and column readaxis
-        if len(ccd.darkim.shape) == 1:
+        if len(ccd.darkim[0].data.shape) == 1:
             if ccd.readaxis == 'line':
                 darkbuf = ccd.darkim[0].data[ccd.darkc1:ccd.darkc2]
             else:
@@ -429,8 +430,8 @@ def process(ccd):
             else:
                 darkscale = ccd.darkscale
         else:
-            darkbuf = ccd.darkim[0].data[ccd.darkc1:ccd.darkc2,
-                                         ccd.darkl1:ccd.darkl2]
+            darkbuf = ccd.darkim[0].data[ccd.darkl1-1:ccd.darkl2,
+                                         ccd.darkc1-1:ccd.darkc2]
             darkscale = ccd.darkscale
         outarr -= darkbuf * darkscale
 
@@ -439,26 +440,26 @@ def process(ccd):
         # XXX: for zero and dark and flat, need to check which dimension is 1D
         # and make sure to broadcast in the appropriate direction
         # that's the main difference between line and column readaxis
-        if len(ccd.flatim.shape) == 1:
+        if len(ccd.flatim[0].data.shape) == 1:
             if ccd.readaxis == 'line':
                 flatbuf = ccd.flatim[0].data[ccd.flatc1:ccd.flatc2]
             else:
                 flatbuf = ccd.flatim[0].data[ccd.flatl1:ccd.flatl2]
         else:
-            flatbuf = ccd.flatim[0].data[ccd.flatc1:ccd.flatc2,
-                                         ccd.flatl1:ccd.flatl2]
+            flatbuf = ccd.flatim[0].data[ccd.flatl1-1:ccd.flatl2,
+                                         ccd.flatc1-1:ccd.flatc2]
         outarr *= ccd.flatscale / flatbuf
 
     # do the illumination correction
     if ccd.cors['illumcor']:
-        illumbuf = ccd.illumim[0].data[ccd.illumc1:ccd.illumc2,
-                                       ccd.illuml1:ccd.illuml2]
+        illumbuf = ccd.illumim[0].data[ccd.illuml1-1:ccd.illuml2,
+                                       ccd.illumc1-1:ccd.illumc2]
         outarr *= ccd.illumscale / illumbuf
 
     # do the fringe correction
     if ccd.cors['fringecor']:
-        fringebuf = ccd.fringeim[0].data[ccd.fringec1:ccd.fringec2,
-                                         ccd.fringel1:ccd.fringel2]
+        fringebuf = ccd.fringeim[0].data[ccd.fringel1-1:ccd.fringel2,
+                                         ccd.fringec1-1:ccd.fringec2]
         outarr -= ccd.fringescale * fringebuf
 
     if ccd.cors['minrep']:
@@ -468,7 +469,7 @@ def process(ccd):
         ccd.mean = outarr.mean()
 
     # XXX: is this needed or is fulloutarr updated as a view of outarr?
-    fulloutarr[ccd.outc1:ccd.outc2, ccd.outl1:ccd.outl2] = outarr * 1
+    fulloutarr[ccd.outl1-1:ccd.outl2, ccd.outc1-1:ccd.outc2] = outarr * 1
     ccd.outim[0].data = fulloutarr * 1
 
 
@@ -824,9 +825,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                 ccd.outc2 = ccd.inc2 - ccd.trimc1 + 1
                 ccd.outl1 = ccd.inl1 - ccd.triml1 + 1
                 ccd.outl2 = ccd.inl2 - ccd.triml1 + 1
-                # XXX: set output dimensions here?
-                # ccd.outdim1 = ccd.trimc2 - ccd.trimc1 + 1
-                # ccd.outdim2 = ccd.triml2 - ccd.triml1 + 1
+
                 ccd.cors['trim'] = True
                 ccd.cor = True
 
@@ -913,29 +912,23 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     if ccd.readaxis == 'line':
                         first = ccd.biasc1
                         last = ccd.biasc2
-                        # XXX: need to check everything about this, but
                         # it's supposed to be the mean in every line between
                         # c1 and c2
-                        amean = ccd.inim[0].data[:, first:last].mean(axis=0)
+                        amean = ccd.inim[0].data[:, first-1:last].mean(axis=1)
                         # Trim the overscan vector and set the pixel coordinate.
-                        # need to make sure this indexing is right
-                        trimoscan = amean[ccd.inl1:ccd.inl2 + 1]
+                        trimoscan = amean[ccd.inl1-1:ccd.inl2]
                     else:
                         first = ccd.biasl1
                         last = ccd.biasl2
-                        # XXX: need to check everything about this, but
                         # it's supposed to be the mean in every column between
                         # l1 and l2
-                        amean = ccd.inim[0].data[first:last, :].mean(axis=1)
+                        amean = ccd.inim[0].data[first-1:last, :].mean(axis=0)
                         # Trim the overscan vector and set the pixel coordinate.
-                        # need to make sure this indexing is right
-                        trimoscan = amean[ccd.inc1:ccd.inc2+1]
+                        trimoscan = amean[ccd.inc1-1:ccd.inc2]
                     # XXX: fit_overscan() goes here. needs to be implemented
                     fitoscan = trimoscan * 1
                 # Set the CCD structure overscan parameters.
-                # XXX: bitwise 1. see ccdred.h
-                # define	O	001B
-                ccd.cors['overscan'] = 1
+                ccd.cors['overscan'] = True
                 ccd.cor = True
                 ccd.overscantype = overscan_function
                 ccd.overscanvec = fitoscan
@@ -990,8 +983,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
                     zdatasec = get_header_value(zeroim, instrument, 'datasec')
                     zc1, zc2, zcs, zl1, zl2, zls = ccd_section(zdatasec, defaults=(1, znc, 1, 1, znl, 1))
-                    # XXX: should these be nc or nc - 1. also check
-                    # upper bounds on errors below
 
                     if (zc1 < 1 or zc2 > znc or zcs != 1 or zl1 < 1 or
                             zl2 > znl or zls != 1):
@@ -1027,8 +1018,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     ccd.zerol1 = ccd.ccdl1 - ccdl1 + datal1
                     ccd.zerol2 = ccd.ccdl2 - ccdl1 + datal1
 
-                    # XXX: define	Z	002B	# zero level
-                    ccd.cors['zerocor'] = 2
+                    ccd.cors['zerocor'] = True
                     ccd.cor = True
 
                     # Log the operation.
@@ -1073,8 +1063,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
                     ddatasec = get_header_value(darkim, instrument, 'datasec')
                     dc1, dc2, dcs, dl1, dl2, dls = ccd_section(ddatasec, defaults=(1, dnc, 1, 1, dnl, 1))
-                    # XXX: should these be nc or nc - 1. also check
-                    # upper bounds on errors below
 
                     if (dc1 < 1 or dc2 > dnc or dcs != 1 or dl1 < 1 or
                             dl2 > dnl or dls != 1):
@@ -1122,8 +1110,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                         raise Exception(f"Dark time is zero for {cal}")
 
                     ccd.darkscale = dt1 / dt2
-                    # XXX: define	D	004B	# dark count
-                    ccd.cors['darkcor'] = 4
+                    ccd.cors['darkcor'] = True
                     ccd.cor = True
 
                     # Log the operation.
@@ -1173,8 +1160,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
                     fdatasec = get_header_value(flatim, instrument, 'datasec')
                     fc1, fc2, fcs, fl1, fl2, fls = ccd_section(fdatasec, defaults=(1, fnc, 1, 1, fnl, 1))
-                    # XXX: should these be nc or nc - 1. also check
-                    # upper bounds on errors below
 
                     if (fc1 < 1 or fc2 > fnc or fcs != 1 or fl1 < 1 or
                             fl2 > fnl or fls != 1):
@@ -1215,8 +1200,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     if fscale is None:
                         fscale = 1.
                     ccd.flatscale = fscale
-                    # XXX: define	F	010B	# flat field
-                    ccd.cors['flatcor'] = 10
+                    ccd.cors['flatcor'] = True
                     ccd.cor = True
 
                     # Log the operation.
@@ -1273,8 +1257,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
                     idatasec = get_header_value(illumim, instrument, 'datasec')
                     ic1, ic2, ics, il1, il2, ils = ccd_section(idatasec, defaults=(1, inc, 1, 1, inl, 1))
-                    # XXX: should these be nc or nc - 1. also check
-                    # upper bounds on errors below
 
                     if (ic1 < 1 or ic2 > inc or ics != 1 or il1 < 1 or
                             il2 > inl or ils != 1):
@@ -1304,8 +1286,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     ccd.illuml1 = ccd.ccdl1 - ccdl1 + datal1
                     ccd.illuml2 = ccd.ccdl2 - ccdl1 + datal1
 
-                    # XXX: define	I	020B	# Illumination
-                    ccd.cors['illumcor'] = 20
+                    ccd.cors['illumcor'] = True
                     ccd.cor = True
 
                     # Log the operation.
@@ -1341,8 +1322,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
                     fdatasec = get_header_value(fringeim, instrument, 'datasec')
                     fc1, fc2, fcs, fl1, fl2, fls = ccd_section(fdatasec, defaults=(1, fnc, 1, 1, fnl, 1))
-                    # XXX: should these be nc or nc - 1. also check
-                    # upper bounds on errors below
 
                     if (fc1 < 1 or fc2 > fnc or fcs != 1 or fl1 < 1 or
                             fl2 > fnl or fls != 1):
@@ -1382,8 +1361,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     ccd.fringel1 = ccd.ccdl1 - ccdl1 + datal1
                     ccd.fringel2 = ccd.ccdl2 - ccdl1 + datal1
 
-                    # XXX: define	Q	040B	# Fringe
-                    ccd.cors['fringecor'] = 40
+                    ccd.cors['fringecor'] = True
                     ccd.cor = True
 
                     # Log the operation.
@@ -1405,8 +1383,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             # Set the data section if it is not the whole image.
             nc = ccd.outim[0].data.shape[-1]
             nl = ccd.outim[0].data.shape[-2]
-            # XXX: check these limits
-            if (ccd.outc1 != 0 or ccd.outc2 != nc or ccd.outl1 != 0 or
+            if (ccd.outc1 != 1 or ccd.outc2 != nc or ccd.outl1 != 1 or
                     ccd.outl2 != nl):
                 hstr = f'[{ccd.outc1}:{ccd.outc2},{ccd.outl1}:{ccd.outl2}]'
                 set_header_value(ccd.outim, instrument, 'datasec', hstr)
@@ -1420,11 +1397,10 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             # If trimming update the trim and bias section parameters.
             if ccd.cors['trim']:
                 delete_header_value(ccd.outim, instrument, 'trimsec')
-                # XXX: check these
-                ccd.biasc1 = max(0, ccd.biasc1 - ccd.trimc1)
-                ccd.biasc2 = min(nc-1, ccd.biasc2 - ccd.trimc1)
-                ccd.biasl1 = max(0, ccd.biasl1 - ccd.triml1)
-                ccd.biasl2 = min(nl-1, ccd.biasl2 - ccd.triml1)
+                ccd.biasc1 = max(1, ccd.biasc1 - ccd.trimc1 + 1)
+                ccd.biasc2 = min(nc, ccd.biasc2 - ccd.trimc1 + 1)
+                ccd.biasl1 = max(1, ccd.biasl1 - ccd.triml1 + 1)
+                ccd.biasl2 = min(nl, ccd.biasl2 - ccd.triml1 + 1)
                 if ccd.biasc1 <= ccd.biasc2 and ccd.biasl1 <= ccd.biasl2:
                     hstr = f'[{ccd.biasc1}:{ccd.biasc2},{ccd.biasl1}:{ccd.biasl2}]'
                     set_header_value(ccd.outim, instrument, 'biassec', hstr)
@@ -1488,8 +1464,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
                     rdatasec = get_header_value(rim, instrument, 'datasec')
                     inc1, inc2, incs, inl1, inl2, inls = ccd_section(rdatasec, defaults=(1, nc, 1, 1, nl, 1))
-                    # XXX: should these be nc or nc - 1. also check limits
-                    # in error section below
+
                     if (inc1 < 1 or inc2 > nc or inl1 < 1 or inl2 > nl or
                             incs != 1 or inl2 != 1):
                         raise Exception('Error in DATASEC parameter')
@@ -1518,21 +1493,21 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # Average across the readout axis.
 
                     # zero out the parts not in the data section
-                    # XXX: make sure this is doing the bits I think it is
-                    outdata[:inc1, :inl1] = 0.
-                    outdata[inc2:, inl2:] = 0.
+                    outdata[:, inc1-1] = 0.
+                    outdata[:inl1 - 1:, ] = 0.
+                    outdata[:, inc2:] = 0.
+                    outdata[inl2:, :] = 0.
 
-                    # XXX: check which axis to sum over
                     if readaxis == 'line':
                         # can't just use mean because there might be fewer
                         # rows we actually want the mean of and the rest 0s
-                        outdata = outdata.sum(axis=1) / (inl2 - inl1 + 1)
+                        outdata = outdata.sum(axis=0) / (inl2 - inl1 + 1)
                         ostr = f'[{inc1}:{inc2}, 1:1]'
                         set_header_value(newhdr, instrument, 'datasec', ostr)
                         ostr = f'[{ccdc1}:{ccdc2}, :]'
                         set_header_value(newhdr, instrument, 'ccdsec', ostr)
                     else:
-                        outdata = outdata.sum(axis=0) / (inc2 - inc1 + 1)
+                        outdata = outdata.sum(axis=1) / (inc2 - inc1 + 1)
                         ostr = f'[1:1, {inl1}:{inl2}]'
                         set_header_value(newhdr, instrument, 'datasec', ostr)
                         ostr = f'[:, {ccdl1}:{ccdl2}]'

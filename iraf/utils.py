@@ -77,10 +77,12 @@ def file_handler(filelist):
         # now that we have separated this up into individual path names or
         # loaded them from the input list, deal with wildcards
         for ifile in files:
-            # search for the matching files
-            results = glob(ifile)
-            # add any matches to the output
-            for jfile in results:
-                outlist.append(jfile)
-
+            if '*' in ifile or '?' in ifile:
+                # search for the matching files
+                results = glob(ifile)
+                # add any matches to the output
+                for jfile in results:
+                    outlist.append(jfile)
+            else:
+                outlist.append(ifile)
     return outlist
