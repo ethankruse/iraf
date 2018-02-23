@@ -291,9 +291,6 @@ def ccd_section(section, defaults=(None, None, 1, None, None, 1)):
     if len(section) == 0:
         return defaults
 
-    # XXX: need to check this function against the IRAF version and see how
-    # compatible they are
-
     if section[0] != '[' and section[-1] != ']':
         raise Exception(f"Error in 2D image section specification {section}")
 
@@ -317,7 +314,7 @@ def ccd_section(section, defaults=(None, None, 1, None, None, 1)):
             try:
                 start = int(split[0])
                 end = int(split[0])
-                step = 1
+                step = ds
             except ValueError:
                 start = d1
                 end = d2
@@ -660,7 +657,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         out = image_open(outim, mode='update')
 
         if pixeltype is not None and len(pixeltype) > 0:
-            otyp = pixeltype.split()[0]
+            otyp = pixeltype.strip().split()[0]
 
             otypes = "short|ushort|integer|long|real|double".split('|')
             ndtypes = [np.short, np.ushort, np.int_, np.int_,
@@ -685,6 +682,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         ccd.cors['overscan'] = False
         ccd.cors['trim'] = False
         readaxis = readaxis.strip().lower()
+        # in IRAF readaxis line == 1, readaxis column == 2
         if readaxis in ['line', 'column']:
             ccd.readaxis = readaxis
         else:
@@ -693,6 +691,19 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
         # begin set_sections
 
+        # XXX: need to think about this
+        """
+        How do I want to handle IRAF/FITS vs numpy axis order? What if we
+        want to extend to hdf5 or other formats? C-order vs F-order arrays
+        is going to be tough to handle. Same with FITS 1-indexing vs Python
+        0-indexing. This ccd_section is designed for 1-indexing and I later
+        adjust to 0-indexing, but what about in the future when I want to save
+        as hdf5 and its datasec parameter is 0-indexed?
+        
+        For now we're just assuming only working with FITS files, but will
+        need to be very careful in the future and revisit this and probably 
+        rewrite chunks to make less assumptions.
+        """
         # python and IRAF axis order is backwards. first axis in IRAF is last
         # in python
         nc = ccd.inim[0].data.shape[-1]
@@ -700,11 +711,9 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
         # The default data section is the entire image.
         datasec = get_header_value(ccd.inim, instrument, 'datasec')
-        c1, c2, cs, l1, l2, ls = ccd_section(datasec, defaults=(0, nc, 1,
-                                                                0, nl, 1))
-        # XXX: should these be nc or nc - 1. also check upper bounds on
-        # exception below
-        if c1 < 0 or c2 > nc or cs != 1 or l1 < 0 or l2 > nl or ls != 1:
+        c1, c2, cs, l1, l2, ls = ccd_section(datasec, defaults=(1, nc, 1,
+                                                                1, nl, 1))
+        if c1 < 1 or c2 > nc or cs != 1 or l1 < 1 or l2 > nl or ls != 1:
             raise Exception(f"Error in datasec parameter: {datasec}")
 
         ccd.inc1 = c1
@@ -731,8 +740,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         bs = biassec
         if biassec == 'image':
             bs = get_header_value(ccd.inim, instrument, 'biassec')
-        c1, c2, cs, l1, l2, ls = ccd_section(bs, defaults=(0, nc, 1, 0, nl, 1))
-        # XXX: should these be nc or nc - 1.
+        c1, c2, cs, l1, l2, ls = ccd_section(bs, defaults=(1, nc, 1, 1, nl, 1))
         if cs != 1 or ls != 1:
             raise Exception(f"Error in biassec parameter: {bs}")
 
@@ -742,12 +750,11 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         ccd.biasl2 = l2
 
         # The default ccd section is the size of the data section.
-        # XXX: check this size
         c2 = ccd.inc2 - ccd.inc1 + 1
         l2 = ccd.inl2 - ccd.inl1 + 1
 
         ccs = get_header_value(ccd.inim, instrument, 'ccdsec')
-        c1, c2, cs, l1, l2, ls = ccd_section(ccs, defaults=(0, c2, 1, 0, l2, 1))
+        c1, c2, cs, l1, l2, ls = ccd_section(ccs, defaults=(1, c2, 1, 1, l2, 1))
 
         if cs != 1 or ls != 1:
             raise Exception(f"Error in ccdsec parameter: {ccs}")
@@ -778,8 +785,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         # into its own function.
         if trim and not already_processed(ccd.inim, instrument, 'trim'):
             # Check trim section.
-            # XXX: check these upper limits
-            if (ccd.trimc1 < 0 or ccd.trimc2 > nc or ccd.triml1 < 0 or
+            if (ccd.trimc1 < 1 or ccd.trimc2 > nc or ccd.triml1 < 1 or
                     ccd.triml2 > nl):
                 estr = f"Error in trim section: image={ccd.inim.filename()}" \
                         f"[{nc},{nl}], trimsec=[{ccd.trimc1}:{ccd.trimc2}," \
@@ -812,15 +818,15 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
                 # output image has the size of the trim limits.
                 # even if the input data section does not cover it
-                # XXX: check this + 1 since these are indices, probably want
-                # to start at 0
                 # also this gives outc2 - outc1 as the same size as the
                 # inc2 - inc1, but then sets IM_LEN(out) to be the trim lengths
                 ccd.outc1 = ccd.inc1 - ccd.trimc1 + 1
                 ccd.outc2 = ccd.inc2 - ccd.trimc1 + 1
                 ccd.outl1 = ccd.inl1 - ccd.triml1 + 1
                 ccd.outl2 = ccd.inl2 - ccd.triml1 + 1
-
+                # XXX: set output dimensions here?
+                # ccd.outdim1 = ccd.trimc2 - ccd.trimc1 + 1
+                # ccd.outdim2 = ccd.triml2 - ccd.triml1 + 1
                 ccd.cors['trim'] = True
                 ccd.cor = True
 
@@ -871,14 +877,13 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         # begin set_overscan
         if overscan and not already_processed(ccd.inim, instrument, 'overscan'):
             # Check bias section.
-            # XXX: check both of these limits
-            if (ccd.biasc1 < 0 or ccd.biasc2 > nc or ccd.biasl1 < 0 or
+            if (ccd.biasc1 < 1 or ccd.biasc2 > nc or ccd.biasl1 < 1 or
                     ccd.biasl2 > nl):
                 estr = f"Error in bias section: image={ccd.inim.filename()}" \
                        f"[{nc},{nl}], biassec=[{ccd.biasc1}:{ccd.biasc2}," \
                        f"{ccd.biasl1}:{ccd.biasl2}]"
                 raise Exception(estr)
-            if (ccd.biasc1 == 0 and ccd.biasc2 == nc and ccd.biasl1 == 0 and
+            if (ccd.biasc1 == 1 and ccd.biasc2 == nc and ccd.biasl1 == 1 and
                     ccd.biasl2 == nl):
                 estr = "Bias section not specified or given as full image"
                 raise Exception(estr)
@@ -900,14 +905,12 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                 # limits.
                 if overscan_function in ['mean', 'median', 'minmax']:
                     fitoscan = None
-                    # XXX: make sure it's not column
-                    if ccd.readaxis == 'line':
+                    if ccd.readaxis == 'column':
                         estr = "Overscan function type not allowed with" \
-                               " readaxis of line"
+                               " readaxis of column"
                         raise Exception(estr)
                 else:
-                    # XXX: make sure it's not line
-                    if ccd.readaxis == 'column':
+                    if ccd.readaxis == 'line':
                         first = ccd.biasc1
                         last = ccd.biasc2
                         # XXX: need to check everything about this, but
@@ -986,11 +989,11 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     znl = zeroim[0].data.shape[-2]
 
                     zdatasec = get_header_value(zeroim, instrument, 'datasec')
-                    zc1, zc2, zcs, zl1, zl2, zls = ccd_section(zdatasec, defaults=(0, znc, 1, 0, znl, 1))
+                    zc1, zc2, zcs, zl1, zl2, zls = ccd_section(zdatasec, defaults=(1, znc, 1, 1, znl, 1))
                     # XXX: should these be nc or nc - 1. also check
                     # upper bounds on errors below
 
-                    if (zc1 < 0 or zc2 > znc or zcs != 1 or zl1 < 0 or
+                    if (zc1 < 1 or zc2 > znc or zcs != 1 or zl1 < 1 or
                             zl2 > znl or zls != 1):
                         estr = f"Data section error: image={cal}[{znc},{znl}]" \
                                f", datasec=[{zc1}:{zc2},{zl1}:{zl2}]"
@@ -1069,11 +1072,11 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     dnl = darkim[0].data.shape[-2]
 
                     ddatasec = get_header_value(darkim, instrument, 'datasec')
-                    dc1, dc2, dcs, dl1, dl2, dls = ccd_section(ddatasec, defaults=(0, dnc, 1, 0, dnl, 1))
+                    dc1, dc2, dcs, dl1, dl2, dls = ccd_section(ddatasec, defaults=(1, dnc, 1, 1, dnl, 1))
                     # XXX: should these be nc or nc - 1. also check
                     # upper bounds on errors below
 
-                    if (dc1 < 0 or dc2 > dnc or dcs != 1 or dl1 < 0 or
+                    if (dc1 < 1 or dc2 > dnc or dcs != 1 or dl1 < 1 or
                             dl2 > dnl or dls != 1):
                         estr = f"Data section error: image={cal}[{dnc},{dnl}]" \
                                f", datasec=[{dc1}:{dc2},{dl1}:{dl2}]"
@@ -1169,11 +1172,11 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     fnl = flatim[0].data.shape[-2]
 
                     fdatasec = get_header_value(flatim, instrument, 'datasec')
-                    fc1, fc2, fcs, fl1, fl2, fls = ccd_section(fdatasec, defaults=(0, fnc, 1, 0, fnl, 1))
+                    fc1, fc2, fcs, fl1, fl2, fls = ccd_section(fdatasec, defaults=(1, fnc, 1, 1, fnl, 1))
                     # XXX: should these be nc or nc - 1. also check
                     # upper bounds on errors below
 
-                    if (fc1 < 0 or fc2 > fnc or fcs != 1 or fl1 < 0 or
+                    if (fc1 < 1 or fc2 > fnc or fcs != 1 or fl1 < 1 or
                             fl2 > fnl or fls != 1):
                         estr = f"Data section error: image={cal}[{fnc},{fnl}]" \
                                f", datasec=[{fc1}:{fc2},{fl1}:{fl2}]"
@@ -1269,11 +1272,11 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     inl = illumim[0].data.shape[-2]
 
                     idatasec = get_header_value(illumim, instrument, 'datasec')
-                    ic1, ic2, ics, il1, il2, ils = ccd_section(idatasec, defaults=(0, inc, 1, 0, inl, 1))
+                    ic1, ic2, ics, il1, il2, ils = ccd_section(idatasec, defaults=(1, inc, 1, 1, inl, 1))
                     # XXX: should these be nc or nc - 1. also check
                     # upper bounds on errors below
 
-                    if (ic1 < 0 or ic2 > inc or ics != 1 or il1 < 0 or
+                    if (ic1 < 1 or ic2 > inc or ics != 1 or il1 < 1 or
                             il2 > inl or ils != 1):
                         estr = f"Data section error: image={cal}[{inc},{inl}]" \
                                f", datasec=[{ic1}:{ic2},{il1}:{il2}]"
@@ -1337,11 +1340,11 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     fnl = fringeim[0].data.shape[-2]
 
                     fdatasec = get_header_value(fringeim, instrument, 'datasec')
-                    fc1, fc2, fcs, fl1, fl2, fls = ccd_section(fdatasec, defaults=(0, fnc, 1, 0, fnl, 1))
+                    fc1, fc2, fcs, fl1, fl2, fls = ccd_section(fdatasec, defaults=(1, fnc, 1, 1, fnl, 1))
                     # XXX: should these be nc or nc - 1. also check
                     # upper bounds on errors below
 
-                    if (fc1 < 0 or fc2 > fnc or fcs != 1 or fl1 < 0 or
+                    if (fc1 < 1 or fc2 > fnc or fcs != 1 or fl1 < 1 or
                             fl2 > fnl or fls != 1):
                         estr = f"Data section error: image={cal}[{fnc},{fnl}]" \
                                f", datasec=[{fc1}:{fc2},{fl1}:{fl2}]"
@@ -1484,10 +1487,10 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     nl = rim[0].data.shape[-2]
 
                     rdatasec = get_header_value(rim, instrument, 'datasec')
-                    inc1, inc2, incs, inl1, inl2, inls = ccd_section(rdatasec, defaults=(0, nc, 1, 0, nl, 1))
+                    inc1, inc2, incs, inl1, inl2, inls = ccd_section(rdatasec, defaults=(1, nc, 1, 1, nl, 1))
                     # XXX: should these be nc or nc - 1. also check limits
                     # in error section below
-                    if (inc1 < 0 or inc2 > nc or inl1 < 0 or inl2 > nl or
+                    if (inc1 < 1 or inc2 > nc or inl1 < 1 or inl2 > nl or
                             incs != 1 or inl2 != 1):
                         raise Exception('Error in DATASEC parameter')
 
