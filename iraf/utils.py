@@ -16,12 +16,20 @@ def is_iterable(obj):
 
 def file_handler(filelist):
     """
+    A limited version of IRAF's imtopen.
+
     General purpose file type interpreter. Takes IRAF file inputs and returns
     list with actual paths for all matching files.
 
     Allows for a file with a list of file patterns by starting with '@', e.g.
-    '@filelist.txt'. Input string can also be comma separated list of filenames.
+    '@filelist.txt'. Will recursively search each line in an @list so e.g.
+    it can handle @lists of @lists.
+
     All file names can also accept ~ and wildcard (* ?) expansions as well.
+
+    Currently does not support IRAF's image section format.
+    e.g. image.fits[1:50, 1:50] will fail rather than allowing only a portion
+    of an image to be opened.
 
     Parameters
     ----------
@@ -34,12 +42,6 @@ def file_handler(filelist):
     list[str]
         List of file names matching all patterns.
     """
-    # XXX: This is supposed to be the replacement for IRAF's IMTOPEN, but has
-    # much reduced functionality from that currently.
-
-    # XXX: this does not allow for image subsections,
-    #  e.g. imagename[x1:x2,y1:y2]
-    # How should that be handled?
 
     if filelist is None:
         return []
@@ -48,41 +50,41 @@ def file_handler(filelist):
         filelist = [filelist]
 
     outlist = []
-    # go through every input and create the output list of files
+    # go through every input and add to the output list of files
     for istr in filelist:
         istr = istr.strip()
-        # every file here to look for
-        files = []
-        # XXX: deal with wildcards here too?
         # we have an input file with a list of files to use.
         if istr[0] == '@':
-            fname = os.path.expanduser(istr[1:])
-
-            with open(fname, 'r') as ff:
-                reader = csv.reader(ff)
-                for row in reader:
-                    # skip over blank lines and comment lines
-                    if (len(row) == 0 or len(row[0].strip()) == 0 or
-                            row[0].strip()[0] == '#'):
-                        continue
-
-                    files.append(os.path.expanduser(row[0].strip()))
-        else:
-            # XXX: deal with lists of '@' files?
-            # this is either a single file or a CSV list of files
-            tmp = istr.split(',')
-            for ifile in tmp:
-                files.append(os.path.expanduser(ifile.strip()))
-
-        # now that we have separated this up into individual path names or
-        # loaded them from the input list, deal with wildcards
-        for ifile in files:
-            if '*' in ifile or '?' in ifile:
-                # search for the matching files
-                results = glob(ifile)
-                # add any matches to the output
-                for jfile in results:
-                    outlist.append(jfile)
+            # remove the @ and deal with home directories
+            fnames = os.path.expanduser(istr[1:])
+            # deal with wildcards
+            if '*' in fnames or '?' in fnames:
+                fnames = glob(fnames)
             else:
-                outlist.append(ifile)
+                fnames = [fnames]
+            # load each requested list
+            for fname in fnames:
+                with open(fname, 'r') as ff:
+                    reader = csv.reader(ff)
+                    for row in reader:
+                        # skip over blank lines and comment lines
+                        if (len(row) == 0 or len(row[0].strip()) == 0 or
+                                row[0].strip()[0] == '#'):
+                            continue
+                        # recursively handle these files
+                        newfiles = file_handler(row)
+                        for newfile in newfiles:
+                            outlist.append(newfile)
+        # just a single file name, no list
+        else:
+            fnames = os.path.expanduser(istr)
+            # deal with wildcards
+            if '*' in fnames or '?' in fnames:
+                fnames = glob(fnames)
+            else:
+                fnames = [fnames]
+            # add the results to the output list
+            for fname in fnames:
+                outlist.append(fname)
+
     return outlist

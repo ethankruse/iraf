@@ -26,6 +26,8 @@ class CCD(object):
 
     """
     def __init__(self):
+        # NOTE: IRAF treats 2D arrays as [column, line], but in Python/numpy
+        # this translates to array[line, column]
         # CCD data coordinates
         self.ccdc1 = 0  # CCD starting column
         self.ccdc2 = 0  # CCD starting column
@@ -699,7 +701,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         is going to be tough to handle. Same with FITS 1-indexing vs Python
         0-indexing. This ccd_section is designed for 1-indexing and I later
         adjust to 0-indexing, but what about in the future when I want to save
-        as hdf5 and its datasec parameter is 0-indexed?
+        as hdf5 and its datasec parameter is already 0-indexed?
         
         For now we're just assuming only working with FITS files, but will
         need to be very careful in the future and revisit this and probably 

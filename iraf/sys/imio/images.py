@@ -24,7 +24,7 @@ def image_open(image, mode='readonly'):
         hdulist = fits.open(image, mode=mode)
         ftype = 'fits'
     except IOError:
-        print("Error reading image {0} ...".format(image))
+        print(f"Error reading image {image} ...")
 
     if hdulist is not None:
         hdulist.__filetype__ = ftype
