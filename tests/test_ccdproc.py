@@ -2,6 +2,10 @@ import iraf
 import pytest
 import os
 from pathlib import Path
+import numpy as np
+from astropy.io import fits
+import copy
+import time
 
 
 def test_ccd_section():
@@ -127,3 +131,99 @@ def test_file_handler(combine_dir):
 
     tot = nwrite + len(samplefiles)
     assert len(iraf.utils.file_handler('@' + atlist)) == tot
+
+
+# explicitly call ccdproc with every parameter set to what we want
+defaultargs = {'output': None, 'ccdtype': 'object', 'noproc': False,
+               'fixpix': False, 'overscan': False, 'trim': False,
+               'zerocor': False,
+               'darkcor': False, 'flatcor': False, 'illumcor': False,
+               'fringecor': False, 'readcor': False, 'scancor': False,
+               'readaxis': 'line', 'fixfile': None, 'biassec': None,
+               'trimsec': None, 'zero': None, 'dark': None, 'flat': None,
+               'illum': None, 'fringe': None, 'minreplace': 1.,
+               'scantype': 'shortscan', 'nscan': 1, 'interactive': False,
+               'overscan_function': 'legendre', 'order': 1, 'sample': '*',
+               'naverage': 1, 'niterate': 1, 'low_reject': 3.,
+               'high_reject': 3., 'grow': 0., 'instrument': None,
+               'pixeltype': "real", 'logfile': None, 'verbose': False}
+
+
+def test_zerocor(combine_dir):
+    basedir = str(combine_dir)
+
+    # create some simple files for testing
+    # use an even number to test the trickier median case
+    nx = 50
+    ny = 90
+    nimg = 3
+    baseval = 100
+
+    # create input files
+    inputs = []
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=float) * baseval
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['imagetyp'] = 'object'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+
+    # make the input list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    inlist = '@' + inlist
+
+    # make the output list
+    outlist = os.path.join(basedir, 'outfiles.txt')
+    outlists = []
+    with open(outlist, 'w') as ff:
+        for ifile in inputs:
+            of = ifile[:-5] + '.out.fits'
+            ff.write(of + '\n')
+            outlists.append(of)
+
+    outlist = '@' + outlist
+
+    # make a zero image
+    zeroval = 10
+    zerofile = os.path.join(basedir, 'testzero.fits')
+
+    arr = np.ones((nx, ny), dtype=float) * zeroval
+
+    hdu = fits.PrimaryHDU(arr)
+    hdu.header['imagetyp'] = 'zero'
+    hdu.writeto(zerofile, overwrite=True)
+
+    # do my processing
+    myargs = copy.deepcopy(defaultargs)
+    myargs['output'] = outlist
+
+    # which parts we want to do
+    myargs['zerocor'] = True
+    myargs['zero'] = zerofile
+
+    iraf.ccdproc(inlist, **myargs)
+
+    oldtimes = []
+    for ifile in outlists:
+        hdr = fits.open(ifile)
+        assert np.allclose(hdr[0].data, baseval - zeroval)
+        assert len(hdr[0].header['zerocor']) > 0
+        assert len(hdr[0].header['ccdproc']) > 0
+        assert hdr[0].header['ccdsec'] == f'[1:{ny:d},1:{nx:d}]'
+        oldtimes.append(hdr[0].header['zerocor'])
+        hdr.close()
+
+    """
+    # test this part is true once you've run with output=None
+    time.sleep(1)
+
+    iraf.ccdproc(inlist, **myargs)
+    for ii, ifile in enumerate(outlists):
+        hdr = fits.open(ifile)
+        assert hdr[0].header['zerocor'] == oldtimes[ii]
+        hdr.close()
+    """

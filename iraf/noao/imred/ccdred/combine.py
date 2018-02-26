@@ -410,7 +410,8 @@ def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True,
         orcomm = 'FITS file originator'
         set_header_value(hdulist, instrument, 'origin', orval, orcomm)
         import datetime
-        dtval = datetime.datetime.now().isoformat()
+        # don't need microsecond precision in our dates, so leave it out
+        dtval = datetime.datetime.now().replace(microsecond=0).isoformat()
         dtcomm = 'Date FITS file was generated'
         set_header_value(hdulist, instrument, 'date', dtval, dtcomm)
         lmcomm = 'Time of last modification'

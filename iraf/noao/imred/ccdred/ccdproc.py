@@ -367,11 +367,11 @@ def logstring(instring, inim, verbose, logfd):
     ostr = f'{now} {instring}'
 
     # the ccdlog() part
-    ostr = f'{inim.filename()}: {ostr}'
+    printstr = f'{inim.filename()}: {ostr}'
     if verbose:
-        print(ostr)
+        print(printstr)
     if logfd is not None:
-        logfd.write(ostr + '\n')
+        logfd.write(printstr + '\n')
     return ostr
 
 
