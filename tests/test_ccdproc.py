@@ -207,23 +207,31 @@ def test_zerocor(combine_dir):
 
     iraf.ccdproc(inlist, **myargs)
 
-    oldtimes = []
     for ifile in outlists:
         hdr = fits.open(ifile)
         assert np.allclose(hdr[0].data, baseval - zeroval)
         assert len(hdr[0].header['zerocor']) > 0
         assert len(hdr[0].header['ccdproc']) > 0
         assert hdr[0].header['ccdsec'] == f'[1:{ny:d},1:{nx:d}]'
+        hdr.close()
+
+    # test no outputs and replacing the input
+    myargs['output'] = None
+    iraf.ccdproc(inlist, **myargs)
+
+    oldtimes = []
+    for ifile in inputs:
+        hdr = fits.open(ifile)
+        assert hdr[0].header['ccdsec'] == f'[1:{ny:d},1:{nx:d}]'
+        assert len(hdr[0].header['zerocor']) > 0
         oldtimes.append(hdr[0].header['zerocor'])
         hdr.close()
 
-    """
-    # test this part is true once you've run with output=None
+    # wait a second and do it again
     time.sleep(1)
-
     iraf.ccdproc(inlist, **myargs)
+    # make sure nothing has happened since inputs are already processed
     for ii, ifile in enumerate(outlists):
         hdr = fits.open(ifile)
         assert hdr[0].header['zerocor'] == oldtimes[ii]
         hdr.close()
-    """
