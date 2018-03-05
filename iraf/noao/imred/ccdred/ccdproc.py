@@ -24,10 +24,39 @@ class CCD(object):
 
     Taken from ccdred.h
 
+    Notes about what these values mean and where they come from.
+    see IRAF documention for ccdgeometry to explain some of these terms.
+
+    in* : input image 'datasec', defaults to size of the image
+    ccd* : input image 'ccdsec', defaults to size of in*, but with starting
+            point at 1. so if in* = [5:50], ccd* = [1:46]
+    trim* : 'trimsec' parameter which might be 'image' so grabs from the image
+            header. defaults to the same as in*.
+    bias* : input image 'biassec', defaults to size of the image
+    out * : defaults to in *
+
+    in* and ccd* must have the same size in each dimension
+    in* and ccd* are both adjusted to be within the trim limits if necessary.
+    so if trim = [5:30] and in = [3:27], the new in = [5:27].
+    ccd is updated accordingly so if ccd = [10:34], the new ccd = [12:34]
+
+    out* is adjusted by the trim starting points, so that out* becomes
+    appropriate way to index into the outarray with size of trim
+
+    so if out*/in* = [10:30] and trim = [5:50], the new out* = [6:26]
+
+    zero*/dark*/flat*/illum*/fringe* :
+    grab the image's datasec (defaults to size of the image) starting values
+    (c1/l1)
+    grab the image's ccdsec starting values (defaults to whatever the
+     datasec was)
+    set the zero* value to ccd* - ccdsec1 + datasec1
+
     """
     def __init__(self):
         # NOTE: IRAF treats 2D arrays as [column, line], but in Python/numpy
         # this translates to array[line, column]
+
         # CCD data coordinates
         self.ccdc1 = 0  # CCD starting column
         self.ccdc2 = 0  # CCD starting column
@@ -382,8 +411,10 @@ def process(ccd):
 
     # translate into numpy space. that means instead of [c, l] you do [l, c]
     # and also that you're 0-indexed and not inclusive of the end anymore.
-    fulloutarr = ccd.inim[0].data[ccd.triml1-1:ccd.triml2,
-                                  ccd.trimc1-1:ccd.trimc2]
+    fulloutarr = ccd.inim[0].data * 1
+    if ccd.cors['trim']:
+        fulloutarr = fulloutarr[ccd.triml1-1:ccd.triml2,
+                                ccd.trimc1-1:ccd.trimc2]
     # XXX: need to deal with xt_fpsr
     if ccd.maskfp is not None:
         raise Exception('maskfp not yet implemented')
@@ -726,6 +757,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
         # The default trim section is the data section.
         # Defer limit checking until actually used.
+        # XXX: set default value to 'image'?
         ts = trimsec
         if trimsec == 'image':
             ts = get_header_value(ccd.inim, instrument, 'trimsec')
@@ -740,6 +772,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         ccd.triml2 = l2
 
         # The default bias section is the whole image.
+        # XXX: set default value to 'image'?
         bs = biassec
         if biassec == 'image':
             bs = get_header_value(ccd.inim, instrument, 'biassec')
@@ -800,7 +833,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                        f"{ccd.trimc2},{ccd.triml1}:{ccd.triml2}]."
                 print(ostr)
             else:
-                # if trim limits are within inc1, clip inc1 to the trim limits,
+                # if trim limits are inside inc1, clip inc1 to the trim limits,
                 # otherwise leave inc1 alone if trim is wider on either side.
                 # then make sure ccdc1 is adjusted the same so they remain the
                 # same size
@@ -991,10 +1024,12 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                         estr = f"Data section error: image={cal}[{znc},{znl}]" \
                                f", datasec=[{zc1}:{zc2},{zl1}:{zl2}]"
                         raise Exception(estr)
-
+                    # save the datasec starting points
                     datac1 = zc1
                     datal1 = zl1
 
+                    # XXX: for zero/dark/flat/illum/fringe, need to make sure
+                    # datasec and ccdsec have the same size/shape.
                     zcsec = get_header_value(zeroim, instrument, 'ccdsec')
                     zc1, zc2, zcs, zl1, zl2, zls = ccd_section(zcsec, defaults=(zc1, zc2, zcs, zl1, zl2, zls))
 
@@ -1004,6 +1039,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     if znl == 1:
                         zl1 = ccd.ccdl1
                         zl2 = ccd.ccdl2
+                    # save the ccdsec starting points
                     ccdc1 = zc1
                     ccdl1 = zl1
 
@@ -1014,6 +1050,9 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                                f'{cal}=[{zc1}:{zc2},{zl1}:{zl2}]'
                         raise Exception(estr)
 
+                    # make sure this and ccd* are starting at the same physical
+                    # pixel on the detector. ensures we're lining up the same
+                    # regions on the detector for calibration
                     ccd.zeroim = zeroim
                     ccd.zeroc1 = ccd.ccdc1 - ccdc1 + datac1
                     ccd.zeroc2 = ccd.ccdc2 - ccdc1 + datac1
@@ -1094,6 +1133,9 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                                f'{cal}=[{dc1}:{dc2},{dl1}:{dl2}]'
                         raise Exception(estr)
 
+                    # make sure this and ccd* are starting at the same physical
+                    # pixel on the detector. ensures we're lining up the same
+                    # regions on the detector for calibration
                     ccd.darkim = darkim
                     ccd.darkc1 = ccd.ccdc1 - ccdc1 + datac1
                     ccd.darkc2 = ccd.ccdc2 - ccdc1 + datac1
@@ -1191,6 +1233,9 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                                f'{cal}=[{fc1}:{fc2},{fl1}:{fl2}]'
                         raise Exception(estr)
 
+                    # make sure this and ccd* are starting at the same physical
+                    # pixel on the detector. ensures we're lining up the same
+                    # regions on the detector for calibration
                     ccd.flatim = flatim
                     ccd.flatc1 = ccd.ccdc1 - ccdc1 + datac1
                     ccd.flatc2 = ccd.ccdc2 - ccdc1 + datac1
@@ -1282,6 +1327,9 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                                f'{cal}=[{ic1}:{ic2},{il1}:{il2}]'
                         raise Exception(estr)
 
+                    # make sure this and ccd* are starting at the same physical
+                    # pixel on the detector. ensures we're lining up the same
+                    # regions on the detector for calibration
                     ccd.illumim = illumim
                     ccd.illumc1 = ccd.ccdc1 - ccdc1 + datac1
                     ccd.illumc2 = ccd.ccdc2 - ccdc1 + datac1
@@ -1357,6 +1405,9 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
                     ccd.fringescale = fexp1 / fexp2 * fscl
 
+                    # make sure this and ccd* are starting at the same physical
+                    # pixel on the detector. ensures we're lining up the same
+                    # regions on the detector for calibration
                     ccd.fringeim = fringeim
                     ccd.fringec1 = ccd.ccdc1 - ccdc1 + datac1
                     ccd.fringec2 = ccd.ccdc2 - ccdc1 + datac1

@@ -153,7 +153,6 @@ def test_zerocor(combine_dir):
     basedir = str(combine_dir)
 
     # create some simple files for testing
-    # use an even number to test the trickier median case
     nx = 50
     ny = 90
     nimg = 3
@@ -228,10 +227,83 @@ def test_zerocor(combine_dir):
         hdr.close()
 
     # wait a second and do it again
-    time.sleep(1)
+    time.sleep(2)
     iraf.ccdproc(inlist, **myargs)
     # make sure nothing has happened since inputs are already processed
     for ii, ifile in enumerate(outlists):
         hdr = fits.open(ifile)
         assert hdr[0].header['zerocor'] == oldtimes[ii]
+        hdr.close()
+
+    # test datasec of input image as just a subset of the image
+
+    # add the datasec parameter
+    dsec = '[5:30,10:40]'
+    inputs = []
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=float) * baseval
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['imagetyp'] = 'object'
+        hdu.header['datasec'] = dsec
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+
+    myargs['output'] = outlist
+    iraf.ccdproc(inlist, **myargs)
+
+    for ifile in outlists:
+        hdr = fits.open(ifile)
+        assert np.allclose(hdr[0].data[9:40, 4:30], baseval - zeroval)
+        data = hdr[0].data * 1
+        data[9:40, 4:30] += zeroval
+        assert np.allclose(data, baseval)
+        assert hdr[0].header['datasec'] == dsec
+        hdr.close()
+
+    # test datasec/ccdsec matches of input and zero image
+
+    # add the datasec/ccdsec parameter
+    dsec = '[5:30,10:40]'
+    ccdsec = '[50:75,100:130]'
+    baseoff = np.arange(ny) + 46  # ccdsec1 - dsec1 + 1
+    inputs = []
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=float) * baseval
+        arr += baseoff
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['imagetyp'] = 'object'
+        hdu.header['datasec'] = dsec
+        hdu.header['ccdsec'] = ccdsec
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+
+    # make a zero image
+    zeroval = 10
+    zerofile = os.path.join(basedir, 'testzero.fits')
+    # nx, ny = 50, 90
+    zdsec = '[30:90, 5:45]'
+    zccdsec = '[20:80, 95:135]'
+
+    zarr = np.ones((nx, ny), dtype=float) * zeroval
+    zbaseoff = np.arange(ny) - 9  # ccdsec1 - dsec1 + 1
+    zarr += zbaseoff
+
+    hdu = fits.PrimaryHDU(zarr)
+    hdu.header['imagetyp'] = 'zero'
+    hdu.header['datasec'] = zdsec
+    hdu.header['ccdsec'] = zccdsec
+    hdu.writeto(zerofile, overwrite=True)
+
+    iraf.ccdproc(inlist, **myargs)
+
+    for ifile in outlists:
+        hdr = fits.open(ifile)
+        assert np.allclose(hdr[0].data[9:40, 4:30], baseval - zeroval)
+        data = hdr[0].data * 1
+        data[9:40, 4:30] += zeroval + baseoff[4:30]
+        assert np.allclose(data, arr)
+        assert hdr[0].header['datasec'] == dsec
+        assert hdr[0].header['ccdsec'] == ccdsec
         hdr.close()
