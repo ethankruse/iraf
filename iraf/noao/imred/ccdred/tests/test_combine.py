@@ -34,9 +34,8 @@ def simple_inputs(nimg, nx, ny, basedir):
     return inputs
 
 
-# combine_dir is set up in conftest.py
-def test_combine_basic(combine_dir):
-    basedir = str(combine_dir)
+def test_combine_basic(tmpdir):
+    basedir = str(tmpdir)
     # create some simple files for testing
     nx = 20
     ny = 30
@@ -58,8 +57,8 @@ def test_combine_basic(combine_dir):
     outim.close()
 
 
-def test_reject_none_outtype(combine_dir):
-    basedir = str(combine_dir)
+def test_reject_none_outtype(tmpdir):
+    basedir = str(tmpdir)
     # iraf outtype values and the numpy equivalent (excluding long == int)
     dtypestr = ['short', 'ushort', 'integer', 'real', 'double']
     dtypes = [np.short, np.ushort, np.int_, np.single, np.double]
@@ -115,8 +114,8 @@ def test_reject_none_outtype(combine_dir):
             outim.close()
 
 
-def test_reject_minmax(combine_dir):
-    basedir = str(combine_dir)
+def test_reject_minmax(tmpdir):
+    basedir = str(tmpdir)
     # create some simple files for testing
     # use an even number to test nlow + nhigh == nimages
     nimg = 6
@@ -163,8 +162,8 @@ def test_reject_minmax(combine_dir):
                     iraf.combine(iraflist, outfile, **myargs)
 
 
-def test_reject_pclip(combine_dir):
-    basedir = str(combine_dir)
+def test_reject_pclip(tmpdir):
+    basedir = str(tmpdir)
     # create some simple files for testing
     nx = 20
     ny = 30
@@ -211,8 +210,8 @@ def test_reject_pclip(combine_dir):
                 outim.close()
 
 
-def test_reject_ccdclip_crreject(combine_dir):
-    basedir = str(combine_dir)
+def test_reject_ccdclip_crreject(tmpdir):
+    basedir = str(tmpdir)
     # create some simple files for testing
     nx = 20
     ny = 30
@@ -267,8 +266,8 @@ def test_reject_ccdclip_crreject(combine_dir):
                 outim.close()
 
 
-def test_reject_sigclip(combine_dir):
-    basedir = str(combine_dir)
+def test_reject_sigclip(tmpdir):
+    basedir = str(tmpdir)
     # create some simple files for testing
     nx = 20
     ny = 30
@@ -314,8 +313,8 @@ def test_reject_sigclip(combine_dir):
             outim.close()
 
 
-def test_reject_avsigclip(combine_dir):
-    basedir = str(combine_dir)
+def test_reject_avsigclip(tmpdir):
+    basedir = str(tmpdir)
     # create some simple files for testing
     nx = 20
     ny = 30
@@ -365,8 +364,8 @@ def test_reject_avsigclip(combine_dir):
             outim.close()
 
 
-def test_delete(combine_dir):
-    basedir = str(combine_dir)
+def test_delete(tmpdir):
+    basedir = str(tmpdir)
     nx = 20
     ny = 30
     inputs = simple_inputs(5, nx, ny, basedir)
@@ -392,8 +391,8 @@ def test_delete(combine_dir):
         assert not os.path.exists(ifile)
 
 
-def test_threshold_blank(combine_dir):
-    basedir = str(combine_dir)
+def test_threshold_blank(tmpdir):
+    basedir = str(tmpdir)
     # create some simple files for testing
     nx = 20
     ny = 30
@@ -440,8 +439,8 @@ def test_threshold_blank(combine_dir):
             outim.close()
 
 
-def test_plfile(combine_dir):
-    basedir = str(combine_dir)
+def test_plfile(tmpdir):
+    basedir = str(tmpdir)
     # create some simple files for testing
     nx = 20
     ny = 30
@@ -475,8 +474,8 @@ def test_plfile(combine_dir):
 
 
 # XXX: need to test weights here
-def test_sigmafile(combine_dir):
-    basedir = str(combine_dir)
+def test_sigmafile(tmpdir):
+    basedir = str(tmpdir)
     # create some simple files for testing
     nx = 20
     ny = 30
@@ -519,8 +518,8 @@ def test_sigmafile(combine_dir):
     outim.close()
 
 
-def test_ccdtype(combine_dir):
-    basedir = str(combine_dir)
+def test_ccdtype(tmpdir):
+    basedir = str(tmpdir)
     # create some simple files for testing
     nx = 20
     ny = 30
@@ -558,8 +557,8 @@ def test_ccdtype(combine_dir):
     outim.close()
 
 
-def test_subsets(combine_dir):
-    basedir = str(combine_dir)
+def test_subsets(tmpdir):
+    basedir = str(tmpdir)
     # create some simple files for testing
     nx = 20
     ny = 30
@@ -604,8 +603,8 @@ def test_subsets(combine_dir):
         outim.close()
 
 
-def test_rdnoise_gain_snoise(combine_dir):
-    basedir = str(combine_dir)
+def test_rdnoise_gain_snoise(tmpdir):
+    basedir = str(tmpdir)
     # create some simple files for testing
     nx = 20
     ny = 30
@@ -687,8 +686,8 @@ def test_rdnoise_gain_snoise(combine_dir):
 
 
 """
-def test_scale(combine_dir):
-    basedir = str(combine_dir)
+def test_scale(tmpdir):
+    basedir = str(tmpdir)
     # create some simple files for testing
     nx = 20
     ny = 30

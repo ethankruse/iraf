@@ -93,6 +93,7 @@ def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
         # only use the first (primary) header for the statistics
         data = hdulist[0].data
         npix = 0
+        valid = data * 1
         # if there's valid data to look at
         if data is not None:
             data = data.flatten()

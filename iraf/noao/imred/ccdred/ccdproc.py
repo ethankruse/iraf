@@ -594,6 +594,10 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     Returns
     -------
 
+    Other Parameters
+    ----------------
+
+
     """
     inputs = file_handler(images)
     outputs = file_handler(output)

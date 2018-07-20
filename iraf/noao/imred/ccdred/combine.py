@@ -1311,9 +1311,9 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         # end of the icscale function
 
         # Set rejection algorithm specific parameters
+        # the column order is readnoise, gain, snoise
+        nm = np.zeros((nimages, 3))
         if reject in ['ccdclip', 'crreject']:
-            # the column order is readnoise, gain, snoise
-            nm = np.zeros((nimages, 3))
             if isinstance(rdnoise, str):
                 for ii in np.arange(nimages):
                     nm[ii, 0] = get_header_value(imin[ii], instrument, rdnoise)

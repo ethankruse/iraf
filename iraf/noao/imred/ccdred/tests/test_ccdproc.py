@@ -54,8 +54,8 @@ def test_ccd_section():
         iraf.ccd_section('[:,:]', defaults=[1, 2, 3])
 
 
-def test_file_handler(combine_dir):
-    basedir = str(combine_dir)
+def test_file_handler(tmpdir):
+    basedir = str(tmpdir)
     ltxt = 4
     lshorttxt = 3
     ifiles = ['a.txt', 'b.txt', 'c.txt', 'ff.txt', '1.fits', '2.fits', '3.fits']
@@ -149,8 +149,8 @@ defaultargs = {'output': None, 'ccdtype': 'object', 'noproc': False,
                'pixeltype': "real", 'logfile': None, 'verbose': False}
 
 
-def test_zerocor(combine_dir):
-    basedir = str(combine_dir)
+def test_zerocor(tmpdir):
+    basedir = str(tmpdir)
 
     # create some simple files for testing
     nx = 50

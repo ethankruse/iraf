@@ -5,18 +5,23 @@ __all__ = ['image_open', 'image_close']
 
 def image_open(image, mode='readonly'):
     """
+    Open an image and return an AIRAF image object.
+
     Supposed to be a function that handles opening images and returning
     data/headers etc in one consistent format. Currently only supports FITS
-    though.
+    and simply returns a standard HDUList with a flag indicating it was
+    opened here.
 
     Parameters
     ----------
-    image
-    mode
+    image : str
+        Image to be opened.
+    mode : str
+        Mode the file is to be opened with.
 
     Returns
     -------
-
+    HDUList object
     """
     hdulist = None
     ftype = ''
@@ -34,12 +39,15 @@ def image_open(image, mode='readonly'):
 
 def image_close(image):
     """
+    Close an AIRAF image.
+
     Supposed to be a function that handles closing images of all types.
-    Currently just operates as image.close() though.
+    Currently just operates as image.close() though, assuming it was opened
+    with `image_open`.
 
     Parameters
     ----------
-    image
+    image : AIRAF image object
 
     Returns
     -------
@@ -47,3 +55,5 @@ def image_close(image):
     """
     if image.__filetype__ == 'fits':
         image.close()
+    else:
+        raise Exception(f"{image} of unknown type {image.__filetype__}")
