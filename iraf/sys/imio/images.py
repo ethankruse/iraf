@@ -19,7 +19,7 @@ def image_open(image, mode='readonly'):
     ----------
     image : str
         Image to be opened.
-    mode : {'readonly', 'update', 'append'}
+    mode : {'readonly', 'update'}
         Mode the file is to be opened with.
 
     Returns

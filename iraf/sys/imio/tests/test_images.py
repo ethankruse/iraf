@@ -5,7 +5,7 @@ import iraf
 import pytest
 
 
-def test_image_open_close(tmpdir):
+def test_image_open_close_fits(tmpdir):
     basedir = str(tmpdir)
     inim = os.path.join(basedir, f'testimg.fits')
 
@@ -14,7 +14,7 @@ def test_image_open_close(tmpdir):
     with pytest.raises(IOError):
         iraf.sys.image_open(inim)
 
-    # test opening a fits file
+    # test opening a FITS file
     sz = 5
     arr = np.zeros(sz)
     hdu = fits.PrimaryHDU(arr)
@@ -24,11 +24,6 @@ def test_image_open_close(tmpdir):
     assert im.__filetype__ == 'fits'
 
     # test image closing
-    im.__filetype__ = 'bs'
-    # unrecognized file types raise errors
-    with pytest.raises(Exception):
-        im.close()
-    im.__filetype__ = 'fits'
     # make sure the file is still open
     assert im[0].data.size == sz
     im.close()
@@ -37,3 +32,20 @@ def test_image_open_close(tmpdir):
         print(im[0].data.size)
 
     # test context manager
+    with iraf.sys.image_open(inim) as im:
+        # make sure the file is still open
+        assert im[0].data.size == sz
+    # file should now be closed and data inaccessible
+    with pytest.raises(ValueError):
+        print(im[0].data.size)
+
+    # make sure you can't change values in 'readonly' mode
+    with iraf.sys.image_open(inim, mode='readonly') as im:
+        im[0].data += 1
+    with iraf.sys.image_open(inim, mode='readonly') as im:
+        assert np.allclose(im[0].data, 0)
+    # make sure update mode works
+    with iraf.sys.image_open(inim, mode='update') as im:
+        im[0].data += 1
+    with iraf.sys.image_open(inim, mode='readonly') as im:
+        assert np.allclose(im[0].data, 1)
