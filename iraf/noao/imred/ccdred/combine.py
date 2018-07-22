@@ -1,7 +1,7 @@
 from iraf.utils import file_handler
 import numpy as np
 import os
-from iraf.sys import image_open, image_close
+from iraf.sys import image_open
 import re
 
 
@@ -416,7 +416,7 @@ def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True,
         set_header_value(hdulist, instrument, 'date', dtval, dtcomm)
         lmcomm = 'Time of last modification'
         set_header_value(hdulist, instrument, 'iraf-tlm', dtval, lmcomm)
-        image_close(hdulist)
+        hdulist.close()
     else:
         raise Exception(f'file_new_copy of file type {ftype} not yet '
                         f'implemented.')
@@ -472,7 +472,7 @@ def ic_mopen(in_images, mtype, mvalue, instrument):
 
             pm = image_open(fname)
             if np.allclose(pm[0].data, 0) and not invert:
-                image_close(pm)
+                pm.close()
                 pm = None
             else:
                 npms += 1
@@ -672,7 +672,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
 
         # if this isn't the image type we're looking for, skip it
         if ccdtype is not None and thistype != ccdtype:
-            image_close(hdulist)
+            hdulist.close()
             continue
 
         if subsets:
@@ -687,7 +687,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         else:
             images[subset.index(subsetstr)].append(image)
 
-        image_close(hdulist)
+        hdulist.close()
 
     # end of IRAF cmb_images
 
@@ -772,7 +772,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                 return
             hdulist = image_open(iimages[0])
             shp = np.array(hdulist[0].data.shape)
-            image_close(hdulist)
+            hdulist.close()
             if shp.size == 1 or shp[shp > 1].size == 1:
                 print("Can't project one dimensional images")
                 return
@@ -1730,11 +1730,11 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
 
         # close the input images
         for ifile in imin:
-            image_close(ifile)
+            ifile.close()
         # close the output images
         for ifile in out:
             if ifile is not None:
-                image_close(ifile)
+                ifile.close()
         if logfd is not None:
             logfd.close()
         # delete the input images if requested
@@ -1744,7 +1744,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         # close the mask images
         for pm in pms:
             if pm is not None:
-                image_close(pm)
+                pm.close()
 
     # return numpy error reporting to its previous state
     np.seterr(invalid=olderr['invalid'])

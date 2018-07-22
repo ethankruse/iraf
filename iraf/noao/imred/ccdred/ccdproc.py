@@ -4,7 +4,7 @@ from .combine import file_new_copy, type_max, set_header_value
 from .combine import delete_header_value
 import numpy as np
 import os
-from iraf.sys import image_open, image_close
+from iraf.sys import image_open
 import tempfile
 import datetime
 import time
@@ -214,7 +214,7 @@ def cal_list(list1, listtype, instrument, calimages, nscans, caltypes, subsets,
                 subsets.append(ccdsubset(hdulist, instrument))
                 calimages.append(image)
 
-        image_close(hdulist)
+        hdulist.close()
 
 
 def cal_scan(image, nscan, scancor):
@@ -674,7 +674,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
         ccdtype = ccdtypes(imin, instrument)
         if ccdtype != origccdtype:
-            image_close(imin)
+            imin.close()
             continue
 
         # Set output image.
@@ -1478,8 +1478,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             set_header_value(ccd.outim, instrument, 'ccdproc', ostr)
             # end set_header
 
-        image_close(imin)
-        image_close(out)
+        imin.close()
+        out.close()
         if outtmp:
             if ccd.cor:
                 # Replace the input image by the corrected image.
@@ -1488,17 +1488,17 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                 os.remove(outim)
 
         if ccd.maskim is not None:
-            image_close(ccd.maskim)
+            ccd.maskim.close()
         if ccd.zeroim is not None:
-            image_close(ccd.zeroim)
+            ccd.zeroim.close()
         if ccd.darkim is not None:
-            image_close(ccd.darkim)
+            ccd.darkim.close()
         if ccd.flatim is not None:
-            image_close(ccd.flatim)
+            ccd.flatim.close()
         if ccd.illumim is not None:
-            image_close(ccd.illumim)
+            ccd.illumim.close()
         if ccd.fringeim is not None:
-            image_close(ccd.fringeim)
+            ccd.fringeim.close()
 
         # Do special processing on certain image types.
         if ccdtype == 'zero' and readcor:
@@ -1513,7 +1513,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     ostr = f"[TO BE DONE] Convert {readim} to readout " \
                            f"correction "
                     print(ostr)
-                    image_close(rim)
+                    rim.close()
                 else:
                     # The default data section is the entire image.
                     nc = rim[0].data.shape[-1]
@@ -1546,7 +1546,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     newout = rtmp.name
                     file_new_copy(newout, rim, instrument=instrument)
                     newhdr = image_open(newout, mode='update')
-                    image_close(rim)
+                    rim.close()
                     # Average across the readout axis.
 
                     # zero out the parts not in the data section
@@ -1570,7 +1570,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                         ostr = f'[:, {ccdl1}:{ccdl2}]'
                         set_header_value(newhdr, instrument, 'ccdsec', ostr)
 
-                    image_close(newhdr)
+                    newhdr.close()
                     os.replace(newout, readim)
 
                     newout = image_open(readim, mode='update')
@@ -1580,9 +1580,9 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # XXX: can't be what is actually put in the header right?
                     set_header_value(newout, instrument, 'readcor', logstr)
 
-                    image_close(newout)
+                    newout.close()
             else:
-                image_close(rim)
+                rim.close()
             # end readcor
 
         if ccdtype == 'flat':
@@ -1616,7 +1616,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     set_header_value(meanim, instrument, 'ccdmean', mean)
                     set_header_value(meanim, instrument, 'ccdmeant',
                                      int(time.time()))
-            image_close(meanim)
+            meanim.close()
             # end ccdmean
 
     if logfd is not None:

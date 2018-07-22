@@ -1,6 +1,6 @@
 from astropy.io import fits
 
-__all__ = ['image_open', 'image_close']
+__all__ = ['image_open']
 
 
 def image_open(image, mode='readonly'):
@@ -46,27 +46,3 @@ def image_open(image, mode='readonly'):
         raise err
 
     return hdulist
-
-
-# XXX: this should be eliminated. If image_open returns context managers,
-# they should all follow .close() protocol
-def image_close(image):
-    """
-    Close an AIRAF image.
-
-    Supposed to be a function that handles closing images of all types.
-    Currently just operates as image.close() though, assuming it was opened
-    with `image_open`.
-
-    Parameters
-    ----------
-    image : AIRAF image object
-
-    Returns
-    -------
-
-    """
-    if image.__filetype__ == 'fits':
-        image.close()
-    else:
-        raise Exception(f"{image} of unknown type {image.__filetype__}")

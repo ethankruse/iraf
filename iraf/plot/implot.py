@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import CheckButtons, Slider
 import copy
 import functools
-from iraf.sys import image_open, image_close
+from iraf.sys import image_open
 
 __all__ = ['implot']
 
@@ -142,7 +142,7 @@ def implot_plot_col(fig, draw=True):
 
 def implot_keypress(event, fig=None):
     """
-    
+
     Parameters
     ----------
     event
@@ -414,7 +414,7 @@ def implot_open_image(fig, infile=None):
     # transpose to match the IRAF definition of line/column
     fig.im_set['im'] = hdulist[0].data.T
 
-    image_close(hdulist)
+    hdulist.close()
 
     if fig.im_set['im'] is None:
         # XXX: call error (1, "image has no pixels")
@@ -486,7 +486,7 @@ def implot_make_slider(fig):
 
 def implot(image, *, line=None, wcs='logical'):
     """
-    
+
     Parameters
     ----------
     image

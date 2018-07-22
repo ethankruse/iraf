@@ -27,11 +27,11 @@ def test_image_open_close(tmpdir):
     im.__filetype__ = 'bs'
     # unrecognized file types raise errors
     with pytest.raises(Exception):
-        iraf.sys.image_close(im)
+        im.close()
     im.__filetype__ = 'fits'
     # make sure the file is still open
     assert im[0].data.size == sz
-    iraf.sys.image_close(im)
+    im.close()
     # file should now be closed and data inaccessible
     with pytest.raises(ValueError):
         print(im[0].data.size)

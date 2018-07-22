@@ -1,7 +1,7 @@
 from iraf.utils import file_handler
 import numpy as np
 import scipy.stats
-from iraf.sys import image_open, image_close
+from iraf.sys import image_open
 
 
 __all__ = ['imstatistics']
