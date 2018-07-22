@@ -235,5 +235,5 @@ def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
                 outstring += '  '
         print(outstring)
 
-        image_close(hdulist)
+        hdulist.close()
     return
