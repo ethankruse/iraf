@@ -541,8 +541,8 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
     ----------
     images :
         List of images to combine
-    output :
-        List of output images
+    output : str
+        Base output file name
     plfile :
         List of output pixel list files (optional)
     sigmafile :

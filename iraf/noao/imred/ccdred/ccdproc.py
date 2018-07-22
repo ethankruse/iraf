@@ -600,7 +600,10 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
     """
     inputs = file_handler(images)
-    outputs = file_handler(output)
+    # can't assume the output files exist, so can't pass through file_handler
+    outputs = output
+    if outputs is None:
+        outputs = []
 
     if 0 < len(outputs) != len(inputs):
         raise Exception("Input and output lists do not match")

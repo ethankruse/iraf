@@ -14,18 +14,21 @@ def is_iterable(obj):
     return not isinstance(obj, str) and isinstance(obj, Iterable)
 
 
-def file_handler(filelist):
+def file_handler(filelist, recursive=False):
     """
-    A limited version of IRAF's imtopen.
+    Convert an input filelist to all matching, existing files.
 
-    General purpose file type interpreter. Takes IRAF file inputs and returns
-    list with actual paths for all matching files.
+    A modified, limited version of IRAF's imtopen. Takes IRAF file inputs
+    and returns a list with actual paths for all matching files.
 
     Allows for a file with a list of file patterns by starting with '@', e.g.
-    '@filelist.txt'. Will recursively search each line in an @list so e.g.
-    it can handle @lists of @lists.
+    '@filelist.txt' will recursively find all matches for each line in the
+    list, and can handle @lists of @lists. Comment lines (starting with '#')
+    are skipped.
 
-    All file names can also accept ~ and wildcard (* ?) expansions as well.
+    All file names also accept ~ and wildcard (*,?,[a-f]) expansions as well.
+    Wildcard and character ranges are handled by `glob.glob`, and the recursive
+    option is passed to `glob.glob`.
 
     Currently does not support IRAF's image section format.
     e.g. image.fits[1:50, 1:50] will fail rather than allowing only a portion
@@ -36,6 +39,8 @@ def file_handler(filelist):
     filelist : string or iterable
         String or list of input file strings to expand and create the final
         list of files.
+    recursive : bool
+        Passed to `glob.glob` to control how '**' is handled.
 
     Returns
     -------
@@ -58,10 +63,7 @@ def file_handler(filelist):
             # remove the @ and deal with home directories
             fnames = os.path.expanduser(istr[1:])
             # deal with wildcards
-            if '*' in fnames or '?' in fnames:
-                fnames = glob(fnames)
-            else:
-                fnames = [fnames]
+            fnames = glob(fnames, recursive=recursive)
             # load each requested list
             for fname in fnames:
                 with open(fname, 'r') as ff:
@@ -79,10 +81,7 @@ def file_handler(filelist):
         else:
             fnames = os.path.expanduser(istr)
             # deal with wildcards
-            if '*' in fnames or '?' in fnames:
-                fnames = glob(fnames)
-            else:
-                fnames = [fnames]
+            fnames = glob(fnames, recursive=recursive)
             # add the results to the output list
             for fname in fnames:
                 outlist.append(fname)
