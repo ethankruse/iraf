@@ -1,4 +1,4 @@
-from iraf.utils import file_handler
+from iraf.utils import file_handler, is_iterable
 from .combine import Instrument, ccdtypes, ccdsubset, get_header_value
 from .combine import file_new_copy, type_max, set_header_value
 from .combine import delete_header_value
@@ -600,11 +600,10 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
     """
     inputs = file_handler(images)
-    # can't assume the output files exist, so can't pass through file_handler
-    outputs = output
-    if outputs is None:
-        outputs = []
+    # can't assume the output files exist
+    outputs = file_handler(output, exists=False)
 
+    # if the output isn't empty but doesn't match the input length
     if 0 < len(outputs) != len(inputs):
         raise Exception("Input and output lists do not match")
 

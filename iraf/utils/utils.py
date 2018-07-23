@@ -14,7 +14,7 @@ def is_iterable(obj):
     return not isinstance(obj, str) and isinstance(obj, Iterable)
 
 
-def file_handler(filelist, recursive=False):
+def file_handler(filelist, recursive=False, exists=True):
     """
     Convert an input filelist to all matching, existing files.
 
@@ -41,6 +41,11 @@ def file_handler(filelist, recursive=False):
         list of files.
     recursive : bool
         Passed to `glob.glob` to control how '**' is handled.
+    exists : bool
+        Whether files must exist to be returned. If True, will run the pattern
+        matching to look for existing files that match (default). If False,
+        only does ~ and @list expansions. Useful for e.g. an @output_files.txt
+        list of requested output file names that do not yet exist.
 
     Returns
     -------
@@ -63,7 +68,10 @@ def file_handler(filelist, recursive=False):
             # remove the @ and deal with home directories
             fnames = os.path.expanduser(istr[1:])
             # deal with wildcards
-            fnames = glob(fnames, recursive=recursive)
+            if exists:
+                fnames = glob(fnames, recursive=recursive)
+            else:
+                fnames = [fnames]
             # load each requested list
             for fname in fnames:
                 with open(fname, 'r') as ff:
@@ -74,14 +82,18 @@ def file_handler(filelist, recursive=False):
                                 row[0].strip()[0] == '#'):
                             continue
                         # recursively handle these files
-                        newfiles = file_handler(row)
+                        newfiles = file_handler(row, recursive=recursive,
+                                                exists=exists)
                         for newfile in newfiles:
                             outlist.append(newfile)
         # just a single file name, no list
         else:
             fnames = os.path.expanduser(istr)
             # deal with wildcards
-            fnames = glob(fnames, recursive=recursive)
+            if exists:
+                fnames = glob(fnames, recursive=recursive)
+            else:
+                fnames = [fnames]
             # add the results to the output list
             for fname in fnames:
                 outlist.append(fname)

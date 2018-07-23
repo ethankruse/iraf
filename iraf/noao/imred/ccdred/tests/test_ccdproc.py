@@ -69,6 +69,89 @@ defaultargs = {'output': None, 'ccdtype': 'object', 'noproc': False,
                'pixeltype': "real", 'logfile': None, 'verbose': False}
 
 
+def test_basics(tmpdir):
+    basedir = str(tmpdir)
+    # create some simple files for testing
+    nx = 50
+    ny = 90
+    nimg = 3
+    baseval = 100
+
+    # create input files
+    inputs = []
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=float) * baseval
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['imagetyp'] = 'object'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+
+    # make the input list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    inlist = '@' + inlist
+
+    # make the output list
+    outlists = []
+    outlist = os.path.join(basedir, 'outfiles.txt')
+    with open(outlist, 'w') as ff:
+        for ifile in inputs:
+            of = ifile[:-5] + '.out.fits'
+            outlists.append(of)
+            ff.write(of + '\n')
+    outlist = '@' + outlist
+
+    # make a zero image
+    zeroval = 10
+    zerofile = os.path.join(basedir, 'testzero.fits')
+
+    arr = np.ones((nx, ny), dtype=float) * zeroval
+    hdu = fits.PrimaryHDU(arr)
+    hdu.header['imagetyp'] = 'zero'
+    hdu.writeto(zerofile, overwrite=True)
+
+    myargs = copy.deepcopy(defaultargs)
+    # which parts we want to do
+    myargs['zerocor'] = True
+    myargs['zero'] = zerofile
+
+    # test no outputs works
+    iraf.ccdproc(inputs, **myargs)
+    for ifile in inputs:
+        with fits.open(ifile) as hdr:
+            assert len(hdr[0].header['zerocor']) > 0
+
+    # test output gets created
+    myargs['output'] = outlists
+    iraf.ccdproc(inputs, **myargs)
+    for ifile in outlists:
+        with fits.open(ifile) as hdr:
+            assert len(hdr[0].header['zerocor']) > 0
+        # remove the file to test the same one again later
+        os.remove(ifile)
+
+    # test bad output sizes
+    myargs['output'] = outlists*2
+    with pytest.raises(Exception):
+        iraf.ccdproc(inputs, **myargs)
+    myargs['output'] = outlists[0]
+    with pytest.raises(Exception):
+        iraf.ccdproc(inputs, **myargs)
+    # make sure the output files don't exist
+    for ifile in outlists:
+        assert not os.path.exists(ifile)
+
+    # test input and output lists
+    myargs['output'] = outlist
+    iraf.ccdproc(inlist, **myargs)
+    for ifile in outlists:
+        with fits.open(ifile) as hdr:
+            assert len(hdr[0].header['zerocor']) > 0
+
+
 def test_zerocor(tmpdir):
     basedir = str(tmpdir)
 

@@ -41,6 +41,9 @@ def test_file_handler(tmpdir):
     inp = os.path.join(basedir, 'abc.txt')
     out = iraf.utils.file_handler(inp)
     assert len(out) == 0
+    # test the exists flag
+    out = iraf.utils.file_handler(inp, exists=False)
+    assert len(out) == 1
 
     # find single files
     # input list of single files
@@ -107,12 +110,14 @@ def test_file_handler(tmpdir):
 
     # check @lists of @lists
     txtlist = os.path.join(basedir, 'txtlist.list')
+    inoexist = 3
     with open(txtlist, 'w') as ff:
-        ff.write('hi.txt\n\n')
+        ff.write('hi.txt\ndoes_not_exist.txt\n\n')
         ff.write(os.path.join(basedir, 'sub'+os.sep+'*.txt'))
 
     reallist = os.path.join(basedir, 'reallist.list')
     wild = [os.path.join(basedir, '*.txt'), os.path.join(basedir, '*.fits')]
+    jnoexist = 2
     with open(reallist, 'w') as ff:
         for iwild in wild:
             ff.write(iwild + '\n')
@@ -123,3 +128,6 @@ def test_file_handler(tmpdir):
 
     tot = ltxt + len(samplefiles)//2
     assert len(iraf.utils.file_handler('@' + atlist)) == tot
+    # test the exists flag
+    tot = inoexist + jnoexist
+    assert len(iraf.utils.file_handler('@' + atlist, exists=False)) == tot
