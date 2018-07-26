@@ -3,7 +3,8 @@ import numpy as np
 import os
 from iraf.sys import image_open
 import re
-
+import copy
+import csv
 
 __all__ = ['combine', 'Instrument', 'ccdtypes', 'get_header_value',
            'Instrument', 'ccdsubset', 'file_new_copy', 'type_max',
@@ -16,6 +17,9 @@ class Instrument(object):
 
     Provides header translations between IRAF standards and the values
     used by specific telescopes or instruments.
+
+    Translation files must be space separated and use single quotes '' to
+    mark one field that contains spaces.
     """
     """
     To learn about instruments, look into
@@ -23,49 +27,101 @@ class Instrument(object):
     a symbol table pointer and do the translations.
     Instrument file tables are located in
     'iraf-src/noao/imred/ccdred/ccddb'.
-
-    values in fits headers/etc actually used so far:
-    imagetyp 
-    and its header values: object|zero|dark|flat|illum|fringe|other|comp
-    and also none, unknown.
-    subset
-    
     """
-    # XXX: need to handle allowing 'default' values for things
-    def __init__(self, name=None):
-        self.definitions = {}
 
-        # create the default instrument translations
-        if name is None or name.strip().lower() == 'default':
-            # XXX: where did these come from? What else needs to be added?
-            self.definitions['bias'] = 'zero'
-            self.definitions['dome flat'] = 'flat'
-            self.definitions['projector flat'] = 'flat'
-            self.definitions['comparison'] = 'comp'
-            self.definitions['sky flat'] = 'object'
-        # load a specific instrument
-        else:
-            raise Exception(f'Instrument {name} not implemented yet.')
+    def __init__(self, translation_file=None):
+        # this is the full list of parameters ccdred references in image
+        # headers. Anything not None says to use that value as the header
+        # keyword instead of this default parameter name.
+        self.parameters = {'BPM': None, 'biassec': None, 'ccdmean': None,
+                           'ccdmeant': None, 'ccdproc': None, 'ccdsec': None,
+                           'darkcor': None,
+                           'darktime': None, 'datasec': None, 'exptime': None,
+                           'fixfile': None, 'fixpix': None, 'flatcor': None,
+                           'fringcor': None, 'gain': None, 'illumcor': None,
+                           'imagetyp': None, 'mkfringe': None, 'mkillum': None,
+                           'ncombine': None, 'nscanrow': None, 'overscan': None,
+                           'rdnoise': None,
+                           'readcor': None, 'snoise': None, 'subset': None,
+                           'trim': None, 'trimsec': None, 'zerocor': None,
+                           'origin': None, 'date': None, 'iraf-tlm': None}
+        # Each of these parameters can have a default value, but we
+        # start off with all None.
+        self.defaults = copy.deepcopy(self.parameters)
+
+        imtyps = "object|zero|dark|flat|illum|fringe|other|comp"
+        self._default_imagetyps = imtyps.split('|')
+        # any custom image type conversions go here
+        self.image_types = {}
+
+        # store the reference to the file
+        self.translation_file = translation_file
+        # create the instrument translations, if given
+        if translation_file is not None:
+            with open(translation_file, 'r') as ff:
+                # allow for multiple spaces between fields for pretty alignment
+                # and use single quotes to mark a field with spaces.
+                reader = csv.reader(ff, delimiter=' ', skipinitialspace=True,
+                                    quotechar="'")
+                for row in reader:
+                    # ignore blank or commented lines
+                    if len(row) == 0 or row[0][0] == '#':
+                        continue
+                    # translations can only be 2 columns or 3 with a default
+                    # value
+                    if len(row) < 2 or len(row) > 3:
+                        raise Exception(f"Row '{row}' in instrument "
+                                        f"translation file {translation_file} "
+                                        f"does not have 2 or 3 values.")
+                    # change the value of this parameter and its defaults
+                    # if present
+                    if row[0].lower() in self.parameters:
+                        self.parameters[row[0].lower()] = row[1]
+                        if len(row) == 3:
+                            self.defaults[row[0].lower()] = row[2]
+                    # see if this is a custom image type that needs to map
+                    # to one of our recognized types
+                    elif row[1].lower() in self._default_imagetyps:
+                        self.image_types[row[0]] = row[1].lower()
+                    # not sure what to do with this row
+                    else:
+                        raise Exception(f"Unrecognized row in "
+                                        f"{translation_file}. Not sure what to "
+                                        f"do with '{row}'.")
 
     def translate(self, key):
-        # if it's a string, strip the value and put it in lowercase.
-        try:
-            key = key.strip().lower()
-        except AttributeError:
-            pass
-
-        if key in self.definitions:
-            return self.definitions[key]
+        # XXX: this bit is just for testing Instrument.
+        if key not in self.parameters:
+            raise Exception(f"Remove when done testing. Needed parameter "
+                            f"{key}, but it's not in the instrument parameters"
+                            f" dict.")
+        if key in self.parameters and self.parameters[key] is not None:
+            return self.parameters[key]
         else:
-            # XXX: return original key or stripped/lowercase version?
+            return key
+
+    def get_default(self, key):
+        if key in self.defaults:
+            return self.defaults[key]
+        else:
+            return None
+
+    def get_image_type(self, key):
+        if key is None:
+            return key
+        key = key.strip()
+        if key in self.image_types:
+            return self.image_types[key]
+        else:
             return key
 
 
 def set_header_value(hdulist, instrument, key, value, comment=None):
     """
-    Add a header key/value to an image, or modify the existing value if the
-    key already exists. Optional ability to add a comment describing the
-    field. If comment is None, the existing comment will remain. To clear
+    Add a header key/value/comment to an image, or modify the existing value
+    if the key already exists.
+
+    If comment is None, the existing comment will remain. To clear
     the comment, set comment to the empty string ''.
 
     The equivalent of IRAF's hdmput*. (e.g. hdmputi, hdmputr)
@@ -82,7 +138,7 @@ def set_header_value(hdulist, instrument, key, value, comment=None):
     # what is the header key in the instrument's language
     key = instrument.translate(key)
 
-    # go through the list of hdus
+    # go through the list of hdus and put it in the first one we find
     found = False
     for hdu in hdulist:
         if key in hdu.header:
@@ -123,19 +179,10 @@ def get_header_value(hdulist, instrument, key, default=False):
         # go reverse order because we'll typically want the first instance
         # if something is in multiple headers
         for hdu in hdulist[::-1]:
-            # XXX: can't you just use a if key in hdu here?
-            try:
-                # get the instrument's value in the header
+            if key in hdu.header:
                 val = hdu.header[key]
-                # translate that back to our normalized language
-                val = instrument.translate(val)
-            except KeyError:
-                pass
-
     if val is None:
-        # XXX: we need a way to use a default value here if given in the
-        # instrument object
-        pass
+        val = instrument.get_default(key)
 
     return val
 
@@ -189,6 +236,7 @@ def ccdtypes(hdulist, instrument):
 
     options = "object|zero|dark|flat|illum|fringe|other|comp".split('|')
     typ = get_header_value(hdulist, instrument, 'imagetyp')
+    typ = instrument.get_image_type(typ)
 
     if typ is None:
         typ = 'none'
@@ -998,7 +1046,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             wflag = True
 
         if snorm:
-            scales = 1./scales
+            scales = 1. / scales
         else:
             scales /= scales.mean()
 
@@ -1049,7 +1097,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         dozero = False
         doscale1 = False
         dowts = False
-        for ii in np.arange(nimages-1) + 1:
+        for ii in np.arange(nimages - 1) + 1:
             if snorm or scales[ii] != scales[0]:
                 doscale = True
             if znorm or zeros[ii] != zeros[0]:
@@ -1330,7 +1378,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             # adjust the readnoise values to be (readnoise / gain)**2
             # which is what is actually used in the sigma calcluation.
             # don't let it be 0.
-            rdsq = (nm[:, 0]/nm[:, 1])**2
+            rdsq = (nm[:, 0] / nm[:, 1]) ** 2
             nm[:, 0] = np.where(rdsq > small, rdsq, [small])
 
             if isinstance(snoise, str):
@@ -1405,10 +1453,10 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                 if doscale1:
                     rr = (meds[..., np.newaxis] + zeros) / scales
                     rr[rr < 1.] = 1.
-                    ss = (data - meds[..., np.newaxis])**2. / rr
+                    ss = (data - meds[..., np.newaxis]) ** 2. / rr
                 else:
                     rr = np.where(meds > 1., meds, [1.])
-                    ss = ((data - meds[..., np.newaxis])**2. /
+                    ss = ((data - meds[..., np.newaxis]) ** 2. /
                           rr[..., np.newaxis])
                 ss = np.nansum(ss, axis=-1)
                 n2 = npts >= 3
@@ -1713,8 +1761,8 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             # fill in the actual wts values, keeping the NaNs
             fullwts *= wts
 
-            sigcor = np.where(npts > 1, npts/(npts - 1), [1])
-            wtsum = (data - avg[..., np.newaxis])**2 * fullwts
+            sigcor = np.where(npts > 1, npts / (npts - 1), [1])
+            wtsum = (data - avg[..., np.newaxis]) ** 2 * fullwts
             wtsum = np.nansum(wtsum, axis=-1)
             totwts = np.nansum(fullwts, axis=-1)
 
@@ -1888,7 +1936,7 @@ def ic_mode(data, zrange=0.8, zstep=0.01, zbin=0.1, nmin=10, maxsize=10000):
             kk += 1
         if kk - ii > nmax:
             nmax = kk - ii
-            mode = data[(ii + kk)//2]
+            mode = data[(ii + kk) // 2]
 
     return mode
 

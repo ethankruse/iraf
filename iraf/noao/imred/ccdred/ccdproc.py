@@ -1,4 +1,4 @@
-from iraf.utils import file_handler, is_iterable
+from iraf.utils import file_handler
 from .combine import Instrument, ccdtypes, ccdsubset, get_header_value
 from .combine import file_new_copy, type_max, set_header_value
 from .combine import delete_header_value
