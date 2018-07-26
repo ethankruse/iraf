@@ -1,7 +1,7 @@
 from iraf.utils import file_handler
-from .combine import Instrument, ccdtypes, ccdsubset, get_header_value
-from .combine import file_new_copy, type_max, set_header_value
-from .combine import delete_header_value
+from .instruments import Instrument, ccdtypes, ccdsubset, get_header_value
+from .instruments import file_new_copy, set_header_value, delete_header_value
+from .combine import type_max
 import numpy as np
 import os
 from iraf.sys import image_open
