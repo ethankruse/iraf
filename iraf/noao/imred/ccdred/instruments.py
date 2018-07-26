@@ -2,6 +2,7 @@ from iraf.sys import image_open
 import re
 import copy
 import csv
+from datetime import datetime
 
 __all__ = ['Instrument', 'get_header_value', 'set_header_value',
            'delete_header_value', 'ccdtypes', 'file_new_copy', 'ccdsubset']
@@ -9,9 +10,7 @@ __all__ = ['Instrument', 'get_header_value', 'set_header_value',
 
 class Instrument(object):
     """
-    Instrument object.
-
-    Provides header translations between IRAF standards and the values
+    Provide header translations between IRAF standards and the values
     used by specific telescopes or instruments.
 
     Translation files must be space separated and use single quotes '' to
@@ -71,14 +70,14 @@ class Instrument(object):
                                         f"does not have 2 or 3 values.")
                     # change the value of this parameter and its defaults
                     # if present
-                    if row[0].lower() in self.parameters:
-                        self.parameters[row[0].lower()] = row[1]
+                    if row[0] in self.parameters:
+                        self.parameters[row[0]] = row[1]
                         if len(row) == 3:
-                            self.defaults[row[0].lower()] = row[2]
+                            self.defaults[row[0]] = row[2]
                     # see if this is a custom image type that needs to map
                     # to one of our recognized types
-                    elif row[1].lower() in self._default_imagetyps:
-                        self.image_types[row[0]] = row[1].lower()
+                    elif row[1] in self._default_imagetyps:
+                        self.image_types[row[0]] = row[1]
                     # not sure what to do with this row
                     else:
                         raise Exception(f"Unrecognized row in "
@@ -267,7 +266,7 @@ def ccdsubset(hdulist, instrument):
 
     subsetstr = subsetstr.strip()
 
-    # Replace non alphanumeric or '.' characters by '_'
+    # Replace any non alphanumeric or '.' or '_' characters by '_'
     # since the subset ID is used in forming image names.
     subsetstr = re.sub(r'[^\w.]', '_', subsetstr)
 
@@ -344,7 +343,6 @@ def ccdsubset(hdulist, instrument):
 
     return subset1
     """
-
     return subsetstr
 
 
@@ -383,9 +381,8 @@ def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True,
         orval = 'AIRAF in Python'
         orcomm = 'FITS file originator'
         set_header_value(hdulist, instrument, 'origin', orval, orcomm)
-        import datetime
         # don't need microsecond precision in our dates, so leave it out
-        dtval = datetime.datetime.now().replace(microsecond=0).isoformat()
+        dtval = datetime.now().replace(microsecond=0).isoformat()
         dtcomm = 'Date FITS file was generated'
         set_header_value(hdulist, instrument, 'date', dtval, dtcomm)
         lmcomm = 'Time of last modification'
