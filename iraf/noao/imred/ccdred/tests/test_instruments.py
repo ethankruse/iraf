@@ -76,4 +76,7 @@ def test_instrument_init(tmpdir):
     # tests for bad instrument file construction (tabs, double quotes, wrong
     # parameters, wrong numbers of items on a line)
 
+
 # test the three methods of the class
+def test_new():
+    pass
