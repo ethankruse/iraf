@@ -85,7 +85,8 @@ class Instrument(object):
                                         f"do with '{row}'.")
 
     def translate(self, key):
-        # XXX: this bit is just for testing Instrument.
+        # XXX: this bit is just for testing Instrument to make sure I am in fact
+        # catching all the parameters actually used by IRAF.
         if key not in self.parameters:
             raise Exception(f"Remove when done testing. Needed parameter "
                             f"{key}, but it's not in the instrument parameters"
@@ -377,10 +378,9 @@ def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True,
             instrument = Instrument()
         # update header parameters in the new file without altering the old
         hdulist = image_open(outstr, mode='update')
-        # XXX: update this with a real package name at some point
-        orval = 'AIRAF in Python'
         orcomm = 'FITS file originator'
-        set_header_value(hdulist, instrument, 'origin', orval, orcomm)
+        from iraf import __hdrstring__ as fitsname
+        set_header_value(hdulist, instrument, 'origin', fitsname, orcomm)
         # don't need microsecond precision in our dates, so leave it out
         dtval = datetime.now().replace(microsecond=0).isoformat()
         dtcomm = 'Date FITS file was generated'

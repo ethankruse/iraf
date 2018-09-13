@@ -1,5 +1,5 @@
 import iraf
-import os
+import os, copy
 
 parameters = {'BPM': None, 'biassec': None, 'ccdmean': None,
               'ccdmeant': None, 'ccdproc': None, 'ccdsec': None,
@@ -21,9 +21,16 @@ def test_instrument_init(tmpdir):
 
     # default instrument
     inst = iraf.Instrument()
+    # test initialized values are right
     for key in inst.parameters:
         assert inst.translate(key) == key and inst.get_default(key) is None
-    imtyps = image_types
+    # make sure this testing list is up to date
+    for key in parameters:
+        assert key in inst.parameters
+    for key in inst.parameters:
+        assert key in parameters
+
+    imtyps = copy.deepcopy(image_types)
     imtyps.append('blah')
     for it in imtyps:
         assert inst.get_image_type(it) == it

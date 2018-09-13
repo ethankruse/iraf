@@ -1,3 +1,4 @@
 *.pyc
 *par
 .pytest_cache
+.idea

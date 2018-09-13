@@ -1292,7 +1292,9 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             # meaningless statement in reality
             oinds = list(oinds)
             oinds.append(n3)
-            msigma = tt * (data[oinds] - meds)
+            # tuple for a numpy deprecation. Figure out a cleaner way to do
+            # this?
+            msigma = tt * (data[tuple(oinds)] - meds)
             # skip over ones where sigma is 0 or there's not enough pixels
             msigma[(msigma == 0.) | (npts < minclip)] = np.inf
 
