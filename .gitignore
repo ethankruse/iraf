@@ -2,3 +2,5 @@
 *par
 .pytest_cache
 .idea
+.coverage
+htmlcov

@@ -1,7 +1,7 @@
 from iraf.sys import image_open
 import re
 import copy
-import csv
+import shlex
 from datetime import datetime
 
 __all__ = ['Instrument', 'get_header_value', 'set_header_value',
@@ -13,7 +13,7 @@ class Instrument(object):
     Provide header translations between IRAF standards and the values
     used by specific telescopes or instruments.
 
-    Translation files must be space separated and use single quotes '' to
+    Translation files must be white space separated and use quotes to
     mark one field that contains spaces.
     """
     """
@@ -30,16 +30,15 @@ class Instrument(object):
         # keyword instead of this default parameter name.
         self.parameters = {'BPM': None, 'biassec': None, 'ccdmean': None,
                            'ccdmeant': None, 'ccdproc': None, 'ccdsec': None,
-                           'darkcor': None,
-                           'darktime': None, 'datasec': None, 'exptime': None,
-                           'fixfile': None, 'fixpix': None, 'flatcor': None,
-                           'fringcor': None, 'gain': None, 'illumcor': None,
-                           'imagetyp': None, 'mkfringe': None, 'mkillum': None,
-                           'ncombine': None, 'nscanrow': None, 'overscan': None,
-                           'rdnoise': None,
-                           'readcor': None, 'snoise': None, 'subset': None,
-                           'trim': None, 'trimsec': None, 'zerocor': None,
-                           'origin': None, 'date': None, 'iraf-tlm': None}
+                           'darkcor': None, 'darktime': None, 'datasec': None,
+                           'exptime': None, 'fixfile': None, 'fixpix': None,
+                           'flatcor': None, 'fringcor': None, 'gain': None,
+                           'illumcor': None, 'imagetyp': None, 'mkfringe': None,
+                           'mkillum': None, 'ncombine': None, 'nscanrow': None,
+                           'overscan': None, 'rdnoise': None, 'readcor': None,
+                           'snoise': None, 'subset': None, 'trim': None,
+                           'trimsec': None, 'zerocor': None, 'origin': None,
+                           'date': None, 'iraf-tlm': None}
         # Each of these parameters can have a default value, but we
         # start off with all None.
         self.defaults = copy.deepcopy(self.parameters)
@@ -55,12 +54,16 @@ class Instrument(object):
         if translation_file is not None:
             with open(translation_file, 'r') as ff:
                 # allow for multiple spaces between fields for pretty alignment
-                # and use single quotes to mark a field with spaces.
-                reader = csv.reader(ff, delimiter=' ', skipinitialspace=True,
-                                    quotechar="'")
-                for row in reader:
-                    # ignore blank or commented lines
-                    if len(row) == 0 or row[0][0] == '#':
+                # and use quotes to mark a field with spaces.
+                for row in ff.readlines():
+                    row = shlex.split(row)
+                    # allow comments at the end of the line, but ignore them
+                    for ii in range(len(row)):
+                        if row[ii][0] == '#':
+                            row = row[:ii]
+                            break
+                    # ignore blank or fully commented lines
+                    if len(row) == 0:
                         continue
                     # translations can only be 2 columns or 3 with a default
                     # value
@@ -76,21 +79,25 @@ class Instrument(object):
                             self.defaults[row[0]] = row[2]
                     # see if this is a custom image type that needs to map
                     # to one of our recognized types
-                    elif row[1] in self._default_imagetyps:
+                    elif row[1] in self._default_imagetyps and len(row) == 2:
                         self.image_types[row[0]] = row[1]
                     # not sure what to do with this row
                     else:
-                        raise Exception(f"Unrecognized row in "
-                                        f"{translation_file}. Not sure what to "
-                                        f"do with '{row}'.")
+                        raise Exception(f"Unrecognized row in translation file "
+                                        f"{translation_file}.\nNot sure what "
+                                        f"to do with '{row}'.")
 
     def translate(self, key):
         # XXX: this bit is just for testing Instrument to make sure I am in fact
         # catching all the parameters actually used by IRAF.
+        # once all testing in this module is done, uncomment and retest to make
+        # sure this exception isn't raised again, then delete.
+        """
         if key not in self.parameters:
             raise Exception(f"Remove when done testing. Needed parameter "
                             f"{key}, but it's not in the instrument parameters"
                             f" dict.")
+        """
         if key in self.parameters and self.parameters[key] is not None:
             return self.parameters[key]
         else:
@@ -109,6 +116,7 @@ class Instrument(object):
         if key in self.image_types:
             return self.image_types[key]
         else:
+            # XXX: return unknown if not already a default value?
             return key
 
 
