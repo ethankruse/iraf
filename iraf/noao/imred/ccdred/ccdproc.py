@@ -2,6 +2,7 @@ from iraf.utils import file_handler
 from .instruments import Instrument, ccdtypes, ccdsubset, get_header_value
 from .instruments import file_new_copy, set_header_value, delete_header_value
 from .combine import type_max
+from iraf.noao.imred.ccdred import imagetypes
 import numpy as np
 import os
 from iraf.sys import image_open
@@ -616,13 +617,11 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     # XXX: set_interactive("", interactive)
 
     # start of cal_open
-
-    # define CCDTYPES "|object|zero|dark|flat|illum|fringe|other|comp|"
-    ccdopts = "object|zero|dark|flat|illum|fringe|other|comp".split('|')
+    # XXX: remove this and all copies for the module level version
     ccdtype = ccdtype.strip().lower()
     if len(ccdtype) == 0:
         ccdtype = 'none'
-    elif ccdtype not in ccdopts:
+    elif ccdtype not in imagetypes:
         ccdtype = 'unknown'
 
     calimages = []
@@ -989,7 +988,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
         # end set_overscan
 
-        # "object|zero|dark|flat|illum|fringe|other|comp"
         # Set processing parameters for the standard CCD image types.
         if ccdtype not in ['zero']:
             # begin set_zero

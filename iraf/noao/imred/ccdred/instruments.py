@@ -1,4 +1,5 @@
 from iraf.sys import image_open
+from iraf.noao.imred.ccdred import imagetypes
 import re
 import copy
 import shlex
@@ -43,8 +44,7 @@ class Instrument(object):
         # start off with all None.
         self.defaults = copy.deepcopy(self.parameters)
 
-        imtyps = "object|zero|dark|flat|illum|fringe|other|comp"
-        self._default_imagetyps = imtyps.split('|')
+        self._default_imagetyps = imagetypes
         # any custom image type conversions go here
         self.image_types = {}
 
@@ -207,8 +207,6 @@ def delete_header_value(hdulist, instrument, key):
     # what is the header key in the instrument's language
     key = instrument.translate(key)
 
-    # go reverse order because we'll typically want the first instance
-    # if something is in multiple headers
     for hdu in hdulist:
         if key in hdu.header:
             hdu.header.remove(key, remove_all=True)
@@ -238,13 +236,12 @@ def ccdtypes(hdulist, instrument):
     if not isinstance(instrument, Instrument):
         raise Exception('ccdtypes not given an Instrument object.')
 
-    options = "object|zero|dark|flat|illum|fringe|other|comp".split('|')
     typ = get_header_value(hdulist, instrument, 'imagetyp')
     typ = instrument.get_image_type(typ)
 
     if typ is None:
         typ = 'none'
-    elif typ not in options:
+    elif typ not in imagetypes:
         typ = 'unknown'
 
     return typ

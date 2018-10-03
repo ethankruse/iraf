@@ -12,7 +12,7 @@ def image_open(image, mode='readonly'):
     AIRAF. Currently only supports FITS and simply returns a standard
     HDUList with a flag indicating it was opened here.
 
-    Always returns a context managers, so can be used in 'with ... as:'
+    Always returns a context manager, so can be used in 'with ... as:'
     blocks.
 
     Parameters
