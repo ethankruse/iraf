@@ -1,5 +1,5 @@
 from iraf.sys import image_open
-from iraf.noao.imred.ccdred import imagetypes
+from ..ccdred import imagetypes
 import re
 import copy
 import shlex
@@ -91,7 +91,8 @@ class Instrument(object):
         # XXX: this bit is just for testing Instrument to make sure I am in fact
         # catching all the parameters actually used by IRAF.
         # once all testing in this module is done, uncomment and retest to make
-        # sure this exception isn't raised again, then delete.
+        # sure this exception isn't raised again, then delete. Or keep as a
+        # warning not to use parameters not explicitly expected.
         """
         if key not in self.parameters:
             raise Exception(f"Remove when done testing. Needed parameter "
@@ -110,6 +111,8 @@ class Instrument(object):
             return None
 
     def get_image_type(self, key):
+        # XXX: return one of the accepted values? 'none'?
+        # Always return a string?
         if key is None:
             return key
         key = key.strip()

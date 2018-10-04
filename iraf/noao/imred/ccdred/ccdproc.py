@@ -2,7 +2,7 @@ from iraf.utils import file_handler
 from .instruments import Instrument, ccdtypes, ccdsubset, get_header_value
 from .instruments import file_new_copy, set_header_value, delete_header_value
 from .combine import type_max
-from iraf.noao.imred.ccdred import imagetypes
+from ..ccdred import imagetypes
 import numpy as np
 import os
 from iraf.sys import image_open

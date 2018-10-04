@@ -160,3 +160,7 @@ def test_instrument_get_image_type(tmpdir):
     assert inst.get_image_type("sky flat") == 'flat'
     assert inst.get_image_type("object") == 'object'
     assert inst.get_image_type("foo") == 'foo'
+
+
+def test_set_header_value(tmpdir):
+    basedir = str(tmpdir)
