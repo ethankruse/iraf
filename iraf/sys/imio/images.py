@@ -29,20 +29,19 @@ def image_open(image, mode='readonly'):
     """
     hdulist = None
     ftype = ''
-    err = None
     # start with FITS files by default
     try:
         hdulist = fits.open(image, mode=mode)
         ftype = 'fits'
     # catch a FITS problem and move on to other file types
-    except IOError as ierr:
-        err = ierr
+    except IOError:
+        pass
 
     # if we've tried all file types and found one, use it;
-    # otherwise raise the most recent error message. (?)
+    # otherwise raise an error
     if hdulist is not None:
         hdulist.__filetype__ = ftype
     else:
-        raise err
+        raise Exception(f'Unable to open image {image}')
 
     return hdulist

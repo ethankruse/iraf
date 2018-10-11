@@ -10,13 +10,13 @@ def is_iterable(obj):
     Returns True if the input is iterable, but not a string. Returns
     False otherwise.
     """
-    from collections import Iterable
+    from collections.abc import Iterable
     return not isinstance(obj, str) and isinstance(obj, Iterable)
 
 
-def file_handler(filelist, recursive=False, exists=True):
+def file_handler(filelist, exists=True, recursive=False):
     """
-    Convert an input filelist to all matching, existing files.
+    Convert an input filelist to all matching files.
 
     A modified, limited version of IRAF's imtopen. Takes IRAF file inputs
     and returns a list with actual paths for all matching files.
@@ -39,13 +39,13 @@ def file_handler(filelist, recursive=False, exists=True):
     filelist : string or iterable
         String or list of input file strings to expand and create the final
         list of files.
-    recursive : bool
-        Passed to `glob.glob` to control how '**' is handled.
     exists : bool
         Whether files must exist to be returned. If True, will run the pattern
         matching to look for existing files that match (default). If False,
         only does ~ and @list expansions. Useful for e.g. an @output_files.txt
         list of requested output file names that do not yet exist.
+    recursive : bool
+        Passed to `glob.glob` to control how '**' is handled.
 
     Returns
     -------
