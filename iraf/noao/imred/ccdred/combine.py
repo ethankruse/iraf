@@ -8,6 +8,7 @@ from .instruments import file_new_copy, set_header_value
 __all__ = ['combine', 'type_max']
 
 
+
 def ic_setout(inputs, output, nimages, project, offsets):
     """
     Set output image size and offsets of input images.
