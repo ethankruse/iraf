@@ -1,4 +1,3 @@
-import copy
 import os
 import iraf
 import pytest
@@ -34,10 +33,6 @@ def test_instrument_init(tmpdir):
     for key in inst.parameters:
         assert key in parameters
 
-    imtyps = copy.deepcopy(image_types)
-    imtyps.append('blah')
-    for it in imtyps:
-        assert inst.get_image_type(it) == it
     assert inst.translation_file is None
     assert len(inst.image_types) == 0
 
@@ -79,7 +74,7 @@ def test_instrument_translation_file(tmpdir):
         ff.write('# this is a comment line here\n\n\n')
         for ipar in parameters:
             cs = ipar + ' custom'
-            # wrap in double quotes to test both in one line
+            # wrap in double quotes to test both quote types in one line
             cs = f'"{cs}"'
             ff.write(f"{ipar}     {cs}\t'{ipar} default'\n")
     inst = iraf.Instrument(tfile)

@@ -617,7 +617,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     # XXX: set_interactive("", interactive)
 
     # start of cal_open
-    # XXX: remove this and all copies for the module level version
+    # XXX: allow for None or empty string to process all ccdtypes?
     ccdtype = ccdtype.strip().lower()
     if len(ccdtype) == 0:
         ccdtype = 'none'

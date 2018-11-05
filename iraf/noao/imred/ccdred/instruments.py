@@ -88,6 +88,7 @@ class Instrument(object):
                                         f"to do with '{row}'.")
 
     def translate(self, key):
+        # what is this an IRAF translation of?
         # XXX: this bit is just for testing Instrument to make sure I am in fact
         # catching all the parameters actually used by IRAF.
         # once all testing in this module is done, uncomment and retest to make
@@ -105,13 +106,18 @@ class Instrument(object):
             return key
 
     def get_default(self, key):
+        # XXX: this could just be one line. return self.defaults[key]. but only
+        # if translate also only allows for things in the parameters table as
+        # well. Then they'd both raise exceptions for keys not in parameters
+        # dict.
         if key in self.defaults:
             return self.defaults[key]
         else:
             return None
 
     def get_image_type(self, key):
-        # XXX: return one of the accepted values? 'none'?
+        # XXX: return one of the accepted values? 'none'? What is this supposed
+        # to be an AIRAF translation of?
         # Always return a string?
         if key is None:
             return key
