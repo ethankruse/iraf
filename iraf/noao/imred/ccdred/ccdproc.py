@@ -892,7 +892,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             else:
                 # Map the bad pixel image and return on an error.
                 # XXX: this function does some complicated stuff. need to work
-                # it all out
+                #     it all out
                 # im = xt_pmmap (Memc[image], IN_IM(ccd), Memc[image], SZ_FNAME)
                 bpm = image_open(fx)
 

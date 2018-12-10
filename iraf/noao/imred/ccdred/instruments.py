@@ -90,7 +90,7 @@ class Instrument(object):
     def translate(self, key):
         # what is this an IRAF translation of?
         # XXX: this bit is just for testing Instrument to make sure I am in fact
-        # catching all the parameters actually used by IRAF.
+        #      catching all the parameters actually used by IRAF.
         # once all testing in this module is done, uncomment and retest to make
         # sure this exception isn't raised again, then delete. Or keep as a
         # warning not to use parameters not explicitly expected.
@@ -151,16 +151,22 @@ def set_header_value(hdulist, instrument, key, value, comment=None):
     # what is the header key in the instrument's language
     key = instrument.translate(key)
 
+    # for some reason comment='' fails in pytest, but ' ' works and enters
+    # an empty comment.
+    if comment is not None and len(comment) == 0:
+        comment = ' '
+
     # go through the list of hdus and put it in the first one we find
     found = False
     for hdu in hdulist:
         if key in hdu.header:
-            hdu.header.set(key, value, comment)
+            hdu.header.set(key, value=value, comment=comment)
             found = True
             break
     # if it's not in any headers, put it in the first one
+    # XXX: is this what IRAF does? what if the same key is in two headers?
     if not found:
-        hdulist[0].header.set(key, value, comment)
+        hdulist[0].header.set(key, value=value, comment=comment)
     return
 
 

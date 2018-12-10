@@ -1,6 +1,7 @@
 import os
 import iraf
 import pytest
+from astropy.io import fits
 
 parameters = {'BPM': None, 'biassec': None, 'ccdmean': None,
               'ccdmeant': None, 'ccdproc': None, 'ccdsec': None,
@@ -159,3 +160,105 @@ def test_instrument_get_image_type(tmpdir):
 
 def test_set_header_value(tmpdir):
     basedir = str(tmpdir)
+    fname = os.path.join(basedir, 'header_test.fits')
+
+    inst = iraf.Instrument()
+    inst.parameters['subset'] = 'filter'
+
+    # set up a simple file with two headers/hdus
+    hdu1 = fits.PrimaryHDU()
+    hdu2 = fits.ImageHDU()
+    new_hdul = fits.HDUList([hdu1, hdu2])
+    new_hdul.writeto(fname, overwrite=True)
+
+    # test adding with a normal key and one that needs to be translated.
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        iraf.set_header_value(ff, inst, 'subset', 'red')
+        iraf.set_header_value(ff, inst, 'exptime', 1)
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert ff[0].header['filter'] == 'red'
+        assert ff[0].header.comments['filter'] == ''
+        assert ff[0].header['exptime'] == 1
+        assert ff[0].header.comments['exptime'] == ''
+        assert 'filter' not in ff[1].header and 'exptime' not in ff[1].header
+
+    # same but adding a comment
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        iraf.set_header_value(ff, inst, 'subset', 'blue', comment='c1')
+        iraf.set_header_value(ff, inst, 'exptime', 2, comment='c2')
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert ff[0].header['filter'] == 'blue'
+        assert ff[0].header.comments['filter'] == 'c1'
+        assert ff[0].header['exptime'] == 2
+        assert ff[0].header.comments['exptime'] == 'c2'
+        assert 'filter' not in ff[1].header and 'exptime' not in ff[1].header
+
+    # test clearing the comment
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        iraf.set_header_value(ff, inst, 'subset', 'blue', comment='')
+        iraf.set_header_value(ff, inst, 'exptime', 2, comment='')
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert ff[0].header['filter'] == 'blue'
+        assert ff[0].header.comments['filter'] == ''
+        assert ff[0].header['exptime'] == 2
+        assert ff[0].header.comments['exptime'] == ''
+        assert 'filter' not in ff[1].header and 'exptime' not in ff[1].header
+
+    # test where the keys already exist both headers.
+
+    # add these to the second header
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        ff[1].header['filter'] = 'uv'
+        ff[1].header['exptime'] = 5
+    # make sure we only change the first header
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        iraf.set_header_value(ff, inst, 'subset', 'red', comment='com1')
+        iraf.set_header_value(ff, inst, 'exptime', 1, comment='com2')
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert ff[0].header['filter'] == 'red'
+        assert ff[0].header.comments['filter'] == 'com1'
+        assert ff[0].header['exptime'] == 1
+        assert ff[0].header.comments['exptime'] == 'com2'
+
+        assert ff[1].header['filter'] == 'uv'
+        assert ff[1].header.comments['filter'] == ''
+        assert ff[1].header['exptime'] == 5
+        assert ff[1].header.comments['exptime'] == ''
+
+    # test where the keys only exist in the second header
+
+    # remove them from the first header
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        del ff[0].header['filter']
+        del ff[0].header['exptime']
+
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        iraf.set_header_value(ff, inst, 'subset', 'blue', comment='c1')
+        iraf.set_header_value(ff, inst, 'exptime', 2, comment='c2')
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert ff[1].header['filter'] == 'blue'
+        assert ff[1].header.comments['filter'] == 'c1'
+        assert ff[1].header['exptime'] == 2
+        assert ff[1].header.comments['exptime'] == 'c2'
+        assert 'filter' not in ff[0].header and 'exptime' not in ff[0].header
+
+    # test updating the value but not the comment
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        iraf.set_header_value(ff, inst, 'subset', 'green')
+        iraf.set_header_value(ff, inst, 'exptime', 3)
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert ff[1].header['filter'] == 'green'
+        assert ff[1].header.comments['filter'] == 'c1'
+        assert ff[1].header['exptime'] == 3
+        assert ff[1].header.comments['exptime'] == 'c2'
+        assert 'filter' not in ff[0].header and 'exptime' not in ff[0].header
+
+    # test updating the comment but not the value
+        iraf.set_header_value(ff, inst, 'subset', None, comment='c1mod')
+        iraf.set_header_value(ff, inst, 'exptime', None, comment='c2mod')
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert ff[1].header['filter'] == 'green'
+        assert ff[1].header.comments['filter'] == 'c1mod'
+        assert ff[1].header['exptime'] == 3
+        assert ff[1].header.comments['exptime'] == 'c2mod'
+        assert 'filter' not in ff[0].header and 'exptime' not in ff[0].header
