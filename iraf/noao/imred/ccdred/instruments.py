@@ -178,6 +178,12 @@ def get_header_value(hdulist, instrument, key, default=False):
     When default is True, it returns the instrument default value for the
     key, equivalent to IRAF's hdmgdef.
 
+    NOTE: in IRAF there's a distinction between int/real and strings.
+    hdmgstr/hdmgdef returns the empty string while hdmgeti/hdmgetr
+    raises an error if there is no value or default.
+    Here we always just return None and expect that to be handled by the
+    calling function depending on what return type it is expecting.
+
     Parameters
     ----------
     hdulist
@@ -203,12 +209,6 @@ def get_header_value(hdulist, instrument, key, default=False):
     if val is None:
         val = instrument.get_default(key)
 
-    # in IRAF there's a distinction between int/real and strings.
-    # hdmgstr/hdmgdef returns the empty string while hdmgeti/hdmgetr
-    # raises an error if there is no value or default.
-    if val is None:
-        raise Exception(f"No value found or default value given for "
-                        f"parameter '{key}', instrument parameter '{userkey}'")
     return val
 
 

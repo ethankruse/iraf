@@ -192,8 +192,7 @@ def test_set_get_delete_header_value(tmpdir):
         assert iraf.get_header_value(ff, inst, 'subset',
                                      default=True) == 'default_filter'
         assert iraf.get_header_value(ff, inst, 'exptime', default=True) == -1
-        with pytest.raises(Exception):
-            iraf.get_header_value(ff, inst, 'rdnoise')
+        assert iraf.get_header_value(ff, inst, 'rdnoise') is None
 
     # same but adding a comment
     with iraf.sys.image_open(fname, mode='update') as ff:
