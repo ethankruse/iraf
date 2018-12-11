@@ -158,12 +158,16 @@ def test_instrument_get_image_type(tmpdir):
     assert inst.get_image_type("foo") == 'foo'
 
 
-def test_set_header_value(tmpdir):
+def test_set_get_delete_header_value(tmpdir):
     basedir = str(tmpdir)
     fname = os.path.join(basedir, 'header_test.fits')
 
     inst = iraf.Instrument()
     inst.parameters['subset'] = 'filter'
+    inst.defaults['subset'] = 'default_filter'
+    inst.defaults['exptime'] = -1
+    # one we aren't going to put in the header
+    inst.defaults['imagetyp'] = 'object'
 
     # set up a simple file with two headers/hdus
     hdu1 = fits.PrimaryHDU()
@@ -176,20 +180,29 @@ def test_set_header_value(tmpdir):
         iraf.set_header_value(ff, inst, 'subset', 'red')
         iraf.set_header_value(ff, inst, 'exptime', 1)
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert ff[0].header['filter'] == 'red'
+        assert iraf.get_header_value(ff, inst, 'subset') == 'red'
         assert ff[0].header.comments['filter'] == ''
-        assert ff[0].header['exptime'] == 1
+        assert iraf.get_header_value(ff, inst, 'exptime') == 1
         assert ff[0].header.comments['exptime'] == ''
         assert 'filter' not in ff[1].header and 'exptime' not in ff[1].header
+        # test defaults
+        assert iraf.get_header_value(ff, inst, 'imagetyp') == 'object'
+        assert iraf.get_header_value(ff, inst, 'imagetyp',
+                                     default=True) == 'object'
+        assert iraf.get_header_value(ff, inst, 'subset',
+                                     default=True) == 'default_filter'
+        assert iraf.get_header_value(ff, inst, 'exptime', default=True) == -1
+        with pytest.raises(Exception):
+            iraf.get_header_value(ff, inst, 'rdnoise')
 
     # same but adding a comment
     with iraf.sys.image_open(fname, mode='update') as ff:
         iraf.set_header_value(ff, inst, 'subset', 'blue', comment='c1')
         iraf.set_header_value(ff, inst, 'exptime', 2, comment='c2')
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert ff[0].header['filter'] == 'blue'
+        assert iraf.get_header_value(ff, inst, 'subset') == 'blue'
         assert ff[0].header.comments['filter'] == 'c1'
-        assert ff[0].header['exptime'] == 2
+        assert iraf.get_header_value(ff, inst, 'exptime') == 2
         assert ff[0].header.comments['exptime'] == 'c2'
         assert 'filter' not in ff[1].header and 'exptime' not in ff[1].header
 
@@ -198,9 +211,9 @@ def test_set_header_value(tmpdir):
         iraf.set_header_value(ff, inst, 'subset', 'blue', comment='')
         iraf.set_header_value(ff, inst, 'exptime', 2, comment='')
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert ff[0].header['filter'] == 'blue'
+        assert iraf.get_header_value(ff, inst, 'subset') == 'blue'
+        assert iraf.get_header_value(ff, inst, 'exptime') == 2
         assert ff[0].header.comments['filter'] == ''
-        assert ff[0].header['exptime'] == 2
         assert ff[0].header.comments['exptime'] == ''
         assert 'filter' not in ff[1].header and 'exptime' not in ff[1].header
 
@@ -225,6 +238,9 @@ def test_set_header_value(tmpdir):
         assert ff[1].header['exptime'] == 5
         assert ff[1].header.comments['exptime'] == ''
 
+        assert iraf.get_header_value(ff, inst, 'subset') == 'red'
+        assert iraf.get_header_value(ff, inst, 'exptime') == 1
+
     # test where the keys only exist in the second header
 
     # remove them from the first header
@@ -236,9 +252,9 @@ def test_set_header_value(tmpdir):
         iraf.set_header_value(ff, inst, 'subset', 'blue', comment='c1')
         iraf.set_header_value(ff, inst, 'exptime', 2, comment='c2')
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert ff[1].header['filter'] == 'blue'
+        assert iraf.get_header_value(ff, inst, 'subset') == 'blue'
+        assert iraf.get_header_value(ff, inst, 'exptime') == 2
         assert ff[1].header.comments['filter'] == 'c1'
-        assert ff[1].header['exptime'] == 2
         assert ff[1].header.comments['exptime'] == 'c2'
         assert 'filter' not in ff[0].header and 'exptime' not in ff[0].header
 
@@ -247,9 +263,9 @@ def test_set_header_value(tmpdir):
         iraf.set_header_value(ff, inst, 'subset', 'green')
         iraf.set_header_value(ff, inst, 'exptime', 3)
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert ff[1].header['filter'] == 'green'
+        assert iraf.get_header_value(ff, inst, 'subset') == 'green'
+        assert iraf.get_header_value(ff, inst, 'exptime') == 3
         assert ff[1].header.comments['filter'] == 'c1'
-        assert ff[1].header['exptime'] == 3
         assert ff[1].header.comments['exptime'] == 'c2'
         assert 'filter' not in ff[0].header and 'exptime' not in ff[0].header
 
@@ -257,8 +273,25 @@ def test_set_header_value(tmpdir):
         iraf.set_header_value(ff, inst, 'subset', None, comment='c1mod')
         iraf.set_header_value(ff, inst, 'exptime', None, comment='c2mod')
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert ff[1].header['filter'] == 'green'
+        assert iraf.get_header_value(ff, inst, 'subset') == 'green'
+        assert iraf.get_header_value(ff, inst, 'exptime') == 3
         assert ff[1].header.comments['filter'] == 'c1mod'
-        assert ff[1].header['exptime'] == 3
         assert ff[1].header.comments['exptime'] == 'c2mod'
         assert 'filter' not in ff[0].header and 'exptime' not in ff[0].header
+
+    # add these back to the first header
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        ff[0].header['filter'] = 'uv'
+        ff[0].header['exptime'] = 5
+
+    # test deleting from headers
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        iraf.delete_header_value(ff, inst, 'subset')
+        iraf.delete_header_value(ff, inst, 'exptime')
+        # delete something that's not there
+        iraf.delete_header_value(ff, inst, 'rdnoise')
+        # and also not in the instrument parameter list
+        iraf.delete_header_value(ff, inst, 'foo')
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert 'filter' not in ff[0].header and 'exptime' not in ff[0].header
+        assert 'filter' not in ff[1].header and 'exptime' not in ff[1].header

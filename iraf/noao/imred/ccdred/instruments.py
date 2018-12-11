@@ -191,18 +191,24 @@ def get_header_value(hdulist, instrument, key, default=False):
 
     """
     # what is the header key in the instrument's language
-    key = instrument.translate(key)
+    userkey = instrument.translate(key)
     val = None
 
     if not default:
-        # go reverse order because we'll typically want the first instance
-        # if something is in multiple headers
-        for hdu in hdulist[::-1]:
-            if key in hdu.header:
-                val = hdu.header[key]
+        # grab the first instance
+        for hdu in hdulist:
+            if userkey in hdu.header:
+                val = hdu.header[userkey]
+                break
     if val is None:
         val = instrument.get_default(key)
 
+    # in IRAF there's a distinction between int/real and strings.
+    # hdmgstr/hdmgdef returns the empty string while hdmgeti/hdmgetr
+    # raises an error if there is no value or default.
+    if val is None:
+        raise Exception(f"No value found or default value given for "
+                        f"parameter '{key}', instrument parameter '{userkey}'")
     return val
 
 
@@ -223,6 +229,7 @@ def delete_header_value(hdulist, instrument, key):
     key = instrument.translate(key)
 
     for hdu in hdulist:
+        # XXX: does IRAF really remove from all headers?
         if key in hdu.header:
             hdu.header.remove(key, remove_all=True)
     return
