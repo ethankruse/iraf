@@ -323,7 +323,7 @@ def ccd_section(section, defaults=(None, None, 1, None, None, 1)):
     if len(section) == 0:
         return defaults
 
-    if section[0] != '[' and section[-1] != ']':
+    if section[0] != '[' or section[-1] != ']':
         raise Exception(f"Error in 2D image section specification {section}")
 
     osection = section

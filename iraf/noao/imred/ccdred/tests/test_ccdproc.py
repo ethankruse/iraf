@@ -39,17 +39,26 @@ def test_ccd_section():
     assert (x0 == 9 and x1 == 9 and xs == d3 and y0 == 5 and y1 == 20 and
             ys == d6)
 
+    # test bad braces
     with pytest.raises(Exception):
-        # test no braces
         iraf.ccd_section('[:,:')
+    with pytest.raises(Exception):
         iraf.ccd_section(':,:]')
+    with pytest.raises(Exception):
         iraf.ccd_section('1:2,5:34')
-        # test wrong dimensions
+
+    # test wrong dimensions
+    with pytest.raises(Exception):
         iraf.ccd_section('[1:5]')
+    with pytest.raises(Exception):
         iraf.ccd_section('[1:5, 1:5, 1:5]')
-        # test bad inputs in a dimension
+
+    # test bad inputs in a dimension
+    with pytest.raises(Exception):
         iraf.ccd_section('[1:3:4:5, :]')
-        # test bad size of defaults
+
+    # test bad size of defaults
+    with pytest.raises(Exception):
         iraf.ccd_section('[:,:]', defaults=[1, 2, 3])
 
 
