@@ -116,17 +116,29 @@ class Instrument(object):
             return None
 
     def get_image_type(self, key):
-        # XXX: return one of the accepted values? 'none'? What is this supposed
-        # to be an AIRAF translation of?
-        # Always return a string?
+        """
+        Translate an input image type into one of the 10 possible IRAF image
+        types: "|object|zero|dark|flat|illum|fringe|other|comp|none|unknown|".
+
+        Parameters
+        ----------
+        key : str or None
+
+        Returns
+        -------
+        string
+        """
         if key is None:
-            return key
+            return 'none'
         key = key.strip()
         if key in self.image_types:
-            return self.image_types[key]
-        else:
-            # XXX: return unknown if not already a default value?
+            key = self.image_types[key]
+        # make sure no one messed with self.image_types to give a nonvalid
+        # image type
+        if key in imagetypes:
             return key
+        else:
+            return 'unknown'
 
 
 def set_header_value(hdulist, instrument, key, value, comment=None):
@@ -259,14 +271,7 @@ def ccdtypes(hdulist, instrument):
         raise Exception('ccdtypes not given an Instrument object.')
 
     typ = get_header_value(hdulist, instrument, 'imagetyp')
-    typ = instrument.get_image_type(typ)
-
-    if typ is None:
-        typ = 'none'
-    elif typ not in imagetypes:
-        typ = 'unknown'
-
-    return typ
+    return instrument.get_image_type(typ)
 
 
 def ccdsubset(hdulist, instrument):

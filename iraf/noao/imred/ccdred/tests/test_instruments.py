@@ -146,7 +146,7 @@ def test_instrument_translate_get_default(tmpdir):
     assert inst.get_default('boo') is None
 
 
-def test_instrument_get_image_type(tmpdir):
+def test_instrument_get_image_type_ccdtypes(tmpdir):
     basedir = str(tmpdir)
     # create a translation file
     tfile = os.path.join(basedir, 'trans.txt')
@@ -155,7 +155,33 @@ def test_instrument_get_image_type(tmpdir):
     inst = iraf.Instrument(tfile)
     assert inst.get_image_type("sky flat") == 'flat'
     assert inst.get_image_type("object") == 'object'
-    assert inst.get_image_type("foo") == 'foo'
+    assert inst.get_image_type("foo") == 'unknown'
+    assert inst.get_image_type(None) == 'none'
+
+    # create fake file
+    fname = os.path.join(basedir, 'ccdtypestest.fits')
+    hdu = fits.PrimaryHDU()
+    hdu.header['imagetyp'] = 'object'
+    hdu.header['itype'] = 'sky flat'
+    hdu.writeto(fname, overwrite=True)
+
+    with pytest.raises(Exception):
+        with iraf.sys.image_open(fname, mode='update') as ff:
+            iraf.ccdtypes(ff, 'notinstrument')
+
+    # check ccdtypes
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert iraf.ccdtypes(ff, inst) == 'object'
+
+    inst.parameters['imagetyp'] = 'itype'
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert iraf.ccdtypes(ff, inst) == 'flat'
+
+    # check for correct default value when not in image header
+    inst.parameters['imagetyp'] = 'imtype'
+    inst.defaults['imagetyp'] = 'dark'
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert iraf.ccdtypes(ff, inst) == 'dark'
 
 
 def test_set_get_delete_header_value(tmpdir):

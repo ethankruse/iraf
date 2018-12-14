@@ -1,5 +1,5 @@
-# XXX: include none and unknown as options as well?
-imagetypes = "object|zero|dark|flat|illum|fringe|other|comp".split('|')
+imagetypes = "object|zero|dark|flat|illum|fringe|other|" \
+             "comp|none|unknown".split('|')
 
 from .instruments import *
 from .combine import *
