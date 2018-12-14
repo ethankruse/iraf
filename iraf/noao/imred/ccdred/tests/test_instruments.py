@@ -320,3 +320,39 @@ def test_set_get_delete_header_value(tmpdir):
     with iraf.sys.image_open(fname, mode='update') as ff:
         assert 'filter' not in ff[0].header and 'exptime' not in ff[0].header
         assert 'filter' not in ff[1].header and 'exptime' not in ff[1].header
+
+
+def test_ccdsubset(tmpdir):
+    basedir = str(tmpdir)
+
+    inst = iraf.Instrument()
+
+    # create fake file
+    fname = os.path.join(basedir, 'ccdsubsets.fits')
+    hdu = fits.PrimaryHDU()
+    hdu.header['subset'] = 'red filter'
+    hdu.header['filter'] = 'blue filter! @#%_.asdf'
+    hdu.writeto(fname, overwrite=True)
+
+    with pytest.raises(Exception):
+        with iraf.sys.image_open(fname, mode='update') as ff:
+            iraf.ccdsubset(ff, 'notinstrument')
+
+    # 'subset' as header value
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert iraf.ccdsubset(ff, inst) == 'red_filter'
+
+    # translate 'subset'
+    inst.parameters['subset'] = 'filter'
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert iraf.ccdsubset(ff, inst) == 'blue_filter______.asdf'
+
+    # no default and not in header
+    inst.parameters['subset'] = 'ifilt'
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert iraf.ccdsubset(ff, inst) == ''
+
+    # check for default
+    inst.defaults['subset'] = '  UB5.3  '
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert iraf.ccdsubset(ff, inst) == 'UB5.3'
