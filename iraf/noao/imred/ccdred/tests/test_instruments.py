@@ -386,7 +386,7 @@ def test_file_new_copy(tmpdir):
     # test simple example
     with iraf.sys.image_open(fname, mode='update') as ff:
         assert not os.path.exists(outf)
-        iraf.file_new_copy(outf, ff, mode='NEW_COPY', instrument=inst,
+        iraf.file_new_copy(outf, ff, mode='NEW_COPY', instrument=None,
                            overwrite=False)
         assert os.path.exists(outf)
 
