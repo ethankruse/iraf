@@ -2,6 +2,7 @@ import os
 import iraf
 import pytest
 from astropy.io import fits
+from datetime import datetime
 
 parameters = {'BPM': None, 'biassec': None, 'ccdmean': None,
               'ccdmeant': None, 'ccdproc': None, 'ccdsec': None,
@@ -356,3 +357,81 @@ def test_ccdsubset(tmpdir):
     inst.defaults['subset'] = '  UB5.3  '
     with iraf.sys.image_open(fname, mode='update') as ff:
         assert iraf.ccdsubset(ff, inst) == 'UB5.3'
+
+
+def test_file_new_copy(tmpdir):
+    basedir = str(tmpdir)
+
+    inst = iraf.Instrument()
+
+    # create fake file
+    fname = os.path.join(basedir, 'ccdnewcopy.fits')
+    hdu = fits.PrimaryHDU()
+    hdu.header['subset'] = 'red filter'
+    hdu.header['filter'] = 'blue filter'
+    hdu.writeto(fname, overwrite=True)
+
+    outf = os.path.join(basedir, 'ccdnewcopy_out.fits')
+
+    # test failures
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        with pytest.raises(Exception):
+            iraf.file_new_copy(outf, ff, mode='readonly', instrument=inst,
+                               overwrite=False)
+        ff.__filetype__ = 'txt'
+        with pytest.raises(Exception):
+            iraf.file_new_copy(outf, ff, mode='NEW_COPY', instrument=inst,
+                               overwrite=False)
+
+    # test simple example
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        assert not os.path.exists(outf)
+        iraf.file_new_copy(outf, ff, mode='NEW_COPY', instrument=inst,
+                           overwrite=False)
+        assert os.path.exists(outf)
+
+    with iraf.sys.image_open(outf, mode='update') as ff:
+        assert 'origin' in ff[0].header
+        assert 'date' in ff[0].header
+        assert 'iraf-tlm' in ff[0].header
+
+        # make sure these are both in UTC.
+        dtime = datetime.strptime(ff[0].header['date'], '%Y-%m-%dT%H:%M:%S')
+        tlmtime = datetime.strptime(ff[0].header['iraf-tlm'],
+                                    '%Y-%m-%dT%H:%M:%S')
+        assert abs((dtime - datetime.utcnow()).total_seconds()) < 2
+        assert abs((tlmtime - datetime.utcnow()).total_seconds()) < 2
+
+        # replace the date to test overwriting
+        ff[0].header['date'] = 'none'
+
+    # test overwrite
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        with pytest.raises(OSError):
+            iraf.file_new_copy(outf, ff, mode='NEW_COPY', instrument=inst,
+                               overwrite=False)
+    with iraf.sys.image_open(outf, mode='update') as ff:
+        assert ff[0].header['date'] == 'none'
+
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        iraf.file_new_copy(outf, ff, mode='NEW_COPY', instrument=inst,
+                           overwrite=True)
+    with iraf.sys.image_open(outf, mode='update') as ff:
+        assert ff[0].header['date'] != 'none'
+
+    # test using custom instrument
+    inst.parameters['origin'] = 'orig'
+    inst.parameters['date'] = 'dt'
+    inst.parameters['iraf-tlm'] = 'tlm'
+    with iraf.sys.image_open(fname, mode='update') as ff:
+        iraf.file_new_copy(outf, ff, mode='NEW_COPY', instrument=inst,
+                           overwrite=True)
+
+    with iraf.sys.image_open(outf, mode='update') as ff:
+        assert 'origin' not in ff[0].header
+        assert 'date' not in ff[0].header
+        assert 'iraf-tlm' not in ff[0].header
+
+        assert 'orig' in ff[0].header
+        assert 'dt' in ff[0].header
+        assert 'tlm' in ff[0].header

@@ -399,9 +399,12 @@ def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True,
 
     """
     if mode != 'NEW_COPY':
-        print('other modes of file_new_copy not supported.')
-        return
+        raise Exception(f'Mode "{mode}" of file_new_copy not supported.')
 
+    # NOTE: IRAF appears to put these three header values (origin, date,
+    # iraf-tlm) at the beginning of the header, right after the 'extend'
+    # value. We currently append at the end. Not sure if this matters for
+    # anyone.
     ftype = in_header.__filetype__
     if ftype == 'fits':
         # do the actual writing of the copy
@@ -414,10 +417,10 @@ def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True,
         from iraf import __hdrstring__ as fitsname
         set_header_value(hdulist, instrument, 'origin', fitsname, orcomm)
         # don't need microsecond precision in our dates, so leave it out
-        dtval = datetime.now().replace(microsecond=0).isoformat()
-        dtcomm = 'Date FITS file was generated'
+        dtval = datetime.utcnow().replace(microsecond=0).isoformat()
+        dtcomm = 'Date FITS file was generated (UTC)'
         set_header_value(hdulist, instrument, 'date', dtval, dtcomm)
-        lmcomm = 'Time of last modification'
+        lmcomm = 'Time of last modification (UTC)'
         set_header_value(hdulist, instrument, 'iraf-tlm', dtval, lmcomm)
         hdulist.close()
     else:
