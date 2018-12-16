@@ -34,8 +34,10 @@ def test_file_handler(tmpdir):
         samplefiles.append(subpath)
         Path(subpath).touch()
 
-    # test None
+    # test None and empty string
     assert len(iraf.utils.file_handler(None)) == 0
+    assert len(iraf.utils.file_handler('')) == 0
+    assert len(iraf.utils.file_handler('    ')) == 0
 
     # test of a file that doesn't exist
     inp = os.path.join(basedir, 'abc.txt')

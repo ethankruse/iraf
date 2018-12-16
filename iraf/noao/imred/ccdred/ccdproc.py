@@ -617,9 +617,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     # XXX: set_interactive("", interactive)
 
     # start of cal_open
-    # XXX: allow for None or empty string to process all ccdtypes?
     ccdtype = ccdtype.strip().lower()
-    if len(ccdtype) == 0:
+    if ccdtype is None or len(ccdtype) == 0:
         ccdtype = 'none'
     elif ccdtype not in imagetypes:
         ccdtype = 'unknown'
@@ -670,6 +669,12 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             print(f'{image}:\n')
 
         imin = image_open(image)
+        # NOTE: Bug in IRAF here (?). If input and output lists are the same
+        # size, but an image in the input list doesn't exist, the i+1 input
+        # image will then get processed with the i output image name because
+        # the output list does not advance to match the step of the input list.
+        # For us, we'll give the above exception that input and output
+        # lists don't match, since the input list is created using exists=True.
         if imin is None:
             continue
 

@@ -15,6 +15,9 @@ def image_open(image, mode='readonly'):
     Always returns a context manager, so can be used in 'with ... as:'
     blocks.
 
+    Will always return an image object. Raises an Exception if the
+    image cannot be opened.
+
     Parameters
     ----------
     image : str

@@ -160,6 +160,11 @@ def test_basics(tmpdir):
         with fits.open(ifile) as hdr:
             assert len(hdr[0].header['zerocor']) > 0
 
+    # test if one of the input files doesn't exist
+    os.remove(inputs[1])
+    with pytest.raises(Exception):
+        iraf.ccdproc(inlist, **myargs)
+
 
 def test_zerocor(tmpdir):
     basedir = str(tmpdir)

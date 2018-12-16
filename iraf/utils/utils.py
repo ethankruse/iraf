@@ -63,6 +63,8 @@ def file_handler(filelist, exists=True, recursive=False):
     # go through every input and add to the output list of files
     for istr in filelist:
         istr = istr.strip()
+        if len(istr) == 0:
+            continue
         # we have an input file with a list of files to use.
         if istr[0] == '@':
             # remove the @ and deal with home directories
