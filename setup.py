@@ -1,9 +1,13 @@
 import builtins
 from setuptools import setup
 
-# Hackishly inject a constant into builtins to enable importing of the
-# package before all the dependencies are built.
+# Comment and idea taken from numpy.
+# This is a bit hackish: we are setting a global variable so that the main
+# airaf __init__ can detect if it is being loaded by the setup routine, to
+# avoid attempting to load components that aren't built yet.  While ugly, it's
+# a lot more robust than what was previously being used.
 builtins.__IRAF_SETUP__ = True
+
 import iraf
 
 # XXX: all of this needs to be looked at and reworked and added before release
