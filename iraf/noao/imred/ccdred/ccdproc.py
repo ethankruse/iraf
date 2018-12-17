@@ -10,7 +10,7 @@ import tempfile
 import datetime
 import time
 
-__all__ = ['ccdproc', 'ccd_section']
+__all__ = ['ccdproc', 'ccd_section', 'cal_list']
 
 
 class CCD(object):
@@ -188,34 +188,47 @@ def ccdnscan(hdulist, instrument, ccdtype, scantype, inscan,
     return nscan
 
 
-def cal_list(list1, listtype, instrument, calimages, nscans, caltypes, subsets,
-             scantype, inscan, scancor):
-    for image in list1:
-        # Open the image.  If an explicit type is given it is an
-        # error if the image can't be opened.
-        hdulist = image_open(image)
-        if hdulist is None:
+def cal_list(inlist, listtype, instrument, calimages, nscans, caltypes, subsets,
+             scantype, nscan, scancor):
+    """
+
+    Parameters
+    ----------
+    inlist
+    listtype
+    instrument
+    calimages
+    nscans
+    caltypes
+    subsets
+    scantype
+    nscan
+    scancor
+
+    Returns
+    -------
+
+    """
+    for image in inlist:
+        # Open the image.  Unlike IRAF, always an error if it can't be found
+        # or opened. In IRAF it's an error unless listtype='unknown'. See note
+        # in main ccdproc about this difference.
+        with image_open(image) as hdulist:
+
+            # Override image header CCD type if a list type is given.
             if listtype == 'unknown':
-                continue
+                ccdtype = ccdtypes(hdulist, instrument)
             else:
-                raise Exception(f'Error opening {image}')
+                ccdtype = listtype
 
-        # Override image header CCD type if a list type is given.
-        if listtype == 'unknown':
-            ccdtype = ccdtypes(hdulist, instrument)
-        else:
-            ccdtype = listtype
-
-        if ccdtype in ['zero', 'dark', 'flat', 'illum', 'fringe']:
-            if image not in calimages:
-                caltypes.append(ccdtype)
-                nsc = ccdnscan(hdulist, instrument, ccdtype, scantype, inscan,
-                               scancor)
-                nscans.append(nsc)
-                subsets.append(ccdsubset(hdulist, instrument))
-                calimages.append(image)
-
-        hdulist.close()
+            if ccdtype in ['zero', 'dark', 'flat', 'illum', 'fringe']:
+                if image not in calimages:
+                    caltypes.append(ccdtype)
+                    nsc = ccdnscan(hdulist, instrument, ccdtype, scantype,
+                                   nscan, scancor)
+                    nscans.append(nsc)
+                    subsets.append(ccdsubset(hdulist, instrument))
+                    calimages.append(image)
 
 
 def cal_scan(image, nscan, scancor):
@@ -628,6 +641,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     caltypes = []
     subsets = []
     scantype = scantype.strip().lower()
+    if scantype not in ['shortscan', 'longscan']:
+        raise Exception(f"Unrecognized scantype '{scantype}'")
 
     if ccdtype != 'zero' and zerocor:
         list1 = file_handler(zero)
@@ -649,6 +664,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         list1 = file_handler(fringe)
         cal_list(list1, 'fringe', instrument, calimages, nscans,
                  caltypes, subsets, scantype, nscan, scancor)
+
     cal_list(inputs, 'unknown', instrument, calimages, nscans,
              caltypes, subsets, scantype, nscan, scancor)
 
@@ -671,10 +687,13 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         imin = image_open(image)
         # NOTE: Bug in IRAF here (?). If input and output lists are the same
         # size, but an image in the input list doesn't exist, the i+1 input
-        # image will then get processed with the i output image name because
+        # image will then get processed to the i output image name because
         # the output list does not advance to match the step of the input list.
-        # For us, we'll give the above exception that input and output
+        # For us, we'll give the exception that input and output
         # lists don't match, since the input list is created using exists=True.
+        # We therefore can't process any images if any one in the list doesn't
+        # exist or can't be opened. IRAF will process all but that one, but the
+        # output files will not be matched up in names as expected.
         if imin is None:
             continue
 

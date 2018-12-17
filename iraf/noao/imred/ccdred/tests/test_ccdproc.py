@@ -62,6 +62,76 @@ def test_ccd_section():
         iraf.ccd_section('[:,:]', defaults=[1, 2, 3])
 
 
+@pytest.mark.parametrize("listtype", iraf.imagetypes)
+def test_cal_list(tmpdir, listtype):
+    basedir = str(tmpdir)
+
+    inst = iraf.Instrument()
+    # set up the necessary empty lists
+    calimages, nscans, caltypes, subsets = [], [], [], []
+    scantype = 'shortscan'
+    nscan = 1
+    scancor = True
+
+    # create some simple files for testing
+    nx = 50
+    ny = 90
+    baseval = 100
+
+    # test files not found
+    foo = os.path.join(basedir, 'foo.fits')
+    with pytest.raises(Exception):
+        iraf.cal_list([foo], listtype, inst, calimages, nscans, caltypes,
+                      subsets, scantype, nscan, scancor)
+
+    lt = len(iraf.imagetypes)
+    # test both 'imagetyp' and custom instrument value
+    for instval in ['imagetyp', 'ityp']:
+        inst.parameters['imagetyp'] = instval
+
+        # create input files
+        inputs = []
+        # set up the necessary empty lists
+        calimages, nscans, caltypes, subsets = [], [], [], []
+
+        # test all possible image types
+        for jj in np.arange(len(iraf.imagetypes)):
+            arr = np.ones((nx, ny), dtype=float) * baseval
+            hdu = fits.PrimaryHDU(arr)
+            hdu.header[instval] = iraf.imagetypes[jj]
+            inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+            hdu.writeto(inim, overwrite=True)
+            inputs.append(inim)
+
+        iraf.cal_list(inputs, listtype, inst, calimages, nscans, caltypes,
+                      subsets, scantype, nscan, scancor)
+
+        # XXX: still to do: test the output of the other lists
+        if listtype == 'unknown':
+            assert (len(calimages) == 5 and len(nscans) == 5 and
+                    len(caltypes) == 5 and len(subsets) == 5)
+            # make sure there's one of each allowable type
+            assert len({'zero', 'dark', 'flat', 'illum', 'fringe'} &
+                       set(caltypes)) == 5
+
+        elif listtype in ['zero', 'dark', 'flat', 'illum', 'fringe']:
+            assert (len(calimages) == lt and len(nscans) == lt and
+                    len(caltypes) == lt and len(subsets) == lt)
+            # make sure all types are the same as the input type
+            for itype in caltypes:
+                assert itype == listtype
+
+        else:
+            assert (len(calimages) == 0 and len(nscans) == 0 and
+                    len(caltypes) == 0 and len(subsets) == 0)
+
+        # XXX: check for duplication
+
+
+def test_ccdnscan():
+    pass
+
+
 # explicitly call ccdproc with every parameter set to what we want
 defaultargs = {'output': None, 'ccdtype': 'object', 'noproc': False,
                'fixpix': False, 'overscan': False, 'trim': False,
@@ -133,6 +203,14 @@ def test_basics(tmpdir):
         with fits.open(ifile) as hdr:
             assert len(hdr[0].header['zerocor']) > 0
 
+    # reset the input files
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=float) * baseval
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['imagetyp'] = 'object'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+
     # test output gets created
     myargs['output'] = outlists
     iraf.ccdproc(inputs, **myargs)
@@ -141,6 +219,12 @@ def test_basics(tmpdir):
             assert len(hdr[0].header['zerocor']) > 0
         # remove the file to test the same one again later
         os.remove(ifile)
+
+    # garbage scantype value
+    myargs['scantype'] = 'foo'
+    with pytest.raises(Exception):
+        iraf.ccdproc(inputs, **myargs)
+    myargs['scantype'] = 'shortscan'
 
     # test bad output sizes
     myargs['output'] = outlists*2
@@ -319,3 +403,11 @@ def test_zerocor(tmpdir):
         assert hdr[0].header['datasec'] == dsec
         assert hdr[0].header['ccdsec'] == ccdsec
         hdr.close()
+
+
+# things to test:
+
+# every ccdtype for cal_open. Do this by giving all 5 types of files
+# and trying to process all 5 types at once for each ccdtype.
+
+# test having the calibration images in the input list.
