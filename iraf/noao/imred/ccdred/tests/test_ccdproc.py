@@ -11,62 +11,62 @@ def test_ccd_section():
     defaults = [5, 6, 7, 8, 9, 10]
     d1, d2, d3, d4, d5, d6 = defaults
     # get the defaults
-    x0, x1, xs, y0, y1, ys = iraf.ccd_section('[:,:]', defaults=defaults)
+    x0, x1, xs, y0, y1, ys = iraf.ccdred.ccd_section('[:,:]', defaults=defaults)
     assert (x0 == d1 and x1 == d2 and xs == d3 and y0 == d4 and y1 == d5 and
             ys == d6)
 
-    x0, x1, xs, y0, y1, ys = iraf.ccd_section(None, defaults=defaults)
+    x0, x1, xs, y0, y1, ys = iraf.ccdred.ccd_section(None, defaults=defaults)
     assert (x0 == d1 and x1 == d2 and xs == d3 and y0 == d4 and y1 == d5 and
             ys == d6)
 
-    x0, x1, xs, y0, y1, ys = iraf.ccd_section('  ', defaults=defaults)
+    x0, x1, xs, y0, y1, ys = iraf.ccdred.ccd_section('  ', defaults=defaults)
     assert (x0 == d1 and x1 == d2 and xs == d3 and y0 == d4 and y1 == d5 and
             ys == d6)
 
     # all the options
-    x0, x1, xs, y0, y1, ys = iraf.ccd_section('[1:5:3,5:20:-4]',
+    x0, x1, xs, y0, y1, ys = iraf.ccdred.ccd_section('[1:5:3,5:20:-4]',
                                               defaults=defaults)
     assert (x0 == 1 and x1 == 5 and xs == 3 and y0 == 5 and y1 == 20 and
             ys == -4)
 
     # no step size
-    x0, x1, xs, y0, y1, ys = iraf.ccd_section('[1:5,5:20]', defaults=defaults)
+    x0, x1, xs, y0, y1, ys = iraf.ccdred.ccd_section('[1:5,5:20]', defaults=defaults)
     assert (x0 == 1 and x1 == 5 and xs == d3 and y0 == 5 and y1 == 20 and
             ys == d6)
 
     # single row
-    x0, x1, xs, y0, y1, ys = iraf.ccd_section('[9,5:20]', defaults=defaults)
+    x0, x1, xs, y0, y1, ys = iraf.ccdred.ccd_section('[9,5:20]', defaults=defaults)
     assert (x0 == 9 and x1 == 9 and xs == d3 and y0 == 5 and y1 == 20 and
             ys == d6)
 
     # test bad braces
     with pytest.raises(Exception):
-        iraf.ccd_section('[:,:')
+        iraf.ccdred.ccd_section('[:,:')
     with pytest.raises(Exception):
-        iraf.ccd_section(':,:]')
+        iraf.ccdred.ccd_section(':,:]')
     with pytest.raises(Exception):
-        iraf.ccd_section('1:2,5:34')
+        iraf.ccdred.ccd_section('1:2,5:34')
 
     # test wrong dimensions
     with pytest.raises(Exception):
-        iraf.ccd_section('[1:5]')
+        iraf.ccdred.ccd_section('[1:5]')
     with pytest.raises(Exception):
-        iraf.ccd_section('[1:5, 1:5, 1:5]')
+        iraf.ccdred.ccd_section('[1:5, 1:5, 1:5]')
 
     # test bad inputs in a dimension
     with pytest.raises(Exception):
-        iraf.ccd_section('[1:3:4:5, :]')
+        iraf.ccdred.ccd_section('[1:3:4:5, :]')
 
     # test bad size of defaults
     with pytest.raises(Exception):
-        iraf.ccd_section('[:,:]', defaults=[1, 2, 3])
+        iraf.ccdred.ccd_section('[:,:]', defaults=[1, 2, 3])
 
 
-@pytest.mark.parametrize("listtype", iraf.imagetypes)
+@pytest.mark.parametrize("listtype", iraf.ccdred.imagetypes)
 def test_cal_list(tmpdir, listtype):
     basedir = str(tmpdir)
 
-    inst = iraf.Instrument()
+    inst = iraf.ccdred.Instrument()
     # set up the necessary empty lists
     calimages, nscans, caltypes, subsets = [], [], [], []
     scantype = 'shortscan'
@@ -81,10 +81,10 @@ def test_cal_list(tmpdir, listtype):
     # test files not found
     foo = os.path.join(basedir, 'foo.fits')
     with pytest.raises(Exception):
-        iraf.cal_list([foo], listtype, inst, calimages, nscans, caltypes,
+        iraf.ccdred.cal_list([foo], listtype, inst, calimages, nscans, caltypes,
                       subsets, scantype, nscan, scancor)
 
-    lt = len(iraf.imagetypes)
+    lt = len(iraf.ccdred.imagetypes)
     # test both 'imagetyp' and custom instrument value
     for instval in ['imagetyp', 'ityp']:
         inst.parameters['imagetyp'] = instval
@@ -95,15 +95,15 @@ def test_cal_list(tmpdir, listtype):
         calimages, nscans, caltypes, subsets = [], [], [], []
 
         # test all possible image types
-        for jj in np.arange(len(iraf.imagetypes)):
+        for jj in np.arange(len(iraf.ccdred.imagetypes)):
             arr = np.ones((nx, ny), dtype=float) * baseval
             hdu = fits.PrimaryHDU(arr)
-            hdu.header[instval] = iraf.imagetypes[jj]
+            hdu.header[instval] = iraf.ccdred.imagetypes[jj]
             inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
             hdu.writeto(inim, overwrite=True)
             inputs.append(inim)
 
-        iraf.cal_list(inputs, listtype, inst, calimages, nscans, caltypes,
+        iraf.ccdred.cal_list(inputs, listtype, inst, calimages, nscans, caltypes,
                       subsets, scantype, nscan, scancor)
 
         # XXX: still to do: test the output of the other lists
@@ -198,7 +198,7 @@ def test_basics(tmpdir):
     myargs['zero'] = zerofile
 
     # test no outputs works
-    iraf.ccdproc(inputs, **myargs)
+    iraf.ccdred.ccdproc(inputs, **myargs)
     for ifile in inputs:
         with fits.open(ifile) as hdr:
             assert len(hdr[0].header['zerocor']) > 0
@@ -213,7 +213,7 @@ def test_basics(tmpdir):
 
     # test output gets created
     myargs['output'] = outlists
-    iraf.ccdproc(inputs, **myargs)
+    iraf.ccdred.ccdproc(inputs, **myargs)
     for ifile in outlists:
         with fits.open(ifile) as hdr:
             assert len(hdr[0].header['zerocor']) > 0
@@ -223,23 +223,23 @@ def test_basics(tmpdir):
     # garbage scantype value
     myargs['scantype'] = 'foo'
     with pytest.raises(Exception):
-        iraf.ccdproc(inputs, **myargs)
+        iraf.ccdred.ccdproc(inputs, **myargs)
     myargs['scantype'] = 'shortscan'
 
     # test bad output sizes
     myargs['output'] = outlists*2
     with pytest.raises(Exception):
-        iraf.ccdproc(inputs, **myargs)
+        iraf.ccdred.ccdproc(inputs, **myargs)
     myargs['output'] = outlists[0]
     with pytest.raises(Exception):
-        iraf.ccdproc(inputs, **myargs)
+        iraf.ccdred.ccdproc(inputs, **myargs)
     # make sure the output files don't exist
     for ifile in outlists:
         assert not os.path.exists(ifile)
 
     # test input and output lists
     myargs['output'] = outlist
-    iraf.ccdproc(inlist, **myargs)
+    iraf.ccdred.ccdproc(inlist, **myargs)
     for ifile in outlists:
         with fits.open(ifile) as hdr:
             assert len(hdr[0].header['zerocor']) > 0
@@ -247,7 +247,7 @@ def test_basics(tmpdir):
     # test if one of the input files doesn't exist
     os.remove(inputs[1])
     with pytest.raises(Exception):
-        iraf.ccdproc(inlist, **myargs)
+        iraf.ccdred.ccdproc(inlist, **myargs)
 
 
 def test_zerocor(tmpdir):
@@ -300,7 +300,7 @@ def test_zerocor(tmpdir):
     myargs['zerocor'] = True
     myargs['zero'] = zerofile
 
-    iraf.ccdproc(inlist, **myargs)
+    iraf.ccdred.ccdproc(inlist, **myargs)
 
     for ifile in outlists:
         hdr = fits.open(ifile)
@@ -312,7 +312,7 @@ def test_zerocor(tmpdir):
 
     # test no outputs and replacing the input
     myargs['output'] = None
-    iraf.ccdproc(inlist, **myargs)
+    iraf.ccdred.ccdproc(inlist, **myargs)
 
     oldtimes = []
     for ifile in inputs:
@@ -324,7 +324,7 @@ def test_zerocor(tmpdir):
 
     # wait a second and do it again
     time.sleep(2)
-    iraf.ccdproc(inlist, **myargs)
+    iraf.ccdred.ccdproc(inlist, **myargs)
     # make sure nothing has happened since inputs are already processed
     for ii, ifile in enumerate(inputs):
         hdr = fits.open(ifile)
@@ -346,7 +346,7 @@ def test_zerocor(tmpdir):
         inputs.append(inim)
 
     myargs['output'] = outlists
-    iraf.ccdproc(inlist, **myargs)
+    iraf.ccdred.ccdproc(inlist, **myargs)
 
     for ifile in outlists:
         hdr = fits.open(ifile)
@@ -392,7 +392,7 @@ def test_zerocor(tmpdir):
     hdu.header['ccdsec'] = zccdsec
     hdu.writeto(zerofile, overwrite=True)
 
-    iraf.ccdproc(inlist, **myargs)
+    iraf.ccdred.ccdproc(inlist, **myargs)
 
     for ifile in outlists:
         hdr = fits.open(ifile)

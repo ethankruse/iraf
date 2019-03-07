@@ -1,1 +1,1 @@
-from .ccdred import *
+from . import ccdred

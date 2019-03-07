@@ -1,3 +1,11 @@
+"""
+AIRAF: Astronomical Image Reduction and Analysis Facility
+======
+
+TODO: write overview of package and docs.
+
+"""
+
 # Taken from numpy/astropy etc.
 # This is only set if we're running from the setup.py file.
 try:
@@ -12,7 +20,9 @@ __hdrstring__ = f"AIRAF v{__version__} for Python"
 
 if not __IRAF_SETUP__:
     from . import utils
-    from .images import *
-    from .noao import *
-    from .plot import *
     from . import sys
+    from .images import *
+    del images
+    from .noao import *
+    del noao
+    from . import plot

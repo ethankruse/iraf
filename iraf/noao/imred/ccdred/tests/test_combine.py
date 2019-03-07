@@ -50,7 +50,7 @@ def test_combine_basic(tmpdir):
 
     outfile = os.path.join(basedir, 'testout_me.fits')
 
-    iraf.combine(iraflist, outfile, **defaultargs)
+    iraf.ccdred.combine(iraflist, outfile, **defaultargs)
 
     outim = fits.open(outfile)
     assert outim[0].data.shape == (nx, ny)
@@ -99,7 +99,7 @@ def test_reject_none_outtype(tmpdir):
             myargs = copy.deepcopy(defaultargs)
             myargs['method'] = imethod
             myargs['outtype'] = dtypestr[ii]
-            iraf.combine(iraflist, outfile, **myargs)
+            iraf.ccdred.combine(iraflist, outfile, **myargs)
 
             outim = fits.open(outfile)
             # this is the simple average and median calculations we
@@ -151,7 +151,7 @@ def test_reject_minmax(tmpdir):
             myargs['nhigh'] = ihigh
 
             if ihigh + ilow < nimg:
-                iraf.combine(iraflist, outfile, **myargs)
+                iraf.ccdred.combine(iraflist, outfile, **myargs)
 
                 outim = fits.open(outfile)
                 imean = innums[ilow:nimg-ihigh].mean()
@@ -159,7 +159,7 @@ def test_reject_minmax(tmpdir):
                 outim.close()
             else:
                 with pytest.raises(Exception):
-                    iraf.combine(iraflist, outfile, **myargs)
+                    iraf.ccdred.combine(iraflist, outfile, **myargs)
 
 
 def test_reject_pclip(tmpdir):
@@ -198,7 +198,7 @@ def test_reject_pclip(tmpdir):
                 myargs['lsigma'] = 3.
                 myargs['hsigma'] = 3.
 
-                iraf.combine(iraflist, outfile, **myargs)
+                iraf.ccdred.combine(iraflist, outfile, **myargs)
 
                 if ikeep > 0:
                     imean = innums[2:-2].mean()
@@ -254,7 +254,7 @@ def test_reject_ccdclip_crreject(tmpdir):
                 # anyway
                 myargs['lsigma'] = 4.3
 
-                iraf.combine(iraflist, outfile, **myargs)
+                iraf.ccdred.combine(iraflist, outfile, **myargs)
 
                 if ikeep < 0 or ireject == 'crreject':
                     imean = innums.mean()
@@ -301,7 +301,7 @@ def test_reject_sigclip(tmpdir):
             # need it this low since the sigma is so huge at first
             myargs['lsigma'] = 1.7
 
-            iraf.combine(iraflist, outfile, **myargs)
+            iraf.ccdred.combine(iraflist, outfile, **myargs)
 
             if ikeep < 0:
                 imean = innums.mean()
@@ -350,7 +350,7 @@ def test_reject_avsigclip(tmpdir):
             # need it this low since the sigma is so huge at first
             myargs['lsigma'] = 1.85
 
-            iraf.combine(iraflist, outfile, **myargs)
+            iraf.ccdred.combine(iraflist, outfile, **myargs)
 
             if ikeep < 0:
                 imean = innums.mean()
@@ -379,13 +379,13 @@ def test_delete(tmpdir):
     myargs = copy.deepcopy(defaultargs)
 
     myargs['delete'] = False
-    iraf.combine(iraflist, outfile, **myargs)
+    iraf.ccdred.combine(iraflist, outfile, **myargs)
     assert os.path.exists(outfile)
     for ifile in inputs:
         assert os.path.exists(ifile)
 
     myargs['delete'] = True
-    iraf.combine(iraflist, outfile, **myargs)
+    iraf.ccdred.combine(iraflist, outfile, **myargs)
     assert os.path.exists(outfile)
     for ifile in inputs:
         assert not os.path.exists(ifile)
@@ -426,7 +426,7 @@ def test_threshold_blank(tmpdir):
             myargs['lthreshold'] = lt
             myargs['hthreshold'] = ht
 
-            iraf.combine(iraflist, outfile, **myargs)
+            iraf.ccdred.combine(iraflist, outfile, **myargs)
 
             outim = fits.open(outfile)
 
@@ -464,7 +464,7 @@ def test_plfile(tmpdir):
     nlows = np.arange(nimg)
     for ilow in nlows:
         myargs['nlow'] = ilow
-        iraf.combine(iraflist, outfile, **myargs)
+        iraf.ccdred.combine(iraflist, outfile, **myargs)
         outim = fits.open(plfile)
         assert np.allclose(outim[0].data, ilow)
         # need to check name instead of dtype because of endianness problems
@@ -505,7 +505,7 @@ def test_sigmafile(tmpdir):
     myargs['hthreshold'] = hthresh
     myargs['blank'] = blank
 
-    iraf.combine(iraflist, outfile, **myargs)
+    iraf.ccdred.combine(iraflist, outfile, **myargs)
     outim = fits.open(sigmafile)
 
     inps = np.arange(nimg) + 1
@@ -549,7 +549,7 @@ def test_ccdtype(tmpdir):
     myargs = copy.deepcopy(defaultargs)
     myargs['ccdtype'] = 'object'
 
-    iraf.combine(iraflist, outfile, **myargs)
+    iraf.ccdred.combine(iraflist, outfile, **myargs)
     outim = fits.open(outfile)
 
     assert np.allclose(outim[0].data, 5)
@@ -588,7 +588,7 @@ def test_subsets(tmpdir):
     myargs = copy.deepcopy(defaultargs)
     myargs['subsets'] = True
 
-    iraf.combine(iraflist, outfile, **myargs)
+    iraf.ccdred.combine(iraflist, outfile, **myargs)
 
     filters = ['red', 'blue']
     meds = [25, 5]
@@ -670,7 +670,7 @@ def test_rdnoise_gain_snoise(tmpdir):
 
                 myargs['hsigma'] = (30. / sigma) - 0.01
 
-                iraf.combine(iraflist, outfile, **myargs)
+                iraf.ccdred.combine(iraflist, outfile, **myargs)
 
                 outim = fits.open(outfile)
                 assert np.allclose(outim[0].data, data[:-1].mean())
@@ -678,7 +678,7 @@ def test_rdnoise_gain_snoise(tmpdir):
 
                 myargs['hsigma'] = (30. / sigma) + 0.01
 
-                iraf.combine(iraflist, outfile, **myargs)
+                iraf.ccdred.combine(iraflist, outfile, **myargs)
 
                 outim = fits.open(outfile)
                 assert np.allclose(outim[0].data, data.mean())
@@ -721,7 +721,7 @@ def test_scale(tmpdir):
     myargs = copy.deepcopy(defaultargs)
     myargs['ccdtype'] = 'object'
 
-    iraf.combine(iraflist, outfile, **myargs)
+    iraf.ccdred.combine(iraflist, outfile, **myargs)
     outim = fits.open(outfile)
 
     assert np.allclose(outim[0].data, 5)

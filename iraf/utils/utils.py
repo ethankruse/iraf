@@ -1,5 +1,5 @@
 """
-Utitily functions needed for the rest of the package.
+Implementation of some utility functions.
 """
 
 import os
