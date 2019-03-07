@@ -1,3 +1,7 @@
+"""
+Utitily functions needed for the rest of the package.
+"""
+
 import os
 import csv
 from glob import glob
@@ -7,7 +11,7 @@ __all__ = ['is_iterable', 'file_handler']
 
 def is_iterable(obj):
     """
-    Returns True if the input is iterable, but not a string. Returns
+    Return True if the input is iterable, but not a string. Return
     False otherwise.
     """
     from collections.abc import Iterable
@@ -16,7 +20,7 @@ def is_iterable(obj):
 
 def file_handler(filelist, exists=True, recursive=False):
     """
-    Convert an input filelist to all matching files.
+    Convert an input filelist to a Python list of filenames.
 
     A modified, limited version of IRAF's imtopen. Takes IRAF file inputs
     and returns a list with actual paths for all matching files.
@@ -76,7 +80,7 @@ def file_handler(filelist, exists=True, recursive=False):
                 fnames = [fnames]
             # load each requested list
             for fname in fnames:
-                with open(fname, 'r') as ff:
+                with open(fname) as ff:
                     reader = csv.reader(ff)
                     for row in reader:
                         # skip over blank lines and comment lines

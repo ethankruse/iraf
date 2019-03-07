@@ -8,7 +8,7 @@ except NameError:
 __version__ = "0.1"
 # the package name that gets inserted into images created by the package
 # in the header value 'origin'
-__hdrstring__ = "AIRAF in Python"
+__hdrstring__ = f"AIRAF v{__version__} for Python"
 
 if not __IRAF_SETUP__:
     from . import utils
