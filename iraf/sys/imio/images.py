@@ -29,6 +29,11 @@ def image_open(image, mode='readonly'):
     -------
     HDUList object
 
+    Raises
+    ------
+    Exception
+        If the input file cannot be opened or understood.
+
     """
     hdulist = None
     ftype = ''

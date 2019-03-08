@@ -20,10 +20,12 @@ def is_iterable(obj):
 
 def file_handler(filelist, exists=True, recursive=False):
     """
-    Convert an input filelist to a Python list of filenames.
+    Convert an input string or list to a Python list of filenames.
 
-    A modified, limited version of IRAF's imtopen. Takes IRAF file inputs
-    and returns a list with actual paths for all matching files.
+    Essentially a combination of the functionality of os.path.expanduser, glob,
+    and IRAF's @list structure. A modified, limited version of IRAF's imtopen.
+    Takes IRAF file inputs and returns a list with actual paths for all
+    matching files.
 
     Allows for a file with a list of file patterns by starting with '@', e.g.
     '@filelist.txt' will recursively find all matches for each line in the
@@ -32,7 +34,7 @@ def file_handler(filelist, exists=True, recursive=False):
 
     All file names also accept ~ and wildcard (*,?,[a-f]) expansions as well.
     Wildcard and character ranges are handled by `glob.glob`, and the recursive
-    option is passed to `glob.glob`.
+    option is passed to `glob.glob` for handling of '**'.
 
     Currently does not support IRAF's image section format.
     e.g. image.fits[1:50, 1:50] will fail rather than allowing only a portion
@@ -45,9 +47,10 @@ def file_handler(filelist, exists=True, recursive=False):
         list of files.
     exists : bool
         Whether files must exist to be returned. If True, will run the pattern
-        matching to look for existing files that match (default). If False,
-        only does ~ and @list expansions. Useful for e.g. an @output_files.txt
-        list of requested output file names that do not yet exist.
+        matching (glob) to look for existing files that match (default).
+        If False, only does ~ and @list expansions. Useful for e.g. an
+        @output_files.txt list of requested output file names that do not
+        yet exist.
     recursive : bool
         Passed to `glob.glob` to control how '**' is handled.
 
