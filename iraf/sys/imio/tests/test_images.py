@@ -52,7 +52,7 @@ def test_image_open_close_fits(tmpdir):
 
     # test bad modes
     with pytest.raises(ValueError):
-        im = iraf.sys.image_open(inim, mode='foo')
+        iraf.sys.image_open(inim, mode='foo')
 
     # test a text file that shouldn't be able to be opened
     with open(inim, 'w') as ff:

@@ -215,10 +215,11 @@ def test_set_get_delete_header_value(tmpdir):
         # test defaults
         assert iraf.ccdred.get_header_value(ff, inst, 'imagetyp') == 'object'
         assert iraf.ccdred.get_header_value(ff, inst, 'imagetyp',
-                                     default=True) == 'object'
+                                            default=True) == 'object'
         assert iraf.ccdred.get_header_value(ff, inst, 'subset',
-                                     default=True) == 'default_filter'
-        assert iraf.ccdred.get_header_value(ff, inst, 'exptime', default=True) == -1
+                                            default=True) == 'default_filter'
+        assert iraf.ccdred.get_header_value(ff, inst, 'exptime',
+                                            default=True) == -1
         assert iraf.ccdred.get_header_value(ff, inst, 'rdnoise') is None
 
     # same but adding a comment
@@ -376,18 +377,18 @@ def test_file_new_copy(tmpdir):
     # test failures
     with iraf.sys.image_open(fname, mode='update') as ff:
         with pytest.raises(Exception):
-            iraf.ccdred.file_new_copy(outf, ff, mode='readonly', instrument=inst,
-                               overwrite=False)
+            iraf.ccdred.file_new_copy(outf, ff, mode='readonly',
+                                      instrument=inst, overwrite=False)
         ff.__filetype__ = 'txt'
         with pytest.raises(Exception):
-            iraf.ccdred.file_new_copy(outf, ff, mode='NEW_COPY', instrument=inst,
-                               overwrite=False)
+            iraf.ccdred.file_new_copy(outf, ff, mode='NEW_COPY',
+                                      instrument=inst, overwrite=False)
 
     # test simple example
     with iraf.sys.image_open(fname, mode='update') as ff:
         assert not os.path.exists(outf)
-        iraf.ccdred.file_new_copy(outf, ff, mode='NEW_COPY', instrument=None,
-                           overwrite=False)
+        iraf.ccdred.file_new_copy(outf, ff, mode='NEW_COPY',
+                                  instrument=None, overwrite=False)
         assert os.path.exists(outf)
 
     with iraf.sys.image_open(outf, mode='update') as ff:
@@ -408,14 +409,14 @@ def test_file_new_copy(tmpdir):
     # test overwrite
     with iraf.sys.image_open(fname, mode='update') as ff:
         with pytest.raises(OSError):
-            iraf.ccdred.file_new_copy(outf, ff, mode='NEW_COPY', instrument=inst,
-                               overwrite=False)
+            iraf.ccdred.file_new_copy(outf, ff, mode='NEW_COPY',
+                                      instrument=inst, overwrite=False)
     with iraf.sys.image_open(outf, mode='update') as ff:
         assert ff[0].header['date'] == 'none'
 
     with iraf.sys.image_open(fname, mode='update') as ff:
-        iraf.ccdred.file_new_copy(outf, ff, mode='NEW_COPY', instrument=inst,
-                           overwrite=True)
+        iraf.ccdred.file_new_copy(outf, ff, mode='NEW_COPY',
+                                  instrument=inst, overwrite=True)
     with iraf.sys.image_open(outf, mode='update') as ff:
         assert ff[0].header['date'] != 'none'
 
@@ -424,8 +425,8 @@ def test_file_new_copy(tmpdir):
     inst.parameters['date'] = 'dt'
     inst.parameters['iraf-tlm'] = 'tlm'
     with iraf.sys.image_open(fname, mode='update') as ff:
-        iraf.ccdred.file_new_copy(outf, ff, mode='NEW_COPY', instrument=inst,
-                           overwrite=True)
+        iraf.ccdred.file_new_copy(outf, ff, mode='NEW_COPY',
+                                  instrument=inst, overwrite=True)
 
     with iraf.sys.image_open(outf, mode='update') as ff:
         assert 'origin' not in ff[0].header

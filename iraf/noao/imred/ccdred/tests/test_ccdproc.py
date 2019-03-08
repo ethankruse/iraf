@@ -25,17 +25,19 @@ def test_ccd_section():
 
     # all the options
     x0, x1, xs, y0, y1, ys = iraf.ccdred.ccd_section('[1:5:3,5:20:-4]',
-                                              defaults=defaults)
+                                                     defaults=defaults)
     assert (x0 == 1 and x1 == 5 and xs == 3 and y0 == 5 and y1 == 20 and
             ys == -4)
 
     # no step size
-    x0, x1, xs, y0, y1, ys = iraf.ccdred.ccd_section('[1:5,5:20]', defaults=defaults)
+    x0, x1, xs, y0, y1, ys = iraf.ccdred.ccd_section('[1:5,5:20]',
+                                                     defaults=defaults)
     assert (x0 == 1 and x1 == 5 and xs == d3 and y0 == 5 and y1 == 20 and
             ys == d6)
 
     # single row
-    x0, x1, xs, y0, y1, ys = iraf.ccdred.ccd_section('[9,5:20]', defaults=defaults)
+    x0, x1, xs, y0, y1, ys = iraf.ccdred.ccd_section('[9,5:20]',
+                                                     defaults=defaults)
     assert (x0 == 9 and x1 == 9 and xs == d3 and y0 == 5 and y1 == 20 and
             ys == d6)
 
@@ -82,7 +84,7 @@ def test_cal_list(tmpdir, listtype):
     foo = os.path.join(basedir, 'foo.fits')
     with pytest.raises(Exception):
         iraf.ccdred.cal_list([foo], listtype, inst, calimages, nscans, caltypes,
-                      subsets, scantype, nscan, scancor)
+                             subsets, scantype, nscan, scancor)
 
     lt = len(iraf.ccdred.imagetypes)
     # test both 'imagetyp' and custom instrument value
@@ -103,8 +105,8 @@ def test_cal_list(tmpdir, listtype):
             hdu.writeto(inim, overwrite=True)
             inputs.append(inim)
 
-        iraf.ccdred.cal_list(inputs, listtype, inst, calimages, nscans, caltypes,
-                      subsets, scantype, nscan, scancor)
+        iraf.ccdred.cal_list(inputs, listtype, inst, calimages, nscans,
+                             caltypes, subsets, scantype, nscan, scancor)
 
         # XXX: still to do: test the output of the other lists
         if listtype == 'unknown':
