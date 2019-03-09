@@ -5,7 +5,7 @@ from astropy.io import fits
 import copy
 import time
 import iraf
-import iraf.noao.imred.ccdred.ccdproc_routines as ccdr
+from .. import ccdproc_routines as ccdr
 
 
 def test_ccd_section():
