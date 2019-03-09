@@ -3,6 +3,7 @@ from ..ccdred import imagetypes
 import re
 import copy
 import shlex
+import os
 from datetime import datetime
 
 __all__ = ['Instrument', 'get_header_value', 'set_header_value',
@@ -11,11 +12,53 @@ __all__ = ['Instrument', 'get_header_value', 'set_header_value',
 
 class Instrument(object):
     """
-    Provide header translations between IRAF standards and the values
-    used by specific telescopes or instruments.
+    Provide translations between IRAF standards and parameter names or image
+    types used by specific telescopes or instruments.
+
+    Internally, IRAF has a standard set of parameter names, but these may not
+    be followed by all observatories. For example, IRAF always assumes the
+    total exposure time for an image is found in the header with keyword
+    'exptime'. If your image uses 'texpose' instead, the Instrument object
+    can provide the necessary translation. Similarly, an image labeled as
+    type 'sky flat' must be translated to the IRAF standard image type 'flat'.
 
     Translation files must be white space separated and use quotes to
     mark one field that contains spaces.
+
+    Parameters
+    ----------
+    translation_file : str, optional
+        File with two or three whitespace separated values. For parameter names,
+        the first value is the IRAF standard parameter name, the second value
+        is the custom instrument specific header key, and the optional third
+        value is a default value if the parameter is not found in the header.
+        Ex:
+        exptime customexp
+        biassec  custombias    [411:431,2:573]
+
+        For image types, the first value is the custom image type and the
+        second value is the IRAF default.
+        Wrap any values with spaces in quotes, e.g.:
+        "sky flat" flat
+
+    Attributes
+    ----------
+    translation_file : str
+        A reference to the translation file used to initialize the object.
+    parameters : dict
+        Each internal IRAF parameter name is a key in this dictionary, and the
+        values are the custom translations used (None if using the default).
+    defaults : dict
+        Same keys as parameters, this time listing the default values for each
+        IRAF parameter
+    image_types : dict
+        Any custom image types and their translations to the IRAF standard.
+
+    Raises
+    ------
+    Exception
+        When a line in the translation file cannot be interpreted.
+
     """
     """
     To learn about instruments, look into
@@ -52,7 +95,7 @@ class Instrument(object):
         self.translation_file = translation_file
         # create the instrument translations, if given
         if translation_file is not None:
-            with open(translation_file, 'r') as ff:
+            with open(os.path.expanduser(translation_file), 'r') as ff:
                 # allow for multiple spaces between fields for pretty alignment
                 # and use quotes to mark a field with spaces.
                 for row in ff.readlines():
@@ -88,32 +131,19 @@ class Instrument(object):
                                         f"to do with '{row}'.")
 
     def translate(self, key):
-        # what is this an IRAF translation of?
-        # XXX: this bit is just for testing Instrument to make sure I am in fact
-        #      catching all the parameters actually used by IRAF.
-        # once all testing in this module is done, uncomment and retest to make
-        # sure this exception isn't raised again, then delete. Or keep as a
-        # warning not to use parameters not explicitly expected.
         """
-        if key not in self.parameters:
-            raise Exception(f"Remove when done testing. Needed parameter "
-                            f"{key}, but it's not in the instrument parameters"
-                            f" dict.")
+        Get the instrument specific translation of the IRAF parameter 'key'.
         """
-        if key in self.parameters and self.parameters[key] is not None:
+        if self.parameters[key] is not None:
             return self.parameters[key]
         else:
             return key
 
     def get_default(self, key):
-        # XXX: this could just be one line. return self.defaults[key]. but only
-        # if translate also only allows for things in the parameters table as
-        # well. Then they'd both raise exceptions for keys not in parameters
-        # dict.
-        if key in self.defaults:
-            return self.defaults[key]
-        else:
-            return None
+        """
+        Get the default value of the IRAF parameter 'key'.
+        """
+        return self.defaults[key]
 
     def get_image_type(self, key):
         """
@@ -126,11 +156,14 @@ class Instrument(object):
 
         Returns
         -------
-        string
+        str, one of the 10 possible image types:
+        "|object|zero|dark|flat|illum|fringe|other|comp|none|unknown|"
         """
         if key is None:
             return 'none'
         key = key.strip()
+        if len(key) == 0:
+            return 'none'
         if key in self.image_types:
             key = self.image_types[key]
         # make sure no one messed with self.image_types to give a nonvalid
@@ -139,6 +172,35 @@ class Instrument(object):
             return key
         else:
             return 'unknown'
+
+
+def ccdtypes(hdulist, instrument):
+    """
+    Get the header value of 'imagetyp' (or instrument equivalent).
+
+    If that (instrument converted) value is one of
+    "object|zero|dark|flat|illum|fringe|other|comp" return that.
+    Otherwise return 'unknown' unless the header does not contain any
+    'imagetyp' and the instrument doesn't have a default value for it. Then
+    return 'none'.
+
+    Parameters
+    ----------
+    hdulist : IRAF image
+        An open IRAF image we want the ccd type of.
+    instrument : Instrument
+        The instrument specific translations.
+
+    Returns
+    -------
+    str, one of the 10 possible image types:
+    "|object|zero|dark|flat|illum|fringe|other|comp|none|unknown|"
+    """
+    if not isinstance(instrument, Instrument):
+        raise Exception('ccdtypes not given an Instrument object.')
+
+    typ = get_header_value(hdulist, instrument, 'imagetyp')
+    return instrument.get_image_type(typ)
 
 
 def set_header_value(hdulist, instrument, key, value, comment=None):
@@ -245,33 +307,6 @@ def delete_header_value(hdulist, instrument, key):
         if key in hdu.header:
             hdu.header.remove(key, remove_all=True)
     return
-
-
-def ccdtypes(hdulist, instrument):
-    """
-    Get the header value of 'imagetyp' (or instrument equivalent).
-
-    If that (instrument converted) value is one of
-    "object|zero|dark|flat|illum|fringe|other|comp" return that.
-    Otherwise return 'unknown' unless the header does not contain any
-    'imagetyp' and the instrument doesn't have a default value for it. Then
-    return 'none'.
-
-    Parameters
-    ----------
-    hdulist
-    instrument : Instrument
-
-    Returns
-    -------
-
-    """
-
-    if not isinstance(instrument, Instrument):
-        raise Exception('ccdtypes not given an Instrument object.')
-
-    typ = get_header_value(hdulist, instrument, 'imagetyp')
-    return instrument.get_image_type(typ)
 
 
 def ccdsubset(hdulist, instrument):

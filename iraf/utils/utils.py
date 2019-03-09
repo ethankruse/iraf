@@ -45,13 +45,13 @@ def file_handler(filelist, exists=True, recursive=False):
     filelist : string or iterable
         String or list of input file strings to expand and create the final
         list of files.
-    exists : bool
+    exists : bool, optional
         Whether files must exist to be returned. If True, will run the pattern
         matching (glob) to look for existing files that match (default).
         If False, only does ~ and @list expansions. Useful for e.g. an
         @output_files.txt list of requested output file names that do not
         yet exist.
-    recursive : bool
+    recursive : bool, optional
         Passed to `glob.glob` to control how '**' is handled.
 
     Returns

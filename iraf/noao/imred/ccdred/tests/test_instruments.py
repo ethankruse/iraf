@@ -139,12 +139,14 @@ def test_instrument_translate_get_default(tmpdir):
     assert inst.translate('subset') == 'filter'
     assert inst.translate('rdnoise') == 'noise'
     assert inst.translate('imagetyp') == 'imagetyp'
-    assert inst.translate('boo') == 'boo'
+    with pytest.raises(KeyError):
+        inst.translate('boo')
 
     assert inst.get_default('subset') == 'default'
     assert inst.get_default('rdnoise') is None
     assert inst.get_default('imagetyp') is None
-    assert inst.get_default('boo') is None
+    with pytest.raises(KeyError):
+        inst.get_default('boo')
 
 
 def test_instrument_get_image_type_ccdtypes(tmpdir):
@@ -158,31 +160,45 @@ def test_instrument_get_image_type_ccdtypes(tmpdir):
     assert inst.get_image_type("object") == 'object'
     assert inst.get_image_type("foo") == 'unknown'
     assert inst.get_image_type(None) == 'none'
+    assert inst.get_image_type('') == 'none'
+    assert inst.get_image_type('\t\n') == 'none'
 
     # create fake file
     fname = os.path.join(basedir, 'ccdtypestest.fits')
     hdu = fits.PrimaryHDU()
     hdu.header['imagetyp'] = 'object'
     hdu.header['itype'] = 'sky flat'
+    hdu.header['itypo'] = 'foo'
     hdu.writeto(fname, overwrite=True)
 
     with pytest.raises(Exception):
-        with iraf.sys.image_open(fname, mode='update') as ff:
+        with iraf.sys.image_open(fname) as ff:
             iraf.ccdred.ccdtypes(ff, 'notinstrument')
 
     # check ccdtypes
-    with iraf.sys.image_open(fname, mode='update') as ff:
+    with iraf.sys.image_open(fname) as ff:
         assert iraf.ccdred.ccdtypes(ff, inst) == 'object'
 
     inst.parameters['imagetyp'] = 'itype'
-    with iraf.sys.image_open(fname, mode='update') as ff:
+    with iraf.sys.image_open(fname) as ff:
         assert iraf.ccdred.ccdtypes(ff, inst) == 'flat'
 
     # check for correct default value when not in image header
     inst.parameters['imagetyp'] = 'imtype'
     inst.defaults['imagetyp'] = 'dark'
-    with iraf.sys.image_open(fname, mode='update') as ff:
+    with iraf.sys.image_open(fname) as ff:
         assert iraf.ccdred.ccdtypes(ff, inst) == 'dark'
+
+    # check for none when not in image header and no default
+    inst.defaults['imagetyp'] = None
+    with iraf.sys.image_open(fname) as ff:
+        assert iraf.ccdred.ccdtypes(ff, inst) == 'none'
+
+    # check for 'unknown' value when not recognized image type
+    inst.parameters['imagetyp'] = 'itypo'
+    inst.defaults['imagetyp'] = 'dark'
+    with iraf.sys.image_open(fname) as ff:
+        assert iraf.ccdred.ccdtypes(ff, inst) == 'unknown'
 
 
 def test_set_get_delete_header_value(tmpdir):
@@ -317,8 +333,7 @@ def test_set_get_delete_header_value(tmpdir):
         iraf.ccdred.delete_header_value(ff, inst, 'exptime')
         # delete something that's not there
         iraf.ccdred.delete_header_value(ff, inst, 'rdnoise')
-        # and also not in the instrument parameter list
-        iraf.ccdred.delete_header_value(ff, inst, 'foo')
+
     with iraf.sys.image_open(fname, mode='update') as ff:
         assert 'filter' not in ff[0].header and 'exptime' not in ff[0].header
         assert 'filter' not in ff[1].header and 'exptime' not in ff[1].header
