@@ -1,8 +1,8 @@
 from iraf.utils import file_handler
-from .instruments import Instrument, ccdtypes, ccdsubset, get_header_value
-from .instruments import file_new_copy, set_header_value, delete_header_value
-from .combine import type_max
-from ..ccdred import imagetypes
+from .utils import ccdtypes, ccdsubset, get_header_value, type_max
+from .utils import file_new_copy, set_header_value, delete_header_value
+from . import Instrument
+from ..ccdred import _imagetypes
 import numpy as np
 import os
 from iraf.sys import image_open
@@ -10,7 +10,7 @@ import tempfile
 import datetime
 import time
 
-__all__ = ['ccdproc', 'ccd_section', 'cal_list']
+__all__ = ['ccdproc']
 
 
 class CCD(object):
@@ -633,7 +633,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     ccdtype = ccdtype.strip().lower()
     if ccdtype is None or len(ccdtype) == 0:
         ccdtype = 'none'
-    elif ccdtype not in imagetypes:
+    elif ccdtype not in _imagetypes:
         ccdtype = 'unknown'
 
     calimages = []

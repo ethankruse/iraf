@@ -1,9 +1,13 @@
 """
 Implementation of the IRAF ccdred package and routines.
 """
-imagetypes = "object|zero|dark|flat|illum|fringe|other|" \
+_imagetypes = "object|zero|dark|flat|illum|fringe|other|" \
              "comp|none|unknown".split('|')
 
-from .instruments import *
-from .combine import *
-from .ccdproc import *
+from .instrument_routines import *
+from . import utils
+from .combine_routines import *
+from .ccdproc_routines import *
+del instrument_routines
+del combine_routines
+del ccdproc_routines

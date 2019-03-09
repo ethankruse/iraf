@@ -1,177 +1,13 @@
-from iraf.sys import image_open
-from ..ccdred import imagetypes
-import re
-import copy
-import shlex
-import os
-from datetime import datetime
+import re as _re
+import os as _os
+import numpy as _np
+from datetime import datetime as _datetime
+from iraf.sys import image_open as _image_open
+from . import Instrument as _Instrument
 
-__all__ = ['Instrument', 'get_header_value', 'set_header_value',
-           'delete_header_value', 'ccdtypes', 'file_new_copy', 'ccdsubset']
-
-
-class Instrument(object):
-    """
-    Provide translations between IRAF standards and parameter names or image
-    types used by specific telescopes or instruments.
-
-    Internally, IRAF has a standard set of parameter names, but these may not
-    be followed by all observatories. For example, IRAF always assumes the
-    total exposure time for an image is found in the header with keyword
-    'exptime'. If your image uses 'texpose' instead, the Instrument object
-    can provide the necessary translation. Similarly, an image labeled as
-    type 'sky flat' must be translated to the IRAF standard image type 'flat'.
-
-    Translation files must be white space separated and use quotes to
-    mark one field that contains spaces.
-
-    Parameters
-    ----------
-    translation_file : str, optional
-        File with two or three whitespace separated values. For parameter names,
-        the first value is the IRAF standard parameter name, the second value
-        is the custom instrument specific header key, and the optional third
-        value is a default value if the parameter is not found in the header.
-        Ex:
-        exptime customexp
-        biassec  custombias    [411:431,2:573]
-
-        For image types, the first value is the custom image type and the
-        second value is the IRAF default.
-        Wrap any values with spaces in quotes, e.g.:
-        "sky flat" flat
-
-    Attributes
-    ----------
-    translation_file : str
-        A reference to the translation file used to initialize the object.
-    parameters : dict
-        Each internal IRAF parameter name is a key in this dictionary, and the
-        values are the custom translations used (None if using the default).
-    defaults : dict
-        Same keys as parameters, this time listing the default values for each
-        IRAF parameter
-    image_types : dict
-        Any custom image types and their translations to the IRAF standard.
-
-    Raises
-    ------
-    Exception
-        When a line in the translation file cannot be interpreted.
-
-    """
-    """
-    To learn about instruments, look into
-    'iraf-src/noao/imred/ccdred/src/hdrmap.x' for the functions that create
-    a symbol table pointer and do the translations.
-    Instrument file tables are located in
-    'iraf-src/noao/imred/ccdred/ccddb'.
-    """
-
-    def __init__(self, translation_file=None):
-        # this is the full list of parameters ccdred references in image
-        # headers. Anything not None says to use that value as the header
-        # keyword instead of this default parameter name.
-        self.parameters = {'BPM': None, 'biassec': None, 'ccdmean': None,
-                           'ccdmeant': None, 'ccdproc': None, 'ccdsec': None,
-                           'darkcor': None, 'darktime': None, 'datasec': None,
-                           'exptime': None, 'fixfile': None, 'fixpix': None,
-                           'flatcor': None, 'fringcor': None, 'gain': None,
-                           'illumcor': None, 'imagetyp': None, 'mkfringe': None,
-                           'mkillum': None, 'ncombine': None, 'nscanrow': None,
-                           'overscan': None, 'rdnoise': None, 'readcor': None,
-                           'snoise': None, 'subset': None, 'trim': None,
-                           'trimsec': None, 'zerocor': None, 'origin': None,
-                           'date': None, 'iraf-tlm': None}
-        # Each of these parameters can have a default value, but we
-        # start off with all None.
-        self.defaults = copy.deepcopy(self.parameters)
-
-        self._default_imagetyps = imagetypes
-        # any custom image type conversions go here
-        self.image_types = {}
-
-        # store the reference to the file
-        self.translation_file = translation_file
-        # create the instrument translations, if given
-        if translation_file is not None:
-            with open(os.path.expanduser(translation_file), 'r') as ff:
-                # allow for multiple spaces between fields for pretty alignment
-                # and use quotes to mark a field with spaces.
-                for row in ff.readlines():
-                    row = shlex.split(row)
-                    # allow comments at the end of the line, but ignore them
-                    for ii in range(len(row)):
-                        if row[ii][0] == '#':
-                            row = row[:ii]
-                            break
-                    # ignore blank or fully commented lines
-                    if len(row) == 0:
-                        continue
-                    # translations can only be 2 columns or 3 with a default
-                    # value
-                    if len(row) < 2 or len(row) > 3:
-                        raise Exception(f"Row '{row}' in instrument "
-                                        f"translation file {translation_file} "
-                                        f"does not have 2 or 3 values.")
-                    # change the value of this parameter and its defaults
-                    # if present
-                    if row[0] in self.parameters:
-                        self.parameters[row[0]] = row[1]
-                        if len(row) == 3:
-                            self.defaults[row[0]] = row[2]
-                    # see if this is a custom image type that needs to map
-                    # to one of our recognized types
-                    elif row[1] in self._default_imagetyps and len(row) == 2:
-                        self.image_types[row[0]] = row[1]
-                    # not sure what to do with this row
-                    else:
-                        raise Exception(f"Unrecognized row in translation file "
-                                        f"{translation_file}.\nNot sure what "
-                                        f"to do with '{row}'.")
-
-    def translate(self, key):
-        """
-        Return the instrument specific translation of the IRAF parameter 'key'.
-        """
-        if self.parameters[key] is not None:
-            return self.parameters[key]
-        else:
-            return key
-
-    def get_default(self, key):
-        """
-        Return the default value of the IRAF parameter 'key'.
-        """
-        return self.defaults[key]
-
-    def get_image_type(self, key):
-        """
-        Translate an input image type into one of the 10 possible IRAF image
-        types: "|object|zero|dark|flat|illum|fringe|other|comp|none|unknown|".
-
-        Parameters
-        ----------
-        key : str or None
-
-        Returns
-        -------
-        str, one of the 10 possible image types:
-        "|object|zero|dark|flat|illum|fringe|other|comp|none|unknown|"
-        """
-        if key is None:
-            return 'none'
-        key = key.strip()
-        if len(key) == 0:
-            return 'none'
-        if key in self.image_types:
-            key = self.image_types[key]
-        # make sure no one messed with self.image_types to give a nonvalid
-        # image type
-        if key in imagetypes:
-            return key
-        else:
-            return 'unknown'
+__all__ = ['get_header_value', 'set_header_value',
+           'delete_header_value', 'ccdtypes', 'file_new_copy', 'ccdsubset',
+           'type_max']
 
 
 def ccdtypes(hdulist, instrument):
@@ -196,7 +32,7 @@ def ccdtypes(hdulist, instrument):
     str, one of the 10 possible image types:
     "|object|zero|dark|flat|illum|fringe|other|comp|none|unknown|"
     """
-    if not isinstance(instrument, Instrument):
+    if not isinstance(instrument, _Instrument):
         raise Exception('ccdtypes not given an Instrument object.')
 
     typ = get_header_value(hdulist, instrument, 'imagetyp')
@@ -327,7 +163,7 @@ def ccdsubset(hdulist, instrument):
     str
     """
 
-    if not isinstance(instrument, Instrument):
+    if not isinstance(instrument, _Instrument):
         raise Exception('ccdsubset not given an Instrument object.')
 
     subsetstr = get_header_value(hdulist, instrument, 'subset')
@@ -339,7 +175,7 @@ def ccdsubset(hdulist, instrument):
 
     # Replace any non alphanumeric or '.' or '_' characters by '_'
     # since the subset ID is used in forming image names.
-    subsetstr = re.sub(r'[^\w.]', '_', subsetstr)
+    subsetstr = _re.sub(r'[^\w.]', '_', subsetstr)
 
     """
     # This bit was a translation of the original IRAF ccdsubset function
@@ -441,7 +277,7 @@ def file_new_copy(outpath, in_header, mode='NEW_COPY', overwrite=True,
     if mode != 'NEW_COPY':
         raise Exception(f'Mode "{mode}" of file_new_copy not supported.')
 
-    outpath = os.path.expanduser(outpath)
+    outpath = _os.path.expanduser(outpath)
     # NOTE: IRAF appears to put these three header values (origin, date,
     # iraf-tlm) at the beginning of the header, right after the 'extend'
     # value. We currently append at the end. Not sure if this matters for
@@ -451,14 +287,14 @@ def file_new_copy(outpath, in_header, mode='NEW_COPY', overwrite=True,
         # do the actual writing of the copy
         in_header.writeto(outpath, overwrite=overwrite)
         if instrument is None:
-            instrument = Instrument()
+            instrument = _Instrument()
         # update header parameters in the new file without altering the old
-        hdulist = image_open(outpath, mode='update')
+        hdulist = _image_open(outpath, mode='update')
         orcomm = 'FITS file originator'
         from iraf import __hdrstring__ as fitsname
         set_header_value(hdulist, instrument, 'origin', fitsname, orcomm)
         # don't need microsecond precision in our dates, so leave it out
-        dtval = datetime.utcnow().replace(microsecond=0).isoformat()
+        dtval = _datetime.utcnow().replace(microsecond=0).isoformat()
         dtcomm = 'Date FITS file was generated (UTC)'
         set_header_value(hdulist, instrument, 'date', dtval, dtcomm)
         lmcomm = 'Time of last modification (UTC)'
@@ -468,3 +304,43 @@ def file_new_copy(outpath, in_header, mode='NEW_COPY', overwrite=True,
         raise Exception(f'file_new_copy of file type {ftype} not yet '
                         f'implemented.')
     return
+
+
+def type_max(type1, type2):
+    """
+    Return the datatype of highest precedence.
+
+    Parameters
+    ----------
+    type1
+    type2
+
+    Returns
+    -------
+
+    """
+    right = _np.can_cast(type1, type2, casting='safe')
+    left = _np.can_cast(type2, type1, casting='safe')
+
+    if left:
+        return type1
+    if right:
+        return type2
+
+    """
+    # likely case of an unsigned int and signed int of same size
+    ints = [np.int8, np.int16, np.int32, np.int64]
+    if (np.issubdtype(type1.type, np.unsignedinteger) and
+            np.issubdtype(type2.type, np.integer)):
+        for iint in ints:
+            if np.can_cast(type1, iint, casting='safe'):
+                return np.dtype(iint)
+
+    elif (np.issubdtype(type2.type, np.unsignedinteger) and
+              np.issubdtype(type1.type, np.integer)):
+        for iint in ints:
+            if np.can_cast(type2, iint, casting='safe'):
+                return np.dtype(iint)
+    """
+    errstr = "Unrecognized dtype or cannot safely cast between {0} and {1}."
+    raise Exception(errstr.format(type1, type2))

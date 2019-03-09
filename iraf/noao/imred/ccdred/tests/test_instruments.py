@@ -169,32 +169,32 @@ def test_instrument_get_image_type_ccdtypes(tmpdir):
 
     with pytest.raises(Exception):
         with iraf.sys.image_open(fname) as ff:
-            iraf.ccdred.ccdtypes(ff, 'notinstrument')
+            iraf.ccdred.utils.ccdtypes(ff, 'notinstrument')
 
     # check ccdtypes
     with iraf.sys.image_open(fname) as ff:
-        assert iraf.ccdred.ccdtypes(ff, inst) == 'object'
+        assert iraf.ccdred.utils.ccdtypes(ff, inst) == 'object'
 
     inst.parameters['imagetyp'] = 'itype'
     with iraf.sys.image_open(fname) as ff:
-        assert iraf.ccdred.ccdtypes(ff, inst) == 'flat'
+        assert iraf.ccdred.utils.ccdtypes(ff, inst) == 'flat'
 
     # check for correct default value when not in image header
     inst.parameters['imagetyp'] = 'imtype'
     inst.defaults['imagetyp'] = 'dark'
     with iraf.sys.image_open(fname) as ff:
-        assert iraf.ccdred.ccdtypes(ff, inst) == 'dark'
+        assert iraf.ccdred.utils.ccdtypes(ff, inst) == 'dark'
 
     # check for none when not in image header and no default
     inst.defaults['imagetyp'] = None
     with iraf.sys.image_open(fname) as ff:
-        assert iraf.ccdred.ccdtypes(ff, inst) == 'none'
+        assert iraf.ccdred.utils.ccdtypes(ff, inst) == 'none'
 
     # check for 'unknown' value when not recognized image type
     inst.parameters['imagetyp'] = 'itypo'
     inst.defaults['imagetyp'] = 'dark'
     with iraf.sys.image_open(fname) as ff:
-        assert iraf.ccdred.ccdtypes(ff, inst) == 'unknown'
+        assert iraf.ccdred.utils.ccdtypes(ff, inst) == 'unknown'
 
 
 def test_set_get_delete_header_value(tmpdir):
@@ -216,42 +216,42 @@ def test_set_get_delete_header_value(tmpdir):
 
     # test adding with a normal key and one that needs to be translated.
     with iraf.sys.image_open(fname, mode='update') as ff:
-        iraf.ccdred.set_header_value(ff, inst, 'subset', 'red')
-        iraf.ccdred.set_header_value(ff, inst, 'exptime', 1)
+        iraf.ccdred.utils.set_header_value(ff, inst, 'subset', 'red')
+        iraf.ccdred.utils.set_header_value(ff, inst, 'exptime', 1)
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert iraf.ccdred.get_header_value(ff, inst, 'subset') == 'red'
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'subset') == 'red'
         assert ff[0].header.comments['filter'] == ''
-        assert iraf.ccdred.get_header_value(ff, inst, 'exptime') == 1
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'exptime') == 1
         assert ff[0].header.comments['exptime'] == ''
         assert 'filter' not in ff[1].header and 'exptime' not in ff[1].header
         # test defaults
-        assert iraf.ccdred.get_header_value(ff, inst, 'imagetyp') == 'object'
-        assert iraf.ccdred.get_header_value(ff, inst, 'imagetyp',
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'imagetyp') == 'object'
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'imagetyp',
                                             default=True) == 'object'
-        assert iraf.ccdred.get_header_value(ff, inst, 'subset',
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'subset',
                                             default=True) == 'default_filter'
-        assert iraf.ccdred.get_header_value(ff, inst, 'exptime',
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'exptime',
                                             default=True) == -1
-        assert iraf.ccdred.get_header_value(ff, inst, 'rdnoise') is None
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'rdnoise') is None
 
     # same but adding a comment
     with iraf.sys.image_open(fname, mode='update') as ff:
-        iraf.ccdred.set_header_value(ff, inst, 'subset', 'blue', comment='c1')
-        iraf.ccdred.set_header_value(ff, inst, 'exptime', 2, comment='c2')
+        iraf.ccdred.utils.set_header_value(ff, inst, 'subset', 'blue', comment='c1')
+        iraf.ccdred.utils.set_header_value(ff, inst, 'exptime', 2, comment='c2')
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert iraf.ccdred.get_header_value(ff, inst, 'subset') == 'blue'
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'subset') == 'blue'
         assert ff[0].header.comments['filter'] == 'c1'
-        assert iraf.ccdred.get_header_value(ff, inst, 'exptime') == 2
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'exptime') == 2
         assert ff[0].header.comments['exptime'] == 'c2'
         assert 'filter' not in ff[1].header and 'exptime' not in ff[1].header
 
     # test clearing the comment
     with iraf.sys.image_open(fname, mode='update') as ff:
-        iraf.ccdred.set_header_value(ff, inst, 'subset', 'blue', comment='')
-        iraf.ccdred.set_header_value(ff, inst, 'exptime', 2, comment='')
+        iraf.ccdred.utils.set_header_value(ff, inst, 'subset', 'blue', comment='')
+        iraf.ccdred.utils.set_header_value(ff, inst, 'exptime', 2, comment='')
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert iraf.ccdred.get_header_value(ff, inst, 'subset') == 'blue'
-        assert iraf.ccdred.get_header_value(ff, inst, 'exptime') == 2
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'subset') == 'blue'
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'exptime') == 2
         assert ff[0].header.comments['filter'] == ''
         assert ff[0].header.comments['exptime'] == ''
         assert 'filter' not in ff[1].header and 'exptime' not in ff[1].header
@@ -264,8 +264,8 @@ def test_set_get_delete_header_value(tmpdir):
         ff[1].header['exptime'] = 5
     # make sure we only change the first header
     with iraf.sys.image_open(fname, mode='update') as ff:
-        iraf.ccdred.set_header_value(ff, inst, 'subset', 'red', comment='com1')
-        iraf.ccdred.set_header_value(ff, inst, 'exptime', 1, comment='com2')
+        iraf.ccdred.utils.set_header_value(ff, inst, 'subset', 'red', comment='com1')
+        iraf.ccdred.utils.set_header_value(ff, inst, 'exptime', 1, comment='com2')
     with iraf.sys.image_open(fname, mode='update') as ff:
         assert ff[0].header['filter'] == 'red'
         assert ff[0].header.comments['filter'] == 'com1'
@@ -277,8 +277,8 @@ def test_set_get_delete_header_value(tmpdir):
         assert ff[1].header['exptime'] == 5
         assert ff[1].header.comments['exptime'] == ''
 
-        assert iraf.ccdred.get_header_value(ff, inst, 'subset') == 'red'
-        assert iraf.ccdred.get_header_value(ff, inst, 'exptime') == 1
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'subset') == 'red'
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'exptime') == 1
 
     # test where the keys only exist in the second header
 
@@ -288,32 +288,32 @@ def test_set_get_delete_header_value(tmpdir):
         del ff[0].header['exptime']
 
     with iraf.sys.image_open(fname, mode='update') as ff:
-        iraf.ccdred.set_header_value(ff, inst, 'subset', 'blue', comment='c1')
-        iraf.ccdred.set_header_value(ff, inst, 'exptime', 2, comment='c2')
+        iraf.ccdred.utils.set_header_value(ff, inst, 'subset', 'blue', comment='c1')
+        iraf.ccdred.utils.set_header_value(ff, inst, 'exptime', 2, comment='c2')
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert iraf.ccdred.get_header_value(ff, inst, 'subset') == 'blue'
-        assert iraf.ccdred.get_header_value(ff, inst, 'exptime') == 2
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'subset') == 'blue'
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'exptime') == 2
         assert ff[1].header.comments['filter'] == 'c1'
         assert ff[1].header.comments['exptime'] == 'c2'
         assert 'filter' not in ff[0].header and 'exptime' not in ff[0].header
 
     # test updating the value but not the comment
     with iraf.sys.image_open(fname, mode='update') as ff:
-        iraf.ccdred.set_header_value(ff, inst, 'subset', 'green')
-        iraf.ccdred.set_header_value(ff, inst, 'exptime', 3)
+        iraf.ccdred.utils.set_header_value(ff, inst, 'subset', 'green')
+        iraf.ccdred.utils.set_header_value(ff, inst, 'exptime', 3)
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert iraf.ccdred.get_header_value(ff, inst, 'subset') == 'green'
-        assert iraf.ccdred.get_header_value(ff, inst, 'exptime') == 3
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'subset') == 'green'
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'exptime') == 3
         assert ff[1].header.comments['filter'] == 'c1'
         assert ff[1].header.comments['exptime'] == 'c2'
         assert 'filter' not in ff[0].header and 'exptime' not in ff[0].header
 
     # test updating the comment but not the value
-        iraf.ccdred.set_header_value(ff, inst, 'subset', None, comment='c1mod')
-        iraf.ccdred.set_header_value(ff, inst, 'exptime', None, comment='c2mod')
+        iraf.ccdred.utils.set_header_value(ff, inst, 'subset', None, comment='c1mod')
+        iraf.ccdred.utils.set_header_value(ff, inst, 'exptime', None, comment='c2mod')
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert iraf.ccdred.get_header_value(ff, inst, 'subset') == 'green'
-        assert iraf.ccdred.get_header_value(ff, inst, 'exptime') == 3
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'subset') == 'green'
+        assert iraf.ccdred.utils.get_header_value(ff, inst, 'exptime') == 3
         assert ff[1].header.comments['filter'] == 'c1mod'
         assert ff[1].header.comments['exptime'] == 'c2mod'
         assert 'filter' not in ff[0].header and 'exptime' not in ff[0].header
@@ -325,10 +325,10 @@ def test_set_get_delete_header_value(tmpdir):
 
     # test deleting from headers
     with iraf.sys.image_open(fname, mode='update') as ff:
-        iraf.ccdred.delete_header_value(ff, inst, 'subset')
-        iraf.ccdred.delete_header_value(ff, inst, 'exptime')
+        iraf.ccdred.utils.delete_header_value(ff, inst, 'subset')
+        iraf.ccdred.utils.delete_header_value(ff, inst, 'exptime')
         # delete something that's not there
-        iraf.ccdred.delete_header_value(ff, inst, 'rdnoise')
+        iraf.ccdred.utils.delete_header_value(ff, inst, 'rdnoise')
 
     with iraf.sys.image_open(fname, mode='update') as ff:
         assert 'filter' not in ff[0].header and 'exptime' not in ff[0].header
@@ -349,26 +349,26 @@ def test_ccdsubset(tmpdir):
 
     with pytest.raises(Exception):
         with iraf.sys.image_open(fname, mode='update') as ff:
-            iraf.ccdred.ccdsubset(ff, 'notinstrument')
+            iraf.ccdred.utils.ccdsubset(ff, 'notinstrument')
 
     # 'subset' as header value
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert iraf.ccdred.ccdsubset(ff, inst) == 'red_filter'
+        assert iraf.ccdred.utils.ccdsubset(ff, inst) == 'red_filter'
 
     # translate 'subset'
     inst.parameters['subset'] = 'filter'
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert iraf.ccdred.ccdsubset(ff, inst) == 'blue_filter______.asdf'
+        assert iraf.ccdred.utils.ccdsubset(ff, inst) == 'blue_filter______.asdf'
 
     # no default and not in header
     inst.parameters['subset'] = 'ifilt'
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert iraf.ccdred.ccdsubset(ff, inst) == ''
+        assert iraf.ccdred.utils.ccdsubset(ff, inst) == ''
 
     # check for default
     inst.defaults['subset'] = '  UB5.3  '
     with iraf.sys.image_open(fname, mode='update') as ff:
-        assert iraf.ccdred.ccdsubset(ff, inst) == 'UB5.3'
+        assert iraf.ccdred.utils.ccdsubset(ff, inst) == 'UB5.3'
 
 
 def test_file_new_copy(tmpdir):
@@ -388,17 +388,17 @@ def test_file_new_copy(tmpdir):
     # test failures
     with iraf.sys.image_open(fname, mode='update') as ff:
         with pytest.raises(Exception):
-            iraf.ccdred.file_new_copy(outf, ff, mode='readonly',
+            iraf.ccdred.utils.file_new_copy(outf, ff, mode='readonly',
                                       instrument=inst, overwrite=False)
         ff.__filetype__ = 'txt'
         with pytest.raises(Exception):
-            iraf.ccdred.file_new_copy(outf, ff, mode='NEW_COPY',
+            iraf.ccdred.utils.file_new_copy(outf, ff, mode='NEW_COPY',
                                       instrument=inst, overwrite=False)
 
     # test simple example
     with iraf.sys.image_open(fname, mode='update') as ff:
         assert not os.path.exists(outf)
-        iraf.ccdred.file_new_copy(outf, ff, mode='NEW_COPY',
+        iraf.ccdred.utils.file_new_copy(outf, ff, mode='NEW_COPY',
                                   instrument=None, overwrite=False)
         assert os.path.exists(outf)
 
@@ -420,13 +420,13 @@ def test_file_new_copy(tmpdir):
     # test overwrite
     with iraf.sys.image_open(fname, mode='update') as ff:
         with pytest.raises(OSError):
-            iraf.ccdred.file_new_copy(outf, ff, mode='NEW_COPY',
+            iraf.ccdred.utils.file_new_copy(outf, ff, mode='NEW_COPY',
                                       instrument=inst, overwrite=False)
     with iraf.sys.image_open(outf, mode='update') as ff:
         assert ff[0].header['date'] == 'none'
 
     with iraf.sys.image_open(fname, mode='update') as ff:
-        iraf.ccdred.file_new_copy(outf, ff, mode='NEW_COPY',
+        iraf.ccdred.utils.file_new_copy(outf, ff, mode='NEW_COPY',
                                   instrument=inst, overwrite=True)
     with iraf.sys.image_open(outf, mode='update') as ff:
         assert ff[0].header['date'] != 'none'
@@ -436,7 +436,7 @@ def test_file_new_copy(tmpdir):
     inst.parameters['date'] = 'dt'
     inst.parameters['iraf-tlm'] = 'tlm'
     with iraf.sys.image_open(fname, mode='update') as ff:
-        iraf.ccdred.file_new_copy(outf, ff, mode='NEW_COPY',
+        iraf.ccdred.utils.file_new_copy(outf, ff, mode='NEW_COPY',
                                   instrument=inst, overwrite=True)
 
     with iraf.sys.image_open(outf, mode='update') as ff:

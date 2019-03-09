@@ -2,10 +2,11 @@ from iraf.utils import file_handler
 import numpy as np
 import os
 from iraf.sys import image_open
-from .instruments import Instrument, get_header_value, ccdtypes, ccdsubset
-from .instruments import file_new_copy, set_header_value
+from .utils import get_header_value, ccdtypes, ccdsubset
+from .utils import file_new_copy, set_header_value, type_max
+from . import Instrument
 
-__all__ = ['combine', 'type_max']
+__all__ = ['combine']
 
 
 def ic_setout(inputs, output, nimages, project, offsets):
@@ -140,46 +141,6 @@ def ic_mopen(in_images, mtype, mvalue, instrument):
         mtype = 'none'
 
     return mtype, pms
-
-
-def type_max(type1, type2):
-    """
-    Return the datatype of highest precedence.
-
-    Parameters
-    ----------
-    type1
-    type2
-
-    Returns
-    -------
-
-    """
-    right = np.can_cast(type1, type2, casting='safe')
-    left = np.can_cast(type2, type1, casting='safe')
-
-    if left:
-        return type1
-    if right:
-        return type2
-
-    """
-    # likely case of an unsigned int and signed int of same size
-    ints = [np.int8, np.int16, np.int32, np.int64]
-    if (np.issubdtype(type1.type, np.unsignedinteger) and
-            np.issubdtype(type2.type, np.integer)):
-        for iint in ints:
-            if np.can_cast(type1, iint, casting='safe'):
-                return np.dtype(iint)
-
-    elif (np.issubdtype(type2.type, np.unsignedinteger) and
-              np.issubdtype(type1.type, np.integer)):
-        for iint in ints:
-            if np.can_cast(type2, iint, casting='safe'):
-                return np.dtype(iint)
-    """
-    errstr = "Unrecognized dtype or cannot safely cast between {0} and {1}."
-    raise Exception(errstr.format(type1, type2))
 
 
 def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
