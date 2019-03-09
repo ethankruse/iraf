@@ -1,3 +1,8 @@
+"""
+Utility functions needed by the main tasks in ccdred, but not intended to be
+used directly by the user.
+"""
+
 import re as _re
 import os as _os
 import numpy as _np
@@ -5,9 +10,8 @@ from datetime import datetime as _datetime
 from iraf.sys import image_open as _image_open
 from . import Instrument as _Instrument
 
-__all__ = ['get_header_value', 'set_header_value',
-           'delete_header_value', 'ccdtypes', 'file_new_copy', 'ccdsubset',
-           'type_max']
+__all__ = ['ccdtypes', 'set_header_value', 'get_header_value',
+           'delete_header_value', 'ccdsubset', 'file_new_copy', 'type_max']
 
 
 def ccdtypes(hdulist, instrument):
@@ -308,16 +312,28 @@ def file_new_copy(outpath, in_header, mode='NEW_COPY', overwrite=True,
 
 def type_max(type1, type2):
     """
-    Return the datatype of highest precedence.
+    Return the datatype of highest precedence of the two input data types.
+
+    Input two data types, and return the data type of highest precedence, such
+    that the lower precedence type can be safely converted to the higher type.
+
+    For example, inputs of np.float64 and np.float32 will return np.float64
+    because all float32s can be safely converted to float64s without losing
+    any information, but the reverse is not true.
 
     Parameters
     ----------
-    type1
-    type2
+    type1, type2 : data type
 
     Returns
     -------
+    data type
 
+    Raises
+    ------
+    Exception
+        When the two inputs cannot be understood or safely converted in either
+        direction.
     """
     right = _np.can_cast(type1, type2, casting='safe')
     left = _np.can_cast(type2, type1, casting='safe')
@@ -328,7 +344,8 @@ def type_max(type1, type2):
         return type2
 
     """
-    # likely case of an unsigned int and signed int of same size
+    # if we're here, it's likely case of an unsigned int and signed int
+    # of same size
     ints = [np.int8, np.int16, np.int32, np.int64]
     if (np.issubdtype(type1.type, np.unsignedinteger) and
             np.issubdtype(type2.type, np.integer)):
