@@ -132,7 +132,7 @@ class Instrument(object):
 
     def translate(self, key):
         """
-        Get the instrument specific translation of the IRAF parameter 'key'.
+        Return the instrument specific translation of the IRAF parameter 'key'.
         """
         if self.parameters[key] is not None:
             return self.parameters[key]
@@ -141,7 +141,7 @@ class Instrument(object):
 
     def get_default(self, key):
         """
-        Get the default value of the IRAF parameter 'key'.
+        Return the default value of the IRAF parameter 'key'.
         """
         return self.defaults[key]
 
@@ -206,7 +206,8 @@ def ccdtypes(hdulist, instrument):
 def set_header_value(hdulist, instrument, key, value, comment=None):
     """
     Add a header key/value/comment to an image, or modify the existing value
-    if the key already exists.
+    if the key already exists. First appropriately translate the IRAF default
+    parameter 'key' into the instrument equivalent.
 
     If comment is None, the existing comment will remain. To clear
     the comment, set comment to the empty string ''.
@@ -215,12 +216,11 @@ def set_header_value(hdulist, instrument, key, value, comment=None):
 
     Parameters
     ----------
-    hdulist
+    hdulist : IRAF image
     instrument : Instrument
     key : str
     value
-    comment : str
-
+    comment : str, optional
     """
     # what is the header key in the instrument's language
     key = instrument.translate(key)
@@ -246,7 +246,8 @@ def set_header_value(hdulist, instrument, key, value, comment=None):
 
 def get_header_value(hdulist, instrument, key, default=False):
     """
-    Retrieve the value of a header key.
+    Retrieve the value of the IRAF parameter 'key' from the instrument
+    specific header keyword.
 
     The equivalent of IRAF's hdmg*. (e.g. hdmgstr) when default is False.
     When default is True, it returns the instrument default value for the
@@ -260,10 +261,10 @@ def get_header_value(hdulist, instrument, key, default=False):
 
     Parameters
     ----------
-    hdulist
-    instrument
-    key
-    default
+    hdulist : IRAF image
+    instrument : Instrument
+    key : str
+    default : bool, optional
 
     Returns
     -------
@@ -276,6 +277,7 @@ def get_header_value(hdulist, instrument, key, default=False):
 
     if not default:
         # grab the first instance
+        # XXX: is this what IRAF does? what if the same key is in two headers?
         for hdu in hdulist:
             if userkey in hdu.header:
                 val = hdu.header[userkey]
@@ -288,15 +290,15 @@ def get_header_value(hdulist, instrument, key, default=False):
 
 def delete_header_value(hdulist, instrument, key):
     """
-    Delete a header field.
+    Delete the translated IRAF parameter 'key' from the header.
 
     The equivalent of IRAF's hdmdelf.
 
     Parameters
     ----------
-    hdulist
-    instrument
-    key
+    hdulist : IRAF image
+    instrument : Instrument
+    key : str
 
     """
     # what is the header key in the instrument's language
@@ -312,16 +314,17 @@ def delete_header_value(hdulist, instrument, key):
 def ccdsubset(hdulist, instrument):
     """
     Get the subset identifier as the header value of 'subset' (or instrument
-    equivalent).
+    equivalent). Replace any characters not suitable for file names with '_'.
+    If no subset is found, return the empty string ''.
 
     Parameters
     ----------
-    hdulist
-    instrument
+    hdulist : IRAF image
+    instrument : Instrument
 
     Returns
     -------
-
+    str
     """
 
     if not isinstance(instrument, Instrument):
@@ -343,7 +346,7 @@ def ccdsubset(hdulist, instrument):
     # that uses the subsets file and turns things into shorter subset strings
     # while also making sure there aren't overlaps. This all seems unnecessary
     # and we should just use the full subset string as the identifier. No
-    # point in maintaining some subsets file.
+    # point in maintaining subsets files.
 
     import shlex
 
@@ -414,7 +417,7 @@ def ccdsubset(hdulist, instrument):
     return subsetstr
 
 
-def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True,
+def file_new_copy(outpath, in_header, mode='NEW_COPY', overwrite=True,
                   instrument=None):
     """
     Copy a file, adding appropriate header info about IRAF sourcing.
@@ -423,19 +426,22 @@ def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True,
 
     Parameters
     ----------
-    outstr
-    in_header
-    mode
-    overwrite
-    instrument
-
-    Returns
-    -------
-
+    outpath : str
+        Path to new file. Performs ~ expansions first.
+    in_header : IRAF image
+        Open image to be copied
+    mode : {'NEW_COPY'}
+        What mode to copy the file
+    overwrite : bool, optional
+        If True, overwrites any previously existing file. If False, raises an
+        error if the output file already exists.
+    instrument : Instrument, optional
+        Translations for the header values added as part of the copy.
     """
     if mode != 'NEW_COPY':
         raise Exception(f'Mode "{mode}" of file_new_copy not supported.')
 
+    outpath = os.path.expanduser(outpath)
     # NOTE: IRAF appears to put these three header values (origin, date,
     # iraf-tlm) at the beginning of the header, right after the 'extend'
     # value. We currently append at the end. Not sure if this matters for
@@ -443,11 +449,11 @@ def file_new_copy(outstr, in_header, mode='NEW_COPY', overwrite=True,
     ftype = in_header.__filetype__
     if ftype == 'fits':
         # do the actual writing of the copy
-        in_header.writeto(outstr, overwrite=overwrite)
+        in_header.writeto(outpath, overwrite=overwrite)
         if instrument is None:
             instrument = Instrument()
         # update header parameters in the new file without altering the old
-        hdulist = image_open(outstr, mode='update')
+        hdulist = image_open(outpath, mode='update')
         orcomm = 'FITS file originator'
         from iraf import __hdrstring__ as fitsname
         set_header_value(hdulist, instrument, 'origin', fitsname, orcomm)

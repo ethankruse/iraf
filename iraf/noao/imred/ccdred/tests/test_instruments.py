@@ -18,10 +18,6 @@ parameters = {'BPM': None, 'biassec': None, 'ccdmean': None,
 
 image_types = "object|zero|dark|flat|illum|fringe|other|comp".split('|')
 
-# XXX: test for return value types in the 3 methods. what if someone sets
-# defaults or parameters manually and uses e.g. an int for ncombine? Will that
-# break things in other places? Should they always be strings?
-
 
 def test_instrument_init(tmpdir):
     # default instrument
@@ -260,7 +256,7 @@ def test_set_get_delete_header_value(tmpdir):
         assert ff[0].header.comments['exptime'] == ''
         assert 'filter' not in ff[1].header and 'exptime' not in ff[1].header
 
-    # test where the keys already exist both headers.
+    # test where the keys already exist in both headers.
 
     # add these to the second header
     with iraf.sys.image_open(fname, mode='update') as ff:
