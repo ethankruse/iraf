@@ -25,9 +25,9 @@ def test_ccd_section():
             ys == d6)
 
     # all the options
-    x0, x1, xs, y0, y1, ys = ccdr.ccd_section('[1:5:3,5:20:-4]',
+    x0, x1, xs, y0, y1, ys = ccdr.ccd_section('[1:5:3,5:-20:-4]',
                                               defaults=defaults)
-    assert (x0 == 1 and x1 == 5 and xs == 3 and y0 == 5 and y1 == 20 and
+    assert (x0 == 1 and x1 == 5 and xs == 3 and y0 == 5 and y1 == -20 and
             ys == -4)
 
     # no step size
@@ -40,6 +40,24 @@ def test_ccd_section():
     assert (x0 == 9 and x1 == 9 and xs == d3 and y0 == 5 and y1 == 20 and
             ys == d6)
 
+    x0, x1, xs, y0, y1, ys = ccdr.ccd_section('[,5:20]', defaults=defaults)
+    assert (x0 == d1 and x1 == d2 and xs == d3 and y0 == 5 and y1 == 20 and
+            ys == d6)
+
+    # test missing values
+    x0, x1, xs, y0, y1, ys = ccdr.ccd_section('[:, 1:]', defaults=defaults)
+    assert (x0 == d1 and x1 == d2 and xs == d3 and y0 == 1 and y1 == d5 and
+            ys == d6)
+    x0, x1, xs, y0, y1, ys = ccdr.ccd_section('[:, 1::3]', defaults=defaults)
+    assert (x0 == d1 and x1 == d2 and xs == d3 and y0 == 1 and y1 == d5 and
+            ys == 3)
+    x0, x1, xs, y0, y1, ys = ccdr.ccd_section('[:, ::3]', defaults=defaults)
+    assert (x0 == d1 and x1 == d2 and xs == d3 and y0 == d4 and y1 == d5 and
+            ys == 3)
+    x0, x1, xs, y0, y1, ys = ccdr.ccd_section('[:, :2:3]', defaults=defaults)
+    assert (x0 == d1 and x1 == d2 and xs == d3 and y0 == d4 and y1 == 2 and
+            ys == 3)
+
     # test bad braces
     with pytest.raises(Exception):
         ccdr.ccd_section('[:,:')
@@ -47,6 +65,21 @@ def test_ccd_section():
         ccdr.ccd_section(':,:]')
     with pytest.raises(Exception):
         ccdr.ccd_section('1:2,5:34')
+
+    # test non integer input
+    with pytest.raises(ValueError):
+        ccdr.ccd_section('[a,:]')
+    with pytest.raises(ValueError):
+        ccdr.ccd_section('[a:b,:]')
+    with pytest.raises(ValueError):
+        ccdr.ccd_section('[1:3:a,:]')
+
+    with pytest.raises(ValueError):
+        ccdr.ccd_section('[2.2,:]')
+    with pytest.raises(ValueError):
+        ccdr.ccd_section('[2.2:3.3,:]')
+    with pytest.raises(ValueError):
+        ccdr.ccd_section('[1:3:2.,:]')
 
     # test wrong dimensions
     with pytest.raises(Exception):

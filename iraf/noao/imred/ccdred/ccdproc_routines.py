@@ -15,6 +15,7 @@ __all__ = ['ccdproc']
 
 class CCD(object):
     """
+    Taken from ccdred.h:
     The CCD structure:  This structure is used to communicate processing
     parameters between the package procedures.  It contains pointers to
     data, calibration image IMIO pointers, scaling parameters, and the
@@ -23,7 +24,6 @@ class CCD(object):
     include a step size.  A step size is assumed.  If arbitrary subsampling
     is desired this would be the next generalization.
 
-    Taken from ccdred.h
 
     Notes about what these values mean and where they come from.
     see IRAF documention for ccdgeometry to explain some of these terms.
@@ -152,10 +152,118 @@ class CCD(object):
                      'minrep': False}
 
 
+def ccd_section(section, defaults=(None, None, 1, None, None, 1)):
+    """
+    Parse a 2D image section string into its elements.
+
+    Convert section information in data headers into useful bounds. For
+    example, convert the header 'biassec' = '[3:10,5:50]' into the bounds
+    (3, 10, 1, 5, 50, 1). The 1s indicate a step size of 1 in each dimension.
+
+    The first nonwhitespace character must be '['. The last
+    character must be ']'. A None or empty string section is ok and will
+    return the defaults.
+
+    The required format is [x1:x2:xstep, y1:y2:ystep].
+    If they are not explicitly given, default start and end values are None,
+    default step size is 1. The second : in either dimension can be ignored
+    if not giving a step size. Custom defaults can be passed as an argument.
+
+    E.g. [:, 2:] will return (None, None, 1, 2, None, 1)
+
+    NOTE: this is not an exact copy of IRAF's ccdsection. In the original
+    version, you could not use pythonic things like '5:'. Either both start
+    and stop had to be specified or else the wildcard * was used. If * is still
+    widely in use, this functionality can be added back in. The original
+    also flipped the step to be negative if start > stop. We don't do that
+    because of Python's use of negative indices to indicate the end of a list.
+
+    Parameters
+    ----------
+    section : str or None
+        The input data section string to be interpreted
+    defaults : tuple
+        Values filled in if not specified (e.g. with [:, 5:10]).
+        The default values should be given as a list/tuple with order:
+        (x_start, x_end, x_step, y_start, y_end, y_step).
+
+    Returns
+    -------
+    tuple
+        Tuple of 6 parameters: first dimension start, stop, step and second
+        dimension start, stop, step.
+
+    Raises
+    ------
+    Exception
+        If the input section cannot be parsed.
+
+    """
+    if len(defaults) != 6:
+        raise Exception('defaults given to ccd_section must have length 6')
+
+    if section is None:
+        return defaults
+
+    section = section.strip()
+    if len(section) == 0:
+        return defaults
+
+    if section[0] != '[' or section[-1] != ']':
+        raise Exception(f"Error in 2D image section specification {section}")
+
+    osection = section
+    # remove the brackets
+    section = section[1:-1]
+    dims = section.split(',')
+    if len(dims) != 2:
+        raise Exception(f"Error in 2D image section specification {osection}")
+
+    ret = []
+    defs = [defaults[:3], defaults[3:]]
+
+    for ii, dim in enumerate(dims):
+        # get the default values in this dimension
+        d1, d2, ds = defs[ii]
+
+        dim = dim.strip()
+        split = dim.split(':')
+        if len(split) == 1:
+            step = ds
+            if len(split[0].strip()) == 0:
+                start = d1
+                end = d2
+            else:
+                start = int(split[0])
+                end = int(split[0])
+        elif len(split) == 2 or len(split) == 3:
+            step = ds
+            if len(split[0].strip()) == 0:
+                start = d1
+            else:
+                start = int(split[0])
+
+            if len(split[1].strip()) == 0:
+                end = d2
+            else:
+                end = int(split[1])
+
+            if len(split) == 3:
+                if len(split[2].strip()) > 0:
+                    step = int(split[2])
+        else:
+            raise Exception(
+                f"Error in 2D image section specification {osection}")
+        ret.append(start)
+        ret.append(end)
+        ret.append(step)
+    return ret
+
+
 def ccdnscan(hdulist, instrument, ccdtype, scantype, inscan,
              scancor):
     """
-    Return the number CCD scan rows.
+    Return the number of CCD scan rows.
 
     If not found in the header return the "nscan" parameter for objects and
     1 for calibration images.
@@ -297,95 +405,6 @@ def cal_image(hdulist, instrument, ccdtype, nscan, calibs, scancor):
         estr = f"Calibration image {useim} is the same as the input image"
         raise Exception(estr)
     return useim
-
-
-def ccd_section(section, defaults=(None, None, 1, None, None, 1)):
-    """
-    CCD_SECTION -- Parse a 2D image section into its elements.
-    1. The default values must be set by the caller.
-    2. A null image section is OK.
-    3. The first nonwhitespace character must be '['.
-    4. The last interpreted character must be ']'.
-
-    The default values should be given as a list/tuple with order:
-    (x_start, x_end, x_step, y_start, y_end, y_step).
-
-    If they are not explicitly given, default start and end values are None,
-    default step size is 1.
-
-    E.g. [:, 1:20] will return (None, None, None, 1, 20, None)
-
-    Parameters
-    ----------
-    section
-    defaults
-
-    Returns
-    -------
-    Tuple of 6 parameters: first dimension start, stop, step and second
-    dimension start, stop, step
-
-    """
-    if len(defaults) != 6:
-        raise Exception('defaults given to ccd_section must have length 6')
-
-    if section is None:
-        return defaults
-
-    section = section.strip()
-    if len(section) == 0:
-        return defaults
-
-    if section[0] != '[' or section[-1] != ']':
-        raise Exception(f"Error in 2D image section specification {section}")
-
-    osection = section
-    # remove the brackets
-    section = section[1:-1]
-    dims = section.split(',')
-    if len(dims) != 2:
-        raise Exception(f"Error in 2D image section specification {osection}")
-
-    ret = []
-    defs = [defaults[:3], defaults[3:]]
-
-    for ii, dim in enumerate(dims):
-        # get the default values in this dimension
-        d1, d2, ds = defs[ii]
-
-        dim = dim.strip()
-        split = dim.split(':')
-        if len(split) == 1:
-            try:
-                start = int(split[0])
-                end = int(split[0])
-                step = ds
-            except ValueError:
-                start = d1
-                end = d2
-                step = ds
-        elif len(split) == 2 or len(split) == 3:
-            step = ds
-            try:
-                start = int(split[0])
-            except ValueError:
-                start = d1
-            try:
-                end = int(split[1])
-            except ValueError:
-                end = d2
-            if len(split) == 3:
-                try:
-                    step = int(split[2])
-                except ValueError:
-                    step = ds
-        else:
-            raise Exception(
-                f"Error in 2D image section specification {osection}")
-        ret.append(start)
-        ret.append(end)
-        ret.append(step)
-    return ret
 
 
 def logstring(instring, inim, verbose, logfd):
