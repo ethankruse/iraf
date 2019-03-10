@@ -3,6 +3,7 @@ Utility functions needed by the main tasks in ccdred, but not intended to be
 used directly by the user.
 """
 
+# keep the namespace clean
 import re as _re
 import os as _os
 import numpy as _np
