@@ -13,6 +13,7 @@ import time
 __all__ = ['ccdproc']
 
 
+# XXX: redo this documentation
 class CCD(object):
     """
     Taken from ccdred.h:
@@ -260,40 +261,49 @@ def ccd_section(section, defaults=(None, None, 1, None, None, 1)):
     return ret
 
 
-def ccdnscan(hdulist, instrument, ccdtype, scantype, inscan,
+def ccdnscan(hdulist, instrument, ccdtype, scantype, nscan,
              scancor):
     """
     Return the number of CCD scan rows.
 
-    If not found in the header return the "nscan" parameter for objects and
-    1 for calibration images.
+    If not found in the header ('nscanrow' or instrument equivalent),
+    return the "nscan" parameter for objects and 1 for calibration images
+    (calibration defined as zero, dark, flat, illum, or fringe image types).
+
+    If scantype is longscan, do not return "nscan"; instead return None if
+    scancor is True, 1 otherwise.
 
     Parameters
     ----------
-    hdulist
-    instrument
-    ccdtype
-    scantype
-    inscan
-    scancor
+    hdulist : IRAF image
+    instrument : Instrument
+    ccdtype : str
+        "|object|zero|dark|flat|illum|fringe|other|comp|none|unknown|"
+    scantype : {'shortscan', 'longscan'}
+    nscan : int
+    scancor : bool
 
     Returns
     -------
+    float or None
 
     """
-    nscan = get_header_value(hdulist, instrument, 'nscanrow')
-    if nscan is None:
+    retscan = get_header_value(hdulist, instrument, 'nscanrow')
+
+    if retscan is None:
         if ccdtype in ['zero', 'dark', 'flat', 'illum', 'fringe']:
-            nscan = 1
+            retscan = 1
         else:
             if scantype == 'shortscan':
-                nscan = inscan
-            else:
+                retscan = nscan * 1
+            elif scantype == 'longscan':
                 if scancor:
-                    nscan = -np.inf
+                    retscan = None
                 else:
-                    nscan = 1
-    return nscan
+                    retscan = 1
+            else:
+                raise Exception(f"Unrecognized scantype: '{scantype}'")
+    return retscan
 
 
 def cal_list(inlist, listtype, instrument, calimages, nscans, caltypes, subsets,
@@ -661,7 +671,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     subsets = []
     scantype = scantype.strip().lower()
     if scantype not in ['shortscan', 'longscan']:
-        raise Exception(f"Unrecognized scantype '{scantype}'")
+        raise Exception(f"Unrecognized scantype: '{scantype}'")
 
     if ccdtype != 'zero' and zerocor:
         list1 = file_handler(zero)

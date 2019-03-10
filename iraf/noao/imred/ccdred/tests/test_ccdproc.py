@@ -97,6 +97,80 @@ def test_ccd_section():
 
 
 @pytest.mark.parametrize("listtype", iraf.ccdred._imagetypes)
+def test_ccdnscan(tmpdir, listtype):
+    basedir = str(tmpdir)
+
+    inst = iraf.ccdred.Instrument()
+
+    # create simple file for testing
+    nx = 50
+    ny = 90
+    baseval = 100
+    arr = np.ones((nx, ny), dtype=float) * baseval
+    hdu = fits.PrimaryHDU(arr)
+    hdu.header['imagetyp'] = listtype
+    hdu.header['nscanrow'] = 5
+    hdu.header['srowcust'] = 10
+    inim = os.path.join(basedir, f'testimg.fits')
+    hdu.writeto(inim, overwrite=True)
+
+    # test getting things from the header first
+    hdu = iraf.sys.image_open(inim)
+    assert ccdr.ccdnscan(hdu, inst, listtype, 'shortscan', 3, True) == 5
+
+    inst.parameters['nscanrow'] = 'srowcust'
+    assert ccdr.ccdnscan(hdu, inst, listtype, 'shortscan', 3, True) == 10
+
+    inst.parameters['nscanrow'] = 'foo'
+    inst.defaults['nscanrow'] = 7
+    assert ccdr.ccdnscan(hdu, inst, listtype, 'shortscan', 3, True) == 7
+
+    # check things not in the image header and no defaults
+    inst.defaults['nscanrow'] = None
+
+    # check failures
+    if listtype not in ['zero', 'dark', 'flat', 'illum', 'fringe']:
+        with pytest.raises(Exception):
+            ccdr.ccdnscan(hdu, inst, listtype, 'noscan', 3, True)
+
+    # test the 4 combos of scantype and scancor
+    sscan = 'shortscan'
+    scor = True
+    res = ccdr.ccdnscan(hdu, inst, listtype, sscan, 3, scor)
+
+    if listtype in ['zero', 'dark', 'flat', 'illum', 'fringe']:
+        assert res == 1
+    else:
+        assert res == 3
+
+    sscan = 'shortscan'
+    scor = False
+    res = ccdr.ccdnscan(hdu, inst, listtype, sscan, 3, scor)
+
+    if listtype in ['zero', 'dark', 'flat', 'illum', 'fringe']:
+        assert res == 1
+    else:
+        assert res == 3
+
+    sscan = 'longscan'
+    scor = False
+    res = ccdr.ccdnscan(hdu, inst, listtype, sscan, 3, scor)
+
+    assert res == 1
+
+    sscan = 'longscan'
+    scor = True
+    res = ccdr.ccdnscan(hdu, inst, listtype, sscan, 3, scor)
+
+    if listtype in ['zero', 'dark', 'flat', 'illum', 'fringe']:
+        assert res == 1
+    else:
+        assert res is None
+
+    hdu.close()
+
+
+@pytest.mark.parametrize("listtype", iraf.ccdred._imagetypes)
 def test_cal_list(tmpdir, listtype):
     basedir = str(tmpdir)
 
@@ -160,10 +234,6 @@ def test_cal_list(tmpdir, listtype):
                     len(caltypes) == 0 and len(subsets) == 0)
 
         # XXX: check for duplication
-
-
-def test_ccdnscan():
-    pass
 
 
 # explicitly call ccdproc with every parameter set to what we want
