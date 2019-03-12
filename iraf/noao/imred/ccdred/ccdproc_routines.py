@@ -311,9 +311,9 @@ def cal_list(inlist, listtype, instrument, calimages, nscans, caltypes, subsets,
     """
     Add calibration images to an internal list.
 
-    Get each image's subset and  image type. If listtype is given, overwrite
-    whatever image type is found in the header, as this image was fed to
-    ccdproc by the user as that image type regardless of its header info.
+    Get each image's subset, nscan, and  image type. If listtype is given,
+    overwrite whatever image type is found in the header, as this image was
+    fed to ccdproc by the user as that image type regardless of its header info.
 
     Parameters
     ----------
@@ -354,6 +354,7 @@ def cal_list(inlist, listtype, instrument, calimages, nscans, caltypes, subsets,
             else:
                 ccdtype = listtype
 
+            # only add calibration images to our calibration lists
             if ccdtype in ['zero', 'dark', 'flat', 'illum', 'fringe']:
                 if image not in calimages:
                     caltypes.append(ccdtype)

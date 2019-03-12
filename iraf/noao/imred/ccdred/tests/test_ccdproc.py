@@ -207,20 +207,29 @@ def test_cal_list(tmpdir, listtype):
             arr = np.ones((nx, ny), dtype=float) * baseval
             hdu = fits.PrimaryHDU(arr)
             hdu.header[instval] = iraf.ccdred._imagetypes[jj]
+            hdu.header['subset'] = iraf.ccdred._imagetypes[jj]
+            hdu.header['nscanrow'] = jj
             inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
             hdu.writeto(inim, overwrite=True)
+            # add each image twice and make sure we only find them once in the
+            # list as a check on catching duplicates.
+            inputs.append(inim)
             inputs.append(inim)
 
         ccdr.cal_list(inputs, listtype, inst, calimages, nscans,
                       caltypes, subsets, scantype, nscan, scancor)
 
-        # XXX: still to do: test the output of the other lists
         if listtype == 'unknown':
             assert (len(calimages) == 5 and len(nscans) == 5 and
                     len(caltypes) == 5 and len(subsets) == 5)
             # make sure there's one of each allowable type
             assert len({'zero', 'dark', 'flat', 'illum', 'fringe'} &
                        set(caltypes)) == 5
+            # make sure the subset and nscan is right
+            for ii, ival in enumerate(subsets):
+                ind = iraf.ccdred._imagetypes.index(ival)
+                assert ival == iraf.ccdred._imagetypes[ind]
+                assert nscans[ii] == ind
 
         elif listtype in ['zero', 'dark', 'flat', 'illum', 'fringe']:
             assert (len(calimages) == lt and len(nscans) == lt and
@@ -228,12 +237,15 @@ def test_cal_list(tmpdir, listtype):
             # make sure all types are the same as the input type
             for itype in caltypes:
                 assert itype == listtype
+            # make sure the subset and nscan is right
+            for ii, ival in enumerate(subsets):
+                ind = iraf.ccdred._imagetypes.index(ival)
+                assert ival == iraf.ccdred._imagetypes[ind]
+                assert nscans[ii] == ind
 
         else:
             assert (len(calimages) == 0 and len(nscans) == 0 and
                     len(caltypes) == 0 and len(subsets) == 0)
-
-        # XXX: check for duplication
 
 
 # explicitly call ccdproc with every parameter set to what we want
