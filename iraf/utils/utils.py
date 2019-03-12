@@ -42,7 +42,7 @@ def file_handler(filelist, exists=True, recursive=False):
 
     Parameters
     ----------
-    filelist : string or iterable
+    filelist : str or list[str]
         String or list of input file strings to expand and create the final
         list of files.
     exists : bool, optional

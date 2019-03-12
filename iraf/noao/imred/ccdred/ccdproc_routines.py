@@ -309,22 +309,37 @@ def ccdnscan(hdulist, instrument, ccdtype, scantype, nscan,
 def cal_list(inlist, listtype, instrument, calimages, nscans, caltypes, subsets,
              scantype, nscan, scancor):
     """
+    Add calibration images to an internal list.
+
+    Get each image's subset and  image type. If listtype is given, overwrite
+    whatever image type is found in the header, as this image was fed to
+    ccdproc by the user as that image type regardless of its header info.
 
     Parameters
     ----------
-    inlist
-    listtype
-    instrument
-    calimages
-    nscans
-    caltypes
-    subsets
-    scantype
-    nscan
-    scancor
+    inlist : list[str]
+        Images to be added to the lists.
+    listtype : str
+        One of the 10 valid image types.
+    instrument : Instrument
+    calimages : list[str]
+        Output list of calibration image file names.
+    nscans : list[int]
+        Output list of the nscan related to the output images.
+    caltypes : list[str]
+        Output list of the image types corrsponding to the output images.
+    subsets : list[str]
+        Subset each output image belongs to.
+    scantype : {'shortscan', 'longscan'}
+        Scan type for the processing
+    nscan : int
+    scancor : bool
 
     Returns
     -------
+    None
+        The input images are added to the four appropriate output lists given
+        as arguments to the function.
 
     """
     for image in inlist:
