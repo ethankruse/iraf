@@ -366,17 +366,56 @@ def cal_list(inlist, listtype, instrument, calimages, nscans, caltypes, subsets,
 
 
 def cal_scan(image, nscan, scancor):
-    # CAL_SCAN -- Generate name for scan corrected calibration image.
+    """
+    Generate a name for a scan corrected calibration image.
+
+    Parameters
+    ----------
+    image : str
+    nscan : int or None
+    scancor : bool
+
+    Returns
+    -------
+    str
+
+    """
+    # make sure we even really want to be here
     if not scancor or nscan == 1:
         return image
     root, ext = os.path.splitext(image)
-    if not np.isfinite(nscan):
+    # NOTE: Bug in IRAF? This is almost certainly supposed to return *.1.ext,
+    # but the actual IRAF does indeed return *.1d.ext
+    if nscan is None:
         return f"{root}.1d{ext}"
     else:
         return f"{root}.{nscan:d}{ext}"
 
 
 def cal_image(hdulist, instrument, ccdtype, nscan, calibs, scancor):
+    """
+    Find the appropriate calibration image in our list of calibration files.
+    Compare the input image's subset and requested calibration image type to
+    the images in the calibration list and pick out the one that matches.
+    Raises an Exception if it can't find exactly one appropriate calibration
+    image to use.
+
+    Parameters
+    ----------
+    hdulist : IRAF image
+    instrument : Instrument
+    ccdtype : str
+        image type of calibration we're looking to do
+    nscan : int
+        nscan value of the image to be calibrated
+    calibs : (List[str], List[int], List[str], List[str])
+        The calibration file paths, nscan values, image types, and subsets
+    scancor : bool
+
+    Returns
+    -------
+    str
+    """
     calimages, nscans, caltypes, subsets = calibs
 
     useind = None
@@ -394,14 +433,16 @@ def cal_image(hdulist, instrument, ccdtype, nscan, calibs, scancor):
                 useind = ii
             else:
                 if nscans[ii] == nscans[useind]:
-                    estr = f"Warning: Extra calibration image " \
-                           f"{calimages[ii]} ignored"
-                    print(estr)
-                    # Reset the image type to eliminate further warnings.
-                    caltypes[ii] = 'unknown'
+                    # NOTE: original IRAF doesn't error here and just ignores
+                    # the additional calibraiton images and uses the first.
+                    estr = f"Multiple calibration images of type '{ccdtype}'" \
+                           f" found:\n{calimages[useind]}\n{calimages[ii]}"
+                    raise Exception(estr)
                 elif nscans[useind] != nscan and (nscans[ii] == nscan or
                                                   nscans[ii] == 1):
                     useind = ii
+    else:
+        raise Exception(f"Image type '{ccdtype}' is not a calibration type.")
 
     # If no calibration image is found then it is an error.
     if useind is None:
@@ -461,6 +502,33 @@ def logstring(instring, inim, verbose, logfd):
     if logfd is not None:
         logfd.write(printstr + '\n')
     return ostr
+
+
+def already_processed(image, instrument, key):
+    """
+    Meant to be a less confusing version of the IRAF function ccdflag.
+
+    Returns True if the input image header has a value other than the instrument
+    default for the key, often indicative that IRAF has already
+    processed the image in this way before.
+
+    Returns False if the input image header
+    has the default value (or key is not in the header at all), usually
+    indicating IRAF has not processed the image for 'key' before.
+
+    Parameters
+    ----------
+    image
+    instrument
+    key
+
+    Returns
+    -------
+
+    """
+    inp = get_header_value(image, instrument, key)
+    default = get_header_value(image, instrument, key, default=True)
+    return inp != default
 
 
 def process(ccd):
@@ -563,33 +631,6 @@ def process(ccd):
     # XXX: is this needed or is fulloutarr updated as a view of outarr?
     fulloutarr[ccd.outl1-1:ccd.outl2, ccd.outc1-1:ccd.outc2] = outarr * 1
     ccd.outim[0].data = fulloutarr * 1
-
-
-def already_processed(image, instrument, key):
-    """
-    Meant to be a less confusing version of the IRAF function ccdflag.
-
-    Returns True if the input image header has a value other than the instrument
-    default for the key, often indicative that IRAF has already
-    processed the image in this way before.
-
-    Returns False if the input image header
-    has the default value (or key is not in the header at all), usually
-    indicating IRAF has not processed the image for 'key' before.
-
-    Parameters
-    ----------
-    image
-    instrument
-    key
-
-    Returns
-    -------
-
-    """
-    inp = get_header_value(image, instrument, key)
-    default = get_header_value(image, instrument, key, default=True)
-    return inp != default
 
 
 def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,

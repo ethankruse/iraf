@@ -248,6 +248,58 @@ def test_cal_list(tmpdir, listtype):
                     len(caltypes) == 0 and len(subsets) == 0)
 
 
+def test_cal_scan():
+    inpath = '/foo/bar/file.txt'
+    root, ext = os.path.splitext(inpath)
+    assert ccdr.cal_scan(inpath, 1, False) == inpath
+    assert ccdr.cal_scan(inpath, 6, False) == inpath
+    assert ccdr.cal_scan(inpath, 1, True) == inpath
+    assert ccdr.cal_scan(inpath, 6, True) == f"{root}.{6:d}{ext}"
+    assert ccdr.cal_scan(inpath, None, True) == f"{root}.{1:d}d{ext}"
+    with pytest.raises(ValueError):
+        ccdr.cal_scan(inpath, 5.5, True)
+    with pytest.raises(ValueError):
+        ccdr.cal_scan(inpath, 'str', True)
+
+
+@pytest.mark.parametrize("imtype", iraf.ccdred._imagetypes)
+def test_cal_image(tmpdir, imtype):
+    basedir = str(tmpdir)
+
+    inst = iraf.ccdred.Instrument()
+
+    # create simple file for testing
+    nx = 50
+    ny = 90
+    baseval = 100
+    arr = np.ones((nx, ny), dtype=float) * baseval
+    hdu = fits.PrimaryHDU(arr)
+    hdu.header['imagetyp'] = imtype
+    hdu.header['nscanrow'] = 5
+    hdu.header['srowcust'] = 10
+    inim = os.path.join(basedir, f'testimg.fits')
+    hdu.writeto(inim, overwrite=True)
+
+    calim = os.path.join(basedir, f'testcal.fits')
+    # just create a garbage file so it exists
+    with open(calim, 'w') as foo:
+        foo.write('hi')
+
+    #     # (calimages, nscans, caltypes, subsets)
+    # basic test of the function
+    cals = ([calim], [1], [imtype], [''])
+    with iraf.sys.image_open(inim) as ff:
+        # non calibration images fail no matter what
+        if imtype not in ['zero', 'dark', 'flat', 'illum', 'fringe']:
+            with pytest.raises(Exception):
+                ccdr.cal_image(ff, inst, imtype, 1, cals, True)
+            return
+        else:
+            assert ccdr.cal_image(ff, inst, imtype, 1, cals, True) == cals[0][0]
+    # don't deal with non-calibration types anymore
+    assert imtype in ['zero', 'dark', 'flat', 'illum', 'fringe']
+
+
 # explicitly call ccdproc with every parameter set to what we want
 defaultargs = {'output': None, 'ccdtype': 'object', 'noproc': False,
                'fixpix': False, 'overscan': False, 'trim': False,
