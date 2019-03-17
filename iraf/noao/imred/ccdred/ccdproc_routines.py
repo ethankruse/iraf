@@ -477,19 +477,19 @@ def cal_image(hdulist, instrument, ccdtype, nscan, calibs, scancor):
 
 def logstring(instring, inim, verbose, logfd):
     """
-    Meant to be the same as calling timelog() then ccdlog() in ccdproc.
-    These prepend the time and image name to the input string
+    Meant to be the same as calling timelog() then ccdlog() in IRAF's ccdproc.
+    These prepend the image name and time to the input string.
 
     Parameters
     ----------
-    instring
-    inim
-    verbose
-    logfd
+    instring : str
+    inim : IRAF image
+    verbose : bool
+    logfd : FileIO or None
 
     Returns
     -------
-
+    str
     """
     # the timelog() part
     now = datetime.datetime.now()
@@ -519,13 +519,13 @@ def already_processed(image, instrument, key):
 
     Parameters
     ----------
-    image
-    instrument
-    key
+    image : IRAF image
+    instrument : Instrument
+    key : str
 
     Returns
     -------
-
+    bool
     """
     inp = get_header_value(image, instrument, key)
     default = get_header_value(image, instrument, key, default=True)

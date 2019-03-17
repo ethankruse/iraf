@@ -4,6 +4,7 @@ import numpy as np
 from astropy.io import fits
 import copy
 import time
+import datetime
 import iraf
 from .. import ccdproc_routines as ccdr
 
@@ -381,6 +382,109 @@ def test_cal_image(tmpdir, imtype):
     else:
         with pytest.raises(Exception):
             ccdr.cal_image(inopen, inst, imtype, 1, cals, False)
+
+    inopen.close()
+
+
+def test_logstring(tmpdir, capsys):
+    basedir = str(tmpdir)
+
+    # create simple file for testing
+    nx = 50
+    ny = 90
+    baseval = 100
+    arr = np.ones((nx, ny), dtype=float) * baseval
+    hdu = fits.PrimaryHDU(arr)
+    inim = os.path.join(basedir, f'testimg.fits')
+    hdu.writeto(inim, overwrite=True)
+
+    # open the file for feeding into all the tests
+    inopen = iraf.sys.image_open(inim)
+
+    instr = 'foo'
+    retstr = ccdr.logstring(instr, inopen, False, None)
+
+    # no outputs
+    out, err = capsys.readouterr()
+    assert out == '' and err == ''
+
+    # make sure the dates are understandable and the same
+    now = datetime.datetime.now()
+    dfmt = '%Y-%m-%d %H:%M:%S'
+    nowstr = now.strftime(dfmt)
+    filetime = datetime.datetime.strptime(retstr[:len(nowstr)], dfmt)
+    assert np.abs((now - filetime).total_seconds()) <= 2
+
+    # extra character is the space between them
+    assert len(retstr) == (len(nowstr) + len(instr) + 1)
+
+    # we got our input string back
+    assert retstr[len(nowstr)+1:] == instr
+
+    # check log files and verbose output
+    log = os.path.join(basedir, f'log.txt')
+    with open(log, 'w') as ff:
+        retstr = ccdr.logstring(instr, inopen, True, ff)
+    now = datetime.datetime.now()
+
+    # make sure we haven't changed the return string while printing stuff
+    assert len(retstr) == (len(nowstr) + len(instr) + 1)
+
+    with open(log, 'r') as ff:
+        lines = ff.readlines()
+    assert len(lines) == 1
+    line = lines[0]
+
+    # make sure output and logfile have the same contents
+    out, err = capsys.readouterr()
+    assert len(err) == 0
+    assert len(out) == len(line)
+    assert out == line
+
+    assert out[:len(inim)] == inim
+    # account for the newline at the end, but otherwise keep the input string
+    assert out[-len(instr)-1:-1] == instr
+
+    cutstr = out[len(inim)+2:len(inim)+2+len(nowstr)]
+    filetime = datetime.datetime.strptime(cutstr, dfmt)
+    assert np.abs((now - filetime).total_seconds()) <= 2
+
+    inopen.close()
+
+
+def test_already_processed(tmpdir):
+    basedir = str(tmpdir)
+
+    # create simple file for testing
+    nx = 50
+    ny = 90
+    baseval = 100
+    arr = np.ones((nx, ny), dtype=float) * baseval
+    hdu = fits.PrimaryHDU(arr)
+    hdu.header['trim'] = 'foo'
+    hdu.header['custom'] = 'bar'
+    inim = os.path.join(basedir, f'testimg.fits')
+    hdu.writeto(inim, overwrite=True)
+
+    inst = iraf.ccdred.Instrument()
+
+    # open the file for feeding into all the tests
+    inopen = iraf.sys.image_open(inim)
+
+    # default of None is not 'foo'
+    assert ccdr.already_processed(inopen, inst, 'trim')
+
+    # default matches what's found in file
+    inst.defaults['trim'] = 'foo'
+    assert not ccdr.already_processed(inopen, inst, 'trim')
+
+    inst.parameters['trim'] = 'custom'
+    # default of 'foo' is not 'bar'
+    assert ccdr.already_processed(inopen, inst, 'trim')
+
+    # default matches what's found in file
+    inst.defaults['trim'] = 'bar'
+    assert not ccdr.already_processed(inopen, inst, 'trim')
 
     inopen.close()
 
