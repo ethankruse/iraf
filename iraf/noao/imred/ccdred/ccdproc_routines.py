@@ -406,7 +406,7 @@ def cal_image(hdulist, instrument, ccdtype, nscan, calibs, scancor):
     instrument : Instrument
     ccdtype : str
         image type of calibration we're looking to do
-    nscan : int
+    nscan : int or None
         nscan value of the image to be calibrated
     calibs : (List[str], List[int], List[str], List[str])
         The calibration file paths, nscan values, image types, and subsets
@@ -450,13 +450,9 @@ def cal_image(hdulist, instrument, ccdtype, nscan, calibs, scancor):
             estr = "No zero level calibration image found"
         elif ccdtype == 'dark':
             estr = "No dark count calibration image found"
-        elif ccdtype == 'flat':
-            estr = "No flat field calibration image of subset %s found"
-        elif ccdtype in ['flat', 'illum', 'fringe']:
-            usub = ccdsubset(hdulist, instrument)
-            estr = f"No {ccdtype} calibration image of subset {usub} found"
         else:
-            estr = f"Unrecognized ccdtype: {ccdtype}"
+            usub = ccdsubset(hdulist, instrument)
+            estr = f"No {ccdtype} calibration image of subset '{usub}' found"
         raise Exception(estr)
 
     useim = calimages[useind]
@@ -468,9 +464,14 @@ def cal_image(hdulist, instrument, ccdtype, nscan, calibs, scancor):
             raise Exception(estr)
 
     # Check that the input image is not the same as the calibration image.
-    if os.path.samefile(useim, hdulist.filename()):
-        estr = f"Calibration image {useim} is the same as the input image"
-        raise Exception(estr)
+    try:
+        if os.path.samefile(useim, hdulist.filename()):
+            estr = f"Calibration image {useim} is the same as the input image"
+            raise Exception(estr)
+    # if the second file doesn't exist, that can be ok (e.g. if cal_scan says
+    # that we have to create the scan corrected file later.)
+    except FileNotFoundError:
+        pass
     return useim
 
 

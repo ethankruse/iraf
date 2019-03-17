@@ -280,24 +280,109 @@ def test_cal_image(tmpdir, imtype):
     inim = os.path.join(basedir, f'testimg.fits')
     hdu.writeto(inim, overwrite=True)
 
-    calim = os.path.join(basedir, f'testcal.fits')
-    # just create a garbage file so it exists
-    with open(calim, 'w') as foo:
-        foo.write('hi')
+    # open the file for feeding into all the tests
+    inopen = iraf.sys.image_open(inim)
 
-    #     # (calimages, nscans, caltypes, subsets)
     # basic test of the function
+    calim = os.path.join(basedir, f'testcal.fits')
     cals = ([calim], [1], [imtype], [''])
-    with iraf.sys.image_open(inim) as ff:
-        # non calibration images fail no matter what
-        if imtype not in ['zero', 'dark', 'flat', 'illum', 'fringe']:
-            with pytest.raises(Exception):
-                ccdr.cal_image(ff, inst, imtype, 1, cals, True)
-            return
-        else:
-            assert ccdr.cal_image(ff, inst, imtype, 1, cals, True) == cals[0][0]
+
+    # non calibration images fail no matter what
+    if imtype not in ['zero', 'dark', 'flat', 'illum', 'fringe']:
+        with pytest.raises(Exception):
+            ccdr.cal_image(inopen, inst, imtype, 1, cals, True)
+        return
+    else:
+        assert ccdr.cal_image(inopen, inst, imtype, 1, cals, True) == cals[0][0]
     # don't deal with non-calibration types anymore
     assert imtype in ['zero', 'dark', 'flat', 'illum', 'fringe']
+
+    # for all image types, check error with 0 images
+    calimages, nscans, caltypes, subsets = [], [], [], []
+    for itype in iraf.ccdred._imagetypes:
+        calim = os.path.join(basedir, f'testcal.{itype}.fits')
+        if itype != imtype:
+            calimages.append(calim)
+            nscans.append(1)
+            caltypes.append(itype)
+            subsets.append('')
+    cals = (calimages, nscans, caltypes, subsets)
+
+    with pytest.raises(Exception):
+        ccdr.cal_image(inopen, inst, imtype, 1, cals, True)
+    # add the image in and make sure we get the expected result
+    calim = os.path.join(basedir, f'testcal.{imtype}.fits')
+    calimages.append(calim)
+    nscans.append(1)
+    caltypes.append(imtype)
+    subsets.append('')
+    cals = (calimages, nscans, caltypes, subsets)
+    assert ccdr.cal_image(inopen, inst, imtype, 1, cals, True) == calim
+
+    # check selected image doesn't equal input image
+    calimages, nscans, caltypes, subsets = [inim], [1], [imtype], ['']
+    cals = (calimages, nscans, caltypes, subsets)
+    with pytest.raises(Exception):
+        ccdr.cal_image(inopen, inst, imtype, 1, cals, True)
+
+    # fail to reach cal_scan
+    calim = os.path.join(basedir, f'testcal.{imtype}.fits')
+
+    cals = ([calim], [6], [imtype], [''])
+    with pytest.raises(Exception):
+        ccdr.cal_image(inopen, inst, imtype, 1, cals, True)
+
+    cals = ([calim], [5], [imtype], [''])
+    with pytest.raises(Exception):
+        ccdr.cal_image(inopen, inst, imtype, 6, cals, True)
+
+    # make sure cal_scan is working
+    cals = ([calim], [1], [imtype], [''])
+
+    # no scancor, so no cal_scan
+    assert ccdr.cal_image(inopen, inst, imtype, 6, cals, False) == calim
+
+    root, ext = os.path.splitext(calim)
+    # nscan of None
+    retval = f"{root}.1d{ext}"
+    assert ccdr.cal_image(inopen, inst, imtype, None, cals, True) == retval
+
+    # nscan not 1
+    retval = f"{root}.{6:d}{ext}"
+    assert ccdr.cal_image(inopen, inst, imtype, 6, cals, True) == retval
+
+    # for all, check error with 2+ images of the same image type and nscan
+    cals = ([calim+'1', calim+'2'], [5, 5], [imtype, imtype], ['', ''])
+    with pytest.raises(Exception):
+        ccdr.cal_image(inopen, inst, imtype, 1, cals, True)
+
+    # pick the right nscan
+    cals = ([calim+'1', calim+'2'], [3, 2], [imtype, imtype], ['', ''])
+    assert ccdr.cal_image(inopen, inst, imtype, 2, cals, True) == calim+'2'
+
+    cals = ([calim + '1', calim + '2'], [3, 1], [imtype, imtype], ['', ''])
+    assert ccdr.cal_image(inopen, inst, imtype, 2, cals, False) == calim + '2'
+
+    inopen.close()
+
+    # add a subset to our input image
+    hdu.header['subset'] = 'red'
+    inim = os.path.join(basedir, f'testimg.fits')
+    hdu.writeto(inim, overwrite=True)
+
+    # open the file for feeding into all the tests
+    inopen = iraf.sys.image_open(inim)
+
+    # only check for correct subset for flat, fringe, illum
+    cals = ([calim+'1', calim+'2'], [1, 1], [imtype, imtype], ['blue', 'red'])
+    if imtype in ['flat', 'illum', 'fringe']:
+        cor = calim + '2'
+        assert ccdr.cal_image(inopen, inst, imtype, 1, cals, False) == cor
+    else:
+        with pytest.raises(Exception):
+            ccdr.cal_image(inopen, inst, imtype, 1, cals, False)
+
+    inopen.close()
 
 
 # explicitly call ccdproc with every parameter set to what we want
