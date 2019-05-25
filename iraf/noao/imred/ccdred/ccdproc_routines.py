@@ -533,32 +533,74 @@ def already_processed(image, instrument, key):
 
 
 def process(ccd):
-    # the equivalent of proc1r/proc2r.
-    # the differences occur where the if readaxis == 'line' bits are.
+    """
+    Do the actual processing that has been set up by ccdproc.
+
+    Parameters
+    ----------
+    ccd : CCD
+
+    Returns
+    -------
+
+    """
+    # the equivalent of proc1r/proc2r plus cor1r/cor2r.
+    # Read out axis (1=lines, 2=cols)
+    # READAXIS(ccd) = clgwrd ("readaxis",Memc[str],SZ_LINE,"|line|columns|")
+
+    # the differences in those occur where the if readaxis == 'line' bits are.
     # mostly the same function
 
-    # translate into numpy space. that means instead of [c, l] you do [l, c]
+    # translate into numpy coords. that means instead of [c, l] you do [l, c]
     # and also that you're 0-indexed and not inclusive of the end anymore.
     fulloutarr = ccd.inim[0].data * 1
     if ccd.cors['trim']:
         fulloutarr = fulloutarr[ccd.triml1-1:ccd.triml2,
                                 ccd.trimc1-1:ccd.trimc2]
-    # XXX: need to deal with xt_fpsr
+
+    # XXX: need to deal with xt_fpsr.
+    # it uses maskfp to identify bad pixels and then linearly interpolates
+    # over them to "fix" them. Comes from fixpix
     if ccd.maskfp is not None:
         raise Exception('maskfp not yet implemented')
+
     # grab the bit we want to correct
     outarr = fulloutarr[ccd.outl1-1:ccd.outl2, ccd.outc1-1:ccd.outc2]
 
     # make the overscan correction
     if ccd.cors['overscan']:
-        overscanc1 = ccd.biasc1 - 1
-        noverscan = ccd.biasc2 - overscanc1
-        # XXX: get the overscan value/vector. different for line/column
-        if ccd.overscantype in ['mean', 'median', 'minmax']:
-            overscan = 1
+        if ccd.readaxis == 'line':
+            if ccd.overscantype in ['mean', 'median', 'minmax']:
+                overscanc1 = ccd.biasc1 - 1
+                noverscan = ccd.biasc2 - overscanc1
+                oscanreg = outarr[:, overscanc1:overscanc1+noverscan]
+                # begin the find_overscanr function
+                if ccd.overscantype == 'minmax':
+                    # average with min and max removed.
+                    # XXX: figure out the axis bit
+                    overscan = np.sum(oscanreg, axis=0)
+                    overscan -= oscanreg.min(axis=0) - oscanreg.max(axis=0)
+                    # XXX: what happens in IRAF when the overscan region has
+                    # a size of 0-2?
+                    overscan /= oscanreg.shape[1] - 2
+                elif ccd.overscantype == 'median':
+                    # NOTE: technically IRAF returns the lower of the middle 2
+                    # in the even median case. numpy returns mean of middle 2.
+                    # XXX: figure out the axis bit
+                    overscan = np.median(oscanreg, axis=0)
+                else:
+                    # XXX: figure out the axis bit
+                    overscan = np.mean(oscanreg, axis=0)
+            else:
+                overscan = ccd.overscanvec
+
+            # XXX: outarr is 2D, overscan is 1D and need to figure out which way
+            # to broadcast
+            outarr -= overscan
         else:
-            overscan = 1
-        outarr -= overscan
+            # XXX: outarr is 2D, overscan is 1D and need to figure out which way
+            # to broadcast
+            outarr -= ccd.overscanvec
 
     # make the zero correction
     if ccd.cors['zerocor']:
@@ -624,6 +666,7 @@ def process(ccd):
         outarr -= ccd.fringescale * fringebuf
 
     if ccd.cors['minrep']:
+        # XXX: use np.clip?
         outarr[np.where(outarr < ccd.minreplace)] = ccd.minreplace
 
     if ccd.cors['findmean']:
@@ -712,15 +755,10 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     if not isinstance(instrument, Instrument):
         instrument = Instrument(instrument)
 
-    # this allows interactive to be 4 valued (yes, no, always yes, always no)
-    # to allow for not prompting for every image
-    # XXX: set_interactive("", interactive)
-
     # start of cal_open
-    ccdtype = ccdtype.strip().lower()
-    if ccdtype is None or len(ccdtype) == 0:
+    if ccdtype is None or len(ccdtype.strip().lower()) == 0:
         ccdtype = 'none'
-    elif ccdtype not in _imagetypes:
+    elif ccdtype.strip().lower() not in _imagetypes:
         ccdtype = 'unknown'
 
     calimages = []
