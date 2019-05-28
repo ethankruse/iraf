@@ -7,13 +7,13 @@ parameters = {'BPM': None, 'biassec': None, 'ccdmean': None,
               'ccdmeant': None, 'ccdproc': None, 'ccdsec': None,
               'darkcor': None, 'darktime': None, 'datasec': None,
               'exptime': None, 'fixfile': None, 'fixpix': None,
-              'flatcor': None, 'fringcor': None, 'gain': None,
-              'illumcor': None, 'imagetyp': None, 'mkfringe': None,
-              'mkillum': None, 'ncombine': None, 'nscanrow': None,
-              'overscan': None, 'rdnoise': None, 'readcor': None,
-              'snoise': None, 'subset': None, 'trim': None,
-              'trimsec': None, 'zerocor': None, 'origin': None,
-              'date': None, 'iraf-tlm': None}
+              'flatcor': None, 'fringcor': None, 'fringscl': None,
+              'gain': None, 'illumcor': None, 'imagetyp': None,
+              'mkfringe': None, 'mkillum': None, 'ncombine': None,
+              'nscanrow': None, 'overscan': None, 'rdnoise': None,
+              'readcor': None, 'snoise': None, 'subset': None,
+              'trim': None, 'trimsec': None, 'zerocor': None,
+              'origin': None, 'date': None, 'iraf-tlm': None}
 
 image_types = "object|zero|dark|flat|illum|fringe|other|comp".split('|')
 
@@ -49,7 +49,7 @@ def test_instrument_translation_file(tmpdir):
             ff.write(f'{ipar}   \t \t  \t  {cs}\n')
         for ii in range(len(customs)):
             for jj in range(len(image_types)):
-                bstr = customs[ii]+image_types[jj]
+                bstr = customs[ii] + image_types[jj]
                 # test each image type with different strings
                 ff.write(f"'{bstr}'\t{image_types[jj]}\n")
     inst = iraf.ccdred.Instrument(tfile)
@@ -59,7 +59,7 @@ def test_instrument_translation_file(tmpdir):
                 inst.defaults[key] is None)
     for ii in range(len(customs)):
         for jj in range(len(image_types)):
-            bstr = customs[ii]+image_types[jj]
+            bstr = customs[ii] + image_types[jj]
             assert inst.image_types[bstr] == image_types[jj]
     assert inst.translation_file == tfile
     assert len(inst.image_types) == len(customs) * len(image_types)

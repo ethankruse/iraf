@@ -671,7 +671,7 @@ def process(ccd):
 
     if ccd.cors['findmean']:
         ccd.mean = outarr.mean()
-
+    print(ccd.darkscale, ccd.flatscale, ccd.illumscale, ccd.fringescale)
     # XXX: is this needed or is fulloutarr updated as a view of outarr?
     fulloutarr[ccd.outl1-1:ccd.outl2, ccd.outc1-1:ccd.outc2] = outarr * 1
     ccd.outim[0].data = fulloutarr * 1
@@ -800,6 +800,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     origccdtype = ccdtype
 
     # Open the log file.
+    # XXX: open this somewhere with proper error handling
     logfd = None
     if logfile is not None:
         logfd = open(logfile, 'a')
@@ -1449,6 +1450,14 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     iscale = get_header_value(illumim, instrument, 'ccdmean')
                     if iscale is None:
                         iscale = 1.
+
+                    # XXX: this is a hack for now. Need to figure out
+                    # what part of the image ccdmean is called on.
+                    # when set with ccdproc, only uses the datasec or whatever
+                    # part is processed, but when ccdmean() sets it, it uses
+                    # the whole image?
+                    iscale = illumim[0].data.mean()
+
                     ccd.illumscale = iscale
 
                     # Set the processing parameters in the CCD structure.

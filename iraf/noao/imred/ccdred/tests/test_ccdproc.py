@@ -607,6 +607,19 @@ def test_basics(tmpdir):
         iraf.ccdred.ccdproc(inlist, **myargs)
 
 
+def test_cal_open():
+    # go through all ccdtypes.
+
+    # make sure if an object is passed in as a list of a specific type it is
+    # processed that way regardless of what's in header
+
+    # make sure that passing in all files as one input list gets things sorted
+    # into the right lists as well
+
+    # check subsets are handled appropriately
+    pass
+
+
 def test_zerocor(tmpdir):
     basedir = str(tmpdir)
 
