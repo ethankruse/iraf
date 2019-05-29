@@ -781,3 +781,9 @@ def test_zerocor(tmpdir):
 # and trying to process all 5 types at once for each ccdtype.
 
 # test having the calibration images in the input list.
+
+
+# some tests to think about:
+# 1D and 3D images
+# 1 vs 0 indexing
+

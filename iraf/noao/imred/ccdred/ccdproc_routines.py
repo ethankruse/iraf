@@ -558,11 +558,11 @@ def process(ccd):
         fulloutarr = fulloutarr[ccd.triml1-1:ccd.triml2,
                                 ccd.trimc1-1:ccd.trimc2]
 
-    # XXX: need to deal with xt_fpsr.
+    # need to deal with xt_fpsr.
     # it uses maskfp to identify bad pixels and then linearly interpolates
     # over them to "fix" them. Comes from fixpix
     if ccd.maskfp is not None:
-        raise Exception('maskfp not yet implemented')
+        raise Exception('maskfp and fixpix not yet implemented')
 
     # grab the bit we want to correct
     outarr = fulloutarr[ccd.outl1-1:ccd.outl2, ccd.outc1-1:ccd.outc2]
@@ -680,7 +680,7 @@ def process(ccd):
 def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             overscan=True, trim=True, zerocor=True, darkcor=True, flatcor=True,
             illumcor=False, fringecor=False, readcor=False, scancor=False,
-            readaxis='line', fixfile=None, biassec=None, trimsec=None,
+            readaxis='line', fixfile=None, biassec='image', trimsec='image',
             zero=None, dark=None, flat=None, illum=None, fringe=None,
             minreplace=1., scantype='shortscan', nscan=1, interactive=False,
             overscan_function='legendre', order=1, sample='*', naverage=1,
@@ -854,7 +854,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             if otyp in otypes:
                 outtype = ndtypes[otypes.index(otyp)]
             else:
-                raise Exception(f'Unrecognized pixeltype: {otyp}')
+                raise Exception(f'Unknown pixeltype: {otyp}')
             # make sure the output type will work given the input
             outtype = type_max(imin[0].data.dtype, outtype)
         else:
@@ -866,10 +866,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         ccd = CCD()
         ccd.inim = imin
         ccd.outim = out
-        ccd.cor = False
-        ccd.cors['fixpix'] = False
-        ccd.cors['overscan'] = False
-        ccd.cors['trim'] = False
         readaxis = readaxis.strip().lower()
         # in IRAF readaxis line == 1, readaxis column == 2
         if readaxis in ['line', 'column']:
@@ -880,7 +876,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
         # begin set_sections
 
-        # XXX: need to think about this
         """
         How do I want to handle IRAF/FITS vs numpy axis order? What if we
         want to extend to hdf5 or other formats? C-order vs F-order arrays
@@ -895,8 +890,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         """
         # python and IRAF axis order is backwards. first axis in IRAF is last
         # in python
-        nc = ccd.inim[0].data.shape[-1]
-        nl = ccd.inim[0].data.shape[-2]
+        nc = ccd.inim[0].data.shape[1]
+        nl = ccd.inim[0].data.shape[0]
 
         # The default data section is the entire image.
         datasec = get_header_value(ccd.inim, instrument, 'datasec')
@@ -912,7 +907,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
         # The default trim section is the data section.
         # Defer limit checking until actually used.
-        # XXX: set default value to 'image'?
         ts = trimsec
         if trimsec == 'image':
             ts = get_header_value(ccd.inim, instrument, 'trimsec')
@@ -927,7 +921,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         ccd.triml2 = l2
 
         # The default bias section is the whole image.
-        # XXX: set default value to 'image'?
         bs = biassec
         if biassec == 'image':
             bs = get_header_value(ccd.inim, instrument, 'biassec')
@@ -943,7 +936,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         # The default ccd section is the size of the data section.
         c2 = ccd.inc2 - ccd.inc1 + 1
         l2 = ccd.inl2 - ccd.inl1 + 1
-
         ccs = get_header_value(ccd.inim, instrument, 'ccdsec')
         c1, c2, cs, l1, l2, ls = ccd_section(ccs, defaults=(1, c2, 1, 1, l2, 1))
 
@@ -1023,13 +1015,13 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                        f"{ccd.triml1:d}:{ccd.triml2:d}]"
 
                 logstr = logstring(ostr, ccd.inim, verbose, logfd)
-                # XXX: this can't be what is actually put in the header right?
                 set_header_value(ccd.outim, instrument, 'trim', logstr)
 
         # end set_trim
 
         # begin set_fixpix
         if fixpix and not already_processed(ccd.inim, instrument, 'fixpix'):
+            """
             # Get the bad pixel file.  If the name is "image" then get the file
             # name from the image header or symbol table.
             fx = fixfile
@@ -1058,11 +1050,12 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                 # Log the operation.
                 ostr = f"Bad pixel file is {fx}"
                 logstr = logstring(ostr, ccd.inim, verbose, logfd)
-                # XXX: this can't be what is actually put in the header right?
                 set_header_value(ccd.outim, instrument, 'fixpix', logstr)
-
+            """
+            raise Exception("fixpix not yet implemented.")
         # end set_fixpix
 
+        # XXX: stop here.
         # begin set_overscan
         if overscan and not already_processed(ccd.inim, instrument, 'overscan'):
             # Check bias section.
