@@ -1055,7 +1055,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             raise Exception("fixpix not yet implemented.")
         # end set_fixpix
 
-        # XXX: stop here.
         # begin set_overscan
         if overscan and not already_processed(ccd.inim, instrument, 'overscan'):
             # Check bias section.
@@ -1069,6 +1068,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     ccd.biasl2 == nl):
                 estr = "Bias section not specified or given as full image"
                 raise Exception(estr)
+
             # If no processing is desired then print overscan strip and return.
             if noproc:
                 ostr = f"  [TO BE DONE] Overscan section is [{ccd.biasc1}:" \
@@ -1088,8 +1088,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                 if overscan_function in ['mean', 'median', 'minmax']:
                     fitoscan = None
                     if ccd.readaxis == 'column':
-                        estr = "Overscan function type not allowed with" \
-                               " readaxis of column"
+                        estr = f"Overscan function type {overscan_function}" \
+                               " not allowed with readaxis of column"
                         raise Exception(estr)
                 else:
                     if ccd.readaxis == 'line':
@@ -1097,19 +1097,22 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                         last = ccd.biasc2
                         # it's supposed to be the mean in every line between
                         # c1 and c2
-                        amean = ccd.inim[0].data[:, first-1:last].mean(axis=1)
+                        amean = ccd.inim[0].data[:, first - 1:last].mean(axis=1)
                         # Trim the overscan vector and set the pixel coordinate.
-                        trimoscan = amean[ccd.inl1-1:ccd.inl2]
+                        veclen = ccd.ccdl2 - ccd.ccdl1 + 1
+                        trimoscan = amean[ccd.inl1 - 1:ccd.inl1 - 1 + veclen]
                     else:
                         first = ccd.biasl1
                         last = ccd.biasl2
                         # it's supposed to be the mean in every column between
                         # l1 and l2
-                        amean = ccd.inim[0].data[first-1:last, :].mean(axis=0)
+                        amean = ccd.inim[0].data[first - 1:last, :].mean(axis=0)
                         # Trim the overscan vector and set the pixel coordinate.
-                        trimoscan = amean[ccd.inc1-1:ccd.inc2]
+                        veclen = ccd.ccdc2 - ccd.ccdc1 + 1
+                        trimoscan = amean[ccd.inc1 - 1:ccd.inc1 - 1 + veclen]
                     # XXX: fit_overscan() goes here. needs to be implemented
                     fitoscan = trimoscan * 1
+
                 # Set the CCD structure overscan parameters.
                 ccd.cors['overscan'] = True
                 ccd.cor = True
@@ -1126,7 +1129,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                            f"{ccd.biasl1}:{ccd.biasl2}] with " \
                            f"mean={fitoscan.mean():g}"
                 logstr = logstring(ostr, ccd.inim, verbose, logfd)
-                # XXX: this can't be what is actually put in the header right?
                 set_header_value(ccd.outim, instrument, 'overscan', logstr)
 
         # end set_overscan
@@ -1143,12 +1145,12 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                 else:
                     znscan = 1
 
-                cal = cal_image(ccd.inim, instrument, 'zero', nscan, calibs,
+                cal = cal_image(ccd.inim, instrument, 'zero', znscan, calibs,
                                 scancor)
                 # If no processing is desired print zero correction image
                 #  and return.
                 if noproc:
-                    ot = "  [TO BE DONE] Zero level correction image is {cal}."
+                    ot = f"  [TO BE DONE] Zero level correction image is {cal}."
                     print(ot)
                 else:
                     # Map the image and return on an error.
@@ -1160,11 +1162,12 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     zeroim = image_open(cal)
 
                     # Set the processing parameters in the CCD structure.
-                    znc = zeroim[0].data.shape[-1]
-                    znl = zeroim[0].data.shape[-2]
+                    znc = zeroim[0].data.shape[1]
+                    znl = zeroim[0].data.shape[0]
 
                     zdatasec = get_header_value(zeroim, instrument, 'datasec')
-                    zc1, zc2, zcs, zl1, zl2, zls = ccd_section(zdatasec, defaults=(1, znc, 1, 1, znl, 1))
+                    rr = ccd_section(zdatasec, defaults=(1, znc, 1, 1, znl, 1))
+                    zc1, zc2, zcs, zl1, zl2, zls = rr
 
                     if (zc1 < 1 or zc2 > znc or zcs != 1 or zl1 < 1 or
                             zl2 > znl or zls != 1):
@@ -1175,10 +1178,10 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     datac1 = zc1
                     datal1 = zl1
 
-                    # XXX: for zero/dark/flat/illum/fringe, need to make sure
-                    # datasec and ccdsec have the same size/shape.
                     zcsec = get_header_value(zeroim, instrument, 'ccdsec')
-                    zc1, zc2, zcs, zl1, zl2, zls = ccd_section(zcsec, defaults=(zc1, zc2, zcs, zl1, zl2, zls))
+                    rr = ccd_section(zcsec, defaults=(zc1, zc2, zcs,
+                                                      zl1, zl2, zls))
+                    zc1, zc2, zcs, zl1, zl2, zls = rr
 
                     if znc == 1:
                         zc1 = ccd.ccdc1
@@ -1212,9 +1215,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # Log the operation.
                     ostr = f"Zero level correction image is {cal}"
                     logstr = logstring(ostr, ccd.inim, verbose, logfd)
-                    # XXX: can't be what is actually put in the header right?
                     set_header_value(ccd.outim, instrument, 'zerocor', logstr)
-
             # end set_zero
 
         if ccdtype not in ['zero', 'dark']:
@@ -1228,7 +1229,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                 else:
                     znscan = 1
 
-                cal = cal_image(ccd.inim, instrument, 'dark', nscan, calibs,
+                cal = cal_image(ccd.inim, instrument, 'dark', znscan, calibs,
                                 scancor)
 
                 # If no processing is desired print dark count image and return.
@@ -1250,7 +1251,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     dnl = darkim[0].data.shape[-2]
 
                     ddatasec = get_header_value(darkim, instrument, 'datasec')
-                    dc1, dc2, dcs, dl1, dl2, dls = ccd_section(ddatasec, defaults=(1, dnc, 1, 1, dnl, 1))
+                    rr = ccd_section(ddatasec, defaults=(1, dnc, 1, 1, dnl, 1))
+                    dc1, dc2, dcs, dl1, dl2, dls = rr
 
                     if (dc1 < 1 or dc2 > dnc or dcs != 1 or dl1 < 1 or
                             dl2 > dnl or dls != 1):
@@ -1262,8 +1264,9 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     datal1 = dl1
 
                     dcsec = get_header_value(darkim, instrument, 'ccdsec')
-                    dc1, dc2, dcs, dl1, dl2, dls = ccd_section(dcsec, defaults=(dc1, dc2, dcs, dl1, dl2, dls))
-
+                    rr = ccd_section(dcsec, defaults=(dc1, dc2, dcs,
+                                                      dl1, dl2, dls))
+                    dc1, dc2, dcs, dl1, dl2, dls = rr
                     if dnc == 1:
                         dc1 = ccd.ccdc1
                         dc2 = ccd.ccdc2
@@ -1308,7 +1311,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     ostr = f"Dark count correction image is {cal} with " \
                            f"scale={ccd.darkscale:g}"
                     logstr = logstring(ostr, ccd.inim, verbose, logfd)
-                    # XXX: can't be what is actually put in the header right?
                     set_header_value(ccd.outim, instrument, 'darkcor', logstr)
 
             # end set_dark
@@ -1328,7 +1330,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                 else:
                     znscan = 1
 
-                cal = cal_image(ccd.inim, instrument, 'flat', nscan, calibs,
+                cal = cal_image(ccd.inim, instrument, 'flat', znscan, calibs,
                                 scancor)
 
                 # If no processing is desired print flat field image and return.
@@ -1350,7 +1352,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     fnl = flatim[0].data.shape[-2]
 
                     fdatasec = get_header_value(flatim, instrument, 'datasec')
-                    fc1, fc2, fcs, fl1, fl2, fls = ccd_section(fdatasec, defaults=(1, fnc, 1, 1, fnl, 1))
+                    rr = ccd_section(fdatasec, defaults=(1, fnc, 1, 1, fnl, 1))
+                    fc1, fc2, fcs, fl1, fl2, fls = rr
 
                     if (fc1 < 1 or fc2 > fnc or fcs != 1 or fl1 < 1 or
                             fl2 > fnl or fls != 1):
@@ -1362,7 +1365,9 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     datal1 = fl1
 
                     fcsec = get_header_value(flatim, instrument, 'ccdsec')
-                    fc1, fc2, fcs, fl1, fl2, fls = ccd_section(fcsec, defaults=(fc1, fc2, fcs, fl1, fl2, fls))
+                    rr = ccd_section(fcsec, defaults=(fc1, fc2, fcs,
+                                                      fl1, fl2, fls))
+                    fc1, fc2, fcs, fl1, fl2, fls = rr
 
                     if fnc == 1:
                         fc1 = ccd.ccdc1
@@ -1401,7 +1406,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     ostr = f"Flat field image is {cal} with " \
                            f"scale={ccd.flatscale:g}"
                     logstr = logstring(ostr, ccd.inim, verbose, logfd)
-                    # XXX: can't be what is actually put in the header right?
                     set_header_value(ccd.outim, instrument, 'flatcor', logstr)
             # end set_flat
 
@@ -1458,7 +1462,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     inl = illumim[0].data.shape[-2]
 
                     idatasec = get_header_value(illumim, instrument, 'datasec')
-                    ic1, ic2, ics, il1, il2, ils = ccd_section(idatasec, defaults=(1, inc, 1, 1, inl, 1))
+                    rr = ccd_section(idatasec, defaults=(1, inc, 1, 1, inl, 1))
+                    ic1, ic2, ics, il1, il2, ils = rr
 
                     if (ic1 < 1 or ic2 > inc or ics != 1 or il1 < 1 or
                             il2 > inl or ils != 1):
@@ -1470,7 +1475,9 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     datal1 = il1
 
                     icsec = get_header_value(illumim, instrument, 'ccdsec')
-                    ic1, ic2, ics, il1, il2, ils = ccd_section(icsec, defaults=(ic1, ic2, ics, il1, il2, ils))
+                    rr = ccd_section(icsec, defaults=(ic1, ic2, ics,
+                                                      il1, il2, ils))
+                    ic1, ic2, ics, il1, il2, ils = rr
 
                     ccdc1 = ic1
                     ccdl1 = il1
@@ -1498,7 +1505,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     ostr = f"Illumination image is {cal} with " \
                            f"scale={ccd.illumscale:g}"
                     logstr = logstring(ostr, ccd.inim, verbose, logfd)
-                    # XXX: can't be what is actually put in the header right?
                     set_header_value(ccd.outim, instrument, 'illumcor', logstr)
             # end set_illum
 
@@ -1526,7 +1532,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     fnl = fringeim[0].data.shape[-2]
 
                     fdatasec = get_header_value(fringeim, instrument, 'datasec')
-                    fc1, fc2, fcs, fl1, fl2, fls = ccd_section(fdatasec, defaults=(1, fnc, 1, 1, fnl, 1))
+                    rr = ccd_section(fdatasec, defaults=(1, fnc, 1, 1, fnl, 1))
+                    fc1, fc2, fcs, fl1, fl2, fls = rr
 
                     if (fc1 < 1 or fc2 > fnc or fcs != 1 or fl1 < 1 or
                             fl2 > fnl or fls != 1):
@@ -1538,7 +1545,9 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     datal1 = fl1
 
                     fcsec = get_header_value(fringeim, instrument, 'ccdsec')
-                    fc1, fc2, fcs, fl1, fl2, fls = ccd_section(fcsec, defaults=(fc1, fc2, fcs, fl1, fl2, fls))
+                    rr = ccd_section(fcsec, defaults=(fc1, fc2, fcs,
+                                                      fl1, fl2, fls))
+                    fc1, fc2, fcs, fl1, fl2, fls = rr
 
                     ccdc1 = fc1
                     ccdl1 = fl1
@@ -1576,7 +1585,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     ostr = f"Fringe image is {cal} with " \
                            f"scale={ccd.fringescale:g}"
                     logstr = logstring(ostr, ccd.inim, verbose, logfd)
-                    # XXX: can't be what is actually put in the header right?
                     set_header_value(ccd.outim, instrument, 'fringcor', logstr)
             # end set_fringe
 
@@ -1610,7 +1618,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                 ccd.biasl1 = max(1, ccd.biasl1 - ccd.triml1 + 1)
                 ccd.biasl2 = min(nl, ccd.biasl2 - ccd.triml1 + 1)
                 if ccd.biasc1 <= ccd.biasc2 and ccd.biasl1 <= ccd.biasl2:
-                    hstr = f'[{ccd.biasc1}:{ccd.biasc2},{ccd.biasl1}:{ccd.biasl2}]'
+                    hstr = f'[{ccd.biasc1}:{ccd.biasc2},' \
+                        f'{ccd.biasl1}:{ccd.biasl2}]'
                     set_header_value(ccd.outim, instrument, 'biassec', hstr)
                 else:
                     delete_header_value(ccd.outim, instrument, 'biassec')
@@ -1671,7 +1680,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     nl = rim[0].data.shape[-2]
 
                     rdatasec = get_header_value(rim, instrument, 'datasec')
-                    inc1, inc2, incs, inl1, inl2, inls = ccd_section(rdatasec, defaults=(1, nc, 1, 1, nl, 1))
+                    rr = ccd_section(rdatasec, defaults=(1, nc, 1, 1, nl, 1))
+                    inc1, inc2, incs, inl1, inl2, inls = rr
 
                     if (inc1 < 1 or inc2 > nc or inl1 < 1 or inl2 > nl or
                             incs != 1 or inl2 != 1):
@@ -1679,8 +1689,10 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
                     # The default ccd section is the data section.
                     rccdsec = get_header_value(rim, instrument, 'ccdsec')
-                    (ccdc1, ccdc2, ccdcs,
-                     ccdl1, ccdl2, ccdls) = ccd_section(rccdsec, defaults=(inc1, inc2, incs, inl1, inl2, inls))
+                    rr = ccd_section(rccdsec, defaults=(inc1, inc2, incs,
+                                                        inl1, inl2, inls))
+                    ccdc1, ccdc2, ccdcs, ccdl1, ccdl2, ccdls = rr
+
                     if ccdcs != 1 or ccdls != 1:
                         raise Exception('Error in CCDSEC parameter')
                     if (inc2 - inc1 != ccdc2 - ccdc1 or
