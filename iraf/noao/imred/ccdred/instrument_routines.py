@@ -76,9 +76,10 @@ class Instrument(object):
                            'gain': None, 'illumcor': None, 'imagetyp': None,
                            'mkfringe': None, 'mkillum': None, 'ncombine': None,
                            'nscanrow': None, 'overscan': None, 'rdnoise': None,
-                           'readcor': None, 'snoise': None, 'subset': None,
-                           'trim': None, 'trimsec': None, 'zerocor': None,
-                           'origin': None, 'date': None, 'iraf-tlm': None}
+                           'readcor': None, 'scancor': None, 'snoise': None,
+                           'subset': None, 'trim': None, 'trimsec': None,
+                           'zerocor': None, 'origin': None, 'date': None,
+                           'iraf-tlm': None}
         # Each of these parameters can have a default value, but we
         # start off with all None.
         self.defaults = copy.deepcopy(self.parameters)

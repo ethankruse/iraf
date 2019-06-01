@@ -532,6 +532,69 @@ def already_processed(image, instrument, key):
     return inp != default
 
 
+def ccdcheck(image, instrument, ccdtype, flags):
+    """
+    Check if a calibration image needs further processing before being used.
+
+    Parameters
+    ----------
+    image : IRAF image
+    instrument : Instrument
+    ccdtype : str
+    flags : dict
+
+    Returns
+    -------
+    bool
+
+    """
+    if flags['trim'] and not already_processed(image, instrument, 'trim'):
+        return True
+    if flags['fixpix'] and not already_processed(image, instrument, 'fixpix'):
+        return True
+    if (flags['overscan'] and
+            not already_processed(image, instrument, 'overscan')):
+        return True
+
+    if ccdtype == 'zero':
+        if flags['readcor'] and not already_processed(image, instrument,
+                                                      'readcor'):
+            return True
+    elif flags['zerocor'] and not already_processed(image, instrument,
+                                                    'zerocor'):
+        return True
+
+    if ccdtype not in ['zero', 'dark']:
+        if flags['darkcor'] and not already_processed(image, instrument,
+                                                      'darkcor'):
+            return True
+
+    if ccdtype == 'flat':
+        if flags['scancor'] and not already_processed(image, instrument,
+                                                      'scancor'):
+            return True
+        # XXX: if the ccdmean hasn't been done or is out of date.
+
+    if ccdtype == 'illum':
+        if flags['flatcor'] and not already_processed(image, instrument,
+                                                      'flatcor'):
+            return True
+        # XXX: needs the ccdmean to be there
+
+    if ccdtype not in ['zero', 'dark', 'flat', 'illum']:
+        if flags['flatcor'] and not already_processed(image, instrument,
+                                                      'flatcor'):
+            return True
+        if flags['illumcor'] and not already_processed(image, instrument,
+                                                       'illumcor'):
+            return True
+        if flags['fringecor'] and not already_processed(image, instrument,
+                                                        'fringcor'):
+            return True
+
+    return False
+
+
 def process(ccd):
     """
     Do the actual processing that has been set up by ccdproc.
@@ -742,7 +805,14 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     ----------------
 
 
+    Differences from IRAF
+    ---------------------
+
+
     """
+    # XXX: at the end, uncomment this and make sure all inputs are being used
+    flags = locals()
+
     inputs = file_handler(images)
     # can't assume the output files exist
     outputs = file_handler(output, exists=False)
@@ -1159,7 +1229,14 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # from the unscanned zero.
                     # XXX: this bit is more complicated. can call ccdproc
                     # recursively to create this image.
-                    zeroim = image_open(cal)
+                    try:
+                        zeroim = image_open(cal)
+                    except Exception:
+                        cal = cal_image(ccd.inim, instrument, 'zero', 1,
+                                        calibs, scancor)
+                        zeroim = image_open(cal)
+
+
 
                     # Set the processing parameters in the CCD structure.
                     znc = zeroim[0].data.shape[1]

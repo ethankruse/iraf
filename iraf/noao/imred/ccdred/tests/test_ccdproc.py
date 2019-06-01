@@ -505,6 +505,113 @@ defaultargs = {'output': None, 'ccdtype': 'object', 'noproc': False,
                'pixeltype': "real", 'logfile': None, 'verbose': False}
 
 
+@pytest.mark.parametrize("imtype", iraf.ccdred._imagetypes)
+def test_ccdcheck(tmpdir, imtype):
+    basedir = str(tmpdir)
+
+    inst = iraf.ccdred.Instrument()
+
+    flags = copy.deepcopy(defaultargs)
+
+    # create simple file for testing
+    nx = 50
+    ny = 90
+    baseval = 100
+    arr = np.ones((nx, ny), dtype=float) * baseval
+    basehdu = fits.PrimaryHDU(arr)
+
+    inim = os.path.join(basedir, f'testimg.fits')
+    basehdu.writeto(inim, overwrite=True)
+
+    inopen = iraf.sys.image_open(inim)
+
+    # everything should be false
+    assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+
+    # check trim
+    flags['trim'] = True
+    assert ccdr.ccdcheck(inopen, inst, imtype, flags)
+    inopen[0].header['trim'] = 'foo'
+    assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+
+    # check fixpix
+    flags['fixpix'] = True
+    assert ccdr.ccdcheck(inopen, inst, imtype, flags)
+    inopen[0].header['fixpix'] = 'foo'
+    assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+
+    # check overscan
+    flags['overscan'] = True
+    assert ccdr.ccdcheck(inopen, inst, imtype, flags)
+    inopen[0].header['overscan'] = 'foo'
+    assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+
+    # check readcor
+    flags['readcor'] = True
+    if imtype in ['zero']:
+        assert ccdr.ccdcheck(inopen, inst, imtype, flags)
+    else:
+        assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+    inopen[0].header['readcor'] = 'foo'
+    assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+
+    # check zerocor
+    flags['zerocor'] = True
+    if imtype not in ['zero']:
+        assert ccdr.ccdcheck(inopen, inst, imtype, flags)
+    else:
+        assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+    inopen[0].header['zerocor'] = 'foo'
+    assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+
+    # check darkcor
+    flags['darkcor'] = True
+    if imtype not in ['zero', 'dark']:
+        assert ccdr.ccdcheck(inopen, inst, imtype, flags)
+    else:
+        assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+    inopen[0].header['darkcor'] = 'foo'
+    assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+
+    # check scancor
+    flags['scancor'] = True
+    if imtype in ['flat']:
+        assert ccdr.ccdcheck(inopen, inst, imtype, flags)
+    else:
+        assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+    inopen[0].header['scancor'] = 'foo'
+    assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+
+    # check flatcor
+    flags['flatcor'] = True
+    if imtype not in ['zero', 'dark', 'flat']:
+        assert ccdr.ccdcheck(inopen, inst, imtype, flags)
+    else:
+        assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+    inopen[0].header['flatcor'] = 'foo'
+    assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+
+    # check illumcor
+    flags['illumcor'] = True
+    if imtype not in ['zero', 'dark', 'flat', 'illum']:
+        assert ccdr.ccdcheck(inopen, inst, imtype, flags)
+    else:
+        assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+    inopen[0].header['illumcor'] = 'foo'
+    assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+
+    # check fringecor
+    flags['fringecor'] = True
+    if imtype not in ['zero', 'dark', 'flat', 'illum']:
+        assert ccdr.ccdcheck(inopen, inst, imtype, flags)
+    else:
+        assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+    inopen[0].header['fringcor'] = 'foo'
+    assert not ccdr.ccdcheck(inopen, inst, imtype, flags)
+
+    inopen.close()
+
+
 def test_basics(tmpdir):
     basedir = str(tmpdir)
     # create some simple files for testing
