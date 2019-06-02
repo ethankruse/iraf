@@ -9,6 +9,7 @@ from iraf.sys import image_open
 import tempfile
 import datetime
 import time
+import copy
 
 __all__ = ['ccdproc']
 
@@ -1227,16 +1228,31 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # Process the zero image if necessary.
                     # If nscan > 1 then the zero may not yet exist so create it
                     # from the unscanned zero.
-                    # XXX: this bit is more complicated. can call ccdproc
-                    # recursively to create this image.
                     try:
                         zeroim = image_open(cal)
                     except Exception:
-                        cal = cal_image(ccd.inim, instrument, 'zero', 1,
-                                        calibs, scancor)
+                        scancal = cal_image(ccd.inim, instrument, 'zero', 1,
+                                            calibs, scancor)
+                        scanim = image_open(scancal)
+                        if ccdcheck(scanim, instrument, 'zero', flags):
+                            scanim.close()
+                            calflags = copy.deepcopy(flags)
+                            calflags['images'] = scancal
+                            calflags['output'] = None
+                            calflags['ccdtype'] = 'zero'
+                            ccdproc(**calflags)
+                        # XXX: calls scancor() Need to write that.
+                        # converts from scancal to cal.
                         zeroim = image_open(cal)
 
-
+                    if ccdcheck(zeroim, instrument, 'zero', flags):
+                        zeroim.close()
+                        calflags = copy.deepcopy(flags)
+                        calflags['images'] = cal
+                        calflags['output'] = None
+                        calflags['ccdtype'] = 'zero'
+                        ccdproc(**calflags)
+                        zeroim = image_open(cal)
 
                     # Set the processing parameters in the CCD structure.
                     znc = zeroim[0].data.shape[1]
@@ -1301,12 +1317,12 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                                                  'darkcor'):
                 # Get the dark count correction image name.
                 if scancor:
-                    znscan = ccdnscan(ccd.inim, instrument, ccdtype, scantype,
+                    dnscan = ccdnscan(ccd.inim, instrument, ccdtype, scantype,
                                       nscan, scancor)
                 else:
-                    znscan = 1
+                    dnscan = 1
 
-                cal = cal_image(ccd.inim, instrument, 'dark', znscan, calibs,
+                cal = cal_image(ccd.inim, instrument, 'dark', dnscan, calibs,
                                 scancor)
 
                 # If no processing is desired print dark count image and return.
@@ -1318,14 +1334,35 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # Process the dark count image if necessary.
                     # If nscan > 1 then the dark may not yet exist so create it
                     # from the unscanned dark.
+                    try:
+                        darkim = image_open(cal)
+                    except Exception:
+                        scancal = cal_image(ccd.inim, instrument, 'dark', 1,
+                                            calibs, scancor)
+                        scanim = image_open(scancal)
+                        if ccdcheck(scanim, instrument, 'dark', flags):
+                            scanim.close()
+                            calflags = copy.deepcopy(flags)
+                            calflags['images'] = scancal
+                            calflags['output'] = None
+                            calflags['ccdtype'] = 'dark'
+                            ccdproc(**calflags)
+                        # XXX: calls scancor() Need to write that.
+                        # converts from scancal to cal.
+                        darkim = image_open(cal)
 
-                    # XXX: this bit is more complicated. can call ccdproc
-                    # recursively to create this image.
-                    darkim = image_open(cal)
+                    if ccdcheck(darkim, instrument, 'dark', flags):
+                        darkim.close()
+                        calflags = copy.deepcopy(flags)
+                        calflags['images'] = cal
+                        calflags['output'] = None
+                        calflags['ccdtype'] = 'dark'
+                        ccdproc(**calflags)
+                        darkim = image_open(cal)
 
                     # Set the processing parameters in the CCD structure.
-                    dnc = darkim[0].data.shape[-1]
-                    dnl = darkim[0].data.shape[-2]
+                    dnc = darkim[0].data.shape[1]
+                    dnl = darkim[0].data.shape[0]
 
                     ddatasec = get_header_value(darkim, instrument, 'datasec')
                     rr = ccd_section(ddatasec, defaults=(1, dnc, 1, 1, dnl, 1))
@@ -1402,12 +1439,12 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                                                  'flatcor'):
                 # Get the flat field correction image name.
                 if scancor:
-                    znscan = ccdnscan(ccd.inim, instrument, ccdtype, scantype,
-                                      nscan, scancor)
+                    flnscan = ccdnscan(ccd.inim, instrument, ccdtype, scantype,
+                                       nscan, scancor)
                 else:
-                    znscan = 1
+                    flnscan = 1
 
-                cal = cal_image(ccd.inim, instrument, 'flat', znscan, calibs,
+                cal = cal_image(ccd.inim, instrument, 'flat', flnscan, calibs,
                                 scancor)
 
                 # If no processing is desired print flat field image and return.
@@ -1419,14 +1456,35 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # Process the flat field image if necessary.
                     # If nscan > 1 then the flat field may not yet exist
                     # so create it from the unscanned flat field.
+                    try:
+                        flatim = image_open(cal)
+                    except Exception:
+                        scancal = cal_image(ccd.inim, instrument, 'flat', 1,
+                                            calibs, scancor)
+                        scanim = image_open(scancal)
+                        if ccdcheck(scanim, instrument, 'flat', flags):
+                            scanim.close()
+                            calflags = copy.deepcopy(flags)
+                            calflags['images'] = scancal
+                            calflags['output'] = None
+                            calflags['ccdtype'] = 'flat'
+                            ccdproc(**calflags)
+                        # XXX: calls scancor() Need to write that.
+                        # converts from scancal to cal.
+                        flatim = image_open(cal)
 
-                    # XXX: this bit is more complicated. can call ccdproc
-                    # recursively to create this image.
-                    flatim = image_open(cal)
+                    if ccdcheck(flatim, instrument, 'flat', flags):
+                        flatim.close()
+                        calflags = copy.deepcopy(flags)
+                        calflags['images'] = cal
+                        calflags['output'] = None
+                        calflags['ccdtype'] = 'flat'
+                        ccdproc(**calflags)
+                        flatim = image_open(cal)
 
                     # Set the processing parameters in the CCD structure.
-                    fnc = flatim[0].data.shape[-1]
-                    fnl = flatim[0].data.shape[-2]
+                    fnc = flatim[0].data.shape[1]
+                    fnl = flatim[0].data.shape[0]
 
                     fdatasec = get_header_value(flatim, instrument, 'datasec')
                     rr = ccd_section(fdatasec, defaults=(1, fnc, 1, 1, fnl, 1))
@@ -1858,6 +1916,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                                      int(time.time()))
             meanim.close()
             # end ccdmean
+
+    # XXX: close all calibration images
 
     if logfd is not None:
         logfd.close()
