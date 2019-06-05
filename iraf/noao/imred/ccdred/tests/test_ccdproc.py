@@ -893,4 +893,4 @@ def test_zerocor(tmpdir):
 # some tests to think about:
 # 1D and 3D images
 # 1 vs 0 indexing
-
+# print notes/logs when doing recursive ccdproc?

@@ -7,7 +7,7 @@ import numpy as np
 import os
 from iraf.sys import image_open
 import tempfile
-import datetime
+from datetime import datetime
 import time
 import copy
 
@@ -476,7 +476,7 @@ def cal_image(hdulist, instrument, ccdtype, nscan, calibs, scancor):
     return useim
 
 
-def logstring(instring, inim, verbose, logfd):
+def logstring(instring, inim, verbose, logfile):
     """
     Meant to be the same as calling timelog() then ccdlog() in IRAF's ccdproc.
     These prepend the image name and time to the input string.
@@ -486,14 +486,14 @@ def logstring(instring, inim, verbose, logfd):
     instring : str
     inim : IRAF image
     verbose : bool
-    logfd : FileIO or None
+    logfile : str or None
 
     Returns
     -------
     str
     """
     # the timelog() part
-    now = datetime.datetime.now()
+    now = datetime.now()
     now = now.strftime('%Y-%m-%d %H:%M:%S')
     ostr = f'{now} {instring}'
 
@@ -501,8 +501,9 @@ def logstring(instring, inim, verbose, logfd):
     printstr = f'{inim.filename()}: {ostr}'
     if verbose:
         print(printstr)
-    if logfd is not None:
-        logfd.write(printstr + '\n')
+    if logfile is not None:
+        with open(logfile, 'a') as logfd:
+            logfd.write(printstr + '\n')
     return ostr
 
 
@@ -811,7 +812,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
 
     """
-    # XXX: at the end, uncomment this and make sure all inputs are being used
+    # XXX: at the end, comment this and make sure all inputs are being used
     flags = locals()
 
     inputs = file_handler(images)
@@ -869,12 +870,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     # end of cal_open
 
     origccdtype = ccdtype
-
-    # Open the log file.
-    # XXX: open this somewhere with proper error handling
-    logfd = None
-    if logfile is not None:
-        logfd = open(logfile, 'a')
 
     # Process each image.
     for imct, image in enumerate(inputs):
@@ -1085,7 +1080,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                 ostr = f"Trim data section is [{ccd.trimc1:d}:{ccd.trimc2:d}," \
                        f"{ccd.triml1:d}:{ccd.triml2:d}]"
 
-                logstr = logstring(ostr, ccd.inim, verbose, logfd)
+                logstr = logstring(ostr, ccd.inim, verbose, logfile)
                 set_header_value(ccd.outim, instrument, 'trim', logstr)
 
         # end set_trim
@@ -1120,7 +1115,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
                 # Log the operation.
                 ostr = f"Bad pixel file is {fx}"
-                logstr = logstring(ostr, ccd.inim, verbose, logfd)
+                logstr = logstring(ostr, ccd.inim, verbose, logfile)
                 set_header_value(ccd.outim, instrument, 'fixpix', logstr)
             """
             raise Exception("fixpix not yet implemented.")
@@ -1199,7 +1194,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     ostr = f"Overscan section is [{ccd.biasc1}:{ccd.biasc2}," \
                            f"{ccd.biasl1}:{ccd.biasl2}] with " \
                            f"mean={fitoscan.mean():g}"
-                logstr = logstring(ostr, ccd.inim, verbose, logfd)
+                logstr = logstring(ostr, ccd.inim, verbose, logfile)
                 set_header_value(ccd.outim, instrument, 'overscan', logstr)
 
         # end set_overscan
@@ -1307,7 +1302,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
                     # Log the operation.
                     ostr = f"Zero level correction image is {cal}"
-                    logstr = logstring(ostr, ccd.inim, verbose, logfd)
+                    logstr = logstring(ostr, ccd.inim, verbose, logfile)
                     set_header_value(ccd.outim, instrument, 'zerocor', logstr)
             # end set_zero
 
@@ -1424,7 +1419,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # Log the operation.
                     ostr = f"Dark count correction image is {cal} with " \
                            f"scale={ccd.darkscale:g}"
-                    logstr = logstring(ostr, ccd.inim, verbose, logfd)
+                    logstr = logstring(ostr, ccd.inim, verbose, logfile)
                     set_header_value(ccd.outim, instrument, 'darkcor', logstr)
 
             # end set_dark
@@ -1540,7 +1535,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # Log the operation.
                     ostr = f"Flat field image is {cal} with " \
                            f"scale={ccd.flatscale:g}"
-                    logstr = logstring(ostr, ccd.inim, verbose, logfd)
+                    logstr = logstring(ostr, ccd.inim, verbose, logfile)
                     set_header_value(ccd.outim, instrument, 'flatcor', logstr)
             # end set_flat
 
@@ -1569,14 +1564,26 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     iscale = get_header_value(illumim, instrument, 'ccdmean')
                     ccd.illumscale = iscale
 
+                    modtime = os.path.getmtime(cal)
+                    epoch = datetime(1980, 1, 1, 0, 0).timestamp()
+                    modtime -= epoch
+                    modtime = int(modtime)
+
+                    # NOTE: ccdmean opens a file under READ_WRITE mode.
+                    # This appears to mess with the image modification time.
+                    # It sets it as an integer value, but on my computer seems
+                    # to set the modification time 3588 seconds earlier than
+                    # the system time. ??? I have no idea where this comes from.
+                    # has something to do with IM_MTIME/IM_SVMTIME?
+                    # I saw somewhere it was adding 4 seconds to times, so maybe
+                    # it's 4*3 seconds ahead then an hour behind for some
+                    # reason?
                     itime = get_header_value(illumim, instrument, 'ccdmeant')
                     if itime is None:
-                        # XXX: itime = IM_MTIME(im)
-                        # supposed to be time of last modification?
-                        pass
+                        itime = modtime
 
-                    # XXX: itime < IM_MTIME(im)
-                    if iscale is None or itime < 0:
+                    # XXX: call ccdmean
+                    if iscale is None or itime < modtime:
                         pass
 
                     iscale = get_header_value(illumim, instrument, 'ccdmean')
@@ -1593,8 +1600,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     ccd.illumscale = iscale
 
                     # Set the processing parameters in the CCD structure.
-                    inc = illumim[0].data.shape[-1]
-                    inl = illumim[0].data.shape[-2]
+                    inc = illumim[0].data.shape[1]
+                    inl = illumim[0].data.shape[0]
 
                     idatasec = get_header_value(illumim, instrument, 'datasec')
                     rr = ccd_section(idatasec, defaults=(1, inc, 1, 1, inl, 1))
@@ -1639,7 +1646,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # Log the operation.
                     ostr = f"Illumination image is {cal} with " \
                            f"scale={ccd.illumscale:g}"
-                    logstr = logstring(ostr, ccd.inim, verbose, logfd)
+                    logstr = logstring(ostr, ccd.inim, verbose, logfile)
                     set_header_value(ccd.outim, instrument, 'illumcor', logstr)
             # end set_illum
 
@@ -1663,8 +1670,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                         raise Exception(estr)
 
                     # Set the processing parameters in the CCD structure.
-                    fnc = fringeim[0].data.shape[-1]
-                    fnl = fringeim[0].data.shape[-2]
+                    fnc = fringeim[0].data.shape[1]
+                    fnl = fringeim[0].data.shape[0]
 
                     fdatasec = get_header_value(fringeim, instrument, 'datasec')
                     rr = ccd_section(fdatasec, defaults=(1, fnc, 1, 1, fnl, 1))
@@ -1719,7 +1726,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # Log the operation.
                     ostr = f"Fringe image is {cal} with " \
                            f"scale={ccd.fringescale:g}"
-                    logstr = logstring(ostr, ccd.inim, verbose, logfd)
+                    logstr = logstring(ostr, ccd.inim, verbose, logfile)
                     set_header_value(ccd.outim, instrument, 'fringcor', logstr)
             # end set_fringe
 
@@ -1767,7 +1774,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                                  int(time.time()))
             # Mark image as processed.
             # timelog()
-            now = datetime.datetime.now()
+            now = datetime.now()
             now = now.strftime('%Y-%m-%d %H:%M:%S')
             ostr = f'{now} CCD processing done'
             set_header_value(ccd.outim, instrument, 'ccdproc', ostr)
@@ -1874,7 +1881,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     newout = image_open(readim, mode='update')
                     # Log the operation.
                     ostr = "Converted to readout format"
-                    logstr = logstring(ostr, newout, verbose, logfd)
+                    logstr = logstring(ostr, newout, verbose, logfile)
                     # XXX: can't be what is actually put in the header right?
                     set_header_value(newout, instrument, 'readcor', logstr)
 
@@ -1911,13 +1918,14 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # Compute and record the mean.
                     mean = meanim[0].data.mean()
 
+                    # IRAF uses 1/1/1980 as its epoch
+                    diff = datetime.now() - datetime(1980, 1, 1)
                     set_header_value(meanim, instrument, 'ccdmean', mean)
                     set_header_value(meanim, instrument, 'ccdmeant',
-                                     int(time.time()))
+                                     int(diff.total_seconds()),
+                                     comment="Time mean was computed "
+                                             "(seconds since 1/1/1980)")
             meanim.close()
             # end ccdmean
 
     # XXX: close all calibration images
-
-    if logfd is not None:
-        logfd.close()
