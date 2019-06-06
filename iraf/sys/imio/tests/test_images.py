@@ -11,7 +11,7 @@ def test_image_open_close_fits(tmpdir):
 
     # test the file doesn't exist and this raises an error
     assert not os.path.exists(inim)
-    with pytest.raises(Exception):
+    with pytest.raises(OSError):
         iraf.sys.image_open(inim)
 
     # test opening a FITS file
@@ -57,5 +57,5 @@ def test_image_open_close_fits(tmpdir):
     # test a text file that shouldn't be able to be opened
     with open(inim, 'w') as ff:
         ff.write('blah\n')
-    with pytest.raises(Exception):
+    with pytest.raises(OSError):
         iraf.sys.image_open(inim)

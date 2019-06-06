@@ -15,7 +15,7 @@ def image_open(image, mode='readonly'):
     Always returns a context manager, so can be used in 'with ... as:'
     blocks.
 
-    Will always return an image object. Raises an Exception if the
+    Will always return an image object. Raises an OSError if the
     image cannot be opened.
 
     Parameters
@@ -31,7 +31,7 @@ def image_open(image, mode='readonly'):
 
     Raises
     ------
-    Exception
+    OSError
         If the input file cannot be opened or understood.
 
     """
@@ -42,7 +42,7 @@ def image_open(image, mode='readonly'):
         hdulist = fits.open(image, mode=mode)
         ftype = 'fits'
     # catch a FITS problem and move on to other file types
-    except IOError:
+    except OSError:
         pass
 
     # if we've tried all file types and found one, use it;
@@ -50,6 +50,6 @@ def image_open(image, mode='readonly'):
     if hdulist is not None:
         hdulist.__filetype__ = ftype
     else:
-        raise Exception(f'Unable to open image {image}')
+        raise OSError(f'Unable to open image {image}')
 
     return hdulist

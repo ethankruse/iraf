@@ -197,12 +197,12 @@ def ccd_section(section, defaults=(None, None, 1, None, None, 1)):
 
     Raises
     ------
-    Exception
+    ValueError
         If the input section cannot be parsed.
 
     """
     if len(defaults) != 6:
-        raise Exception('defaults given to ccd_section must have length 6')
+        raise IndexError('defaults given to ccd_section must have length 6')
 
     if section is None:
         return defaults
@@ -212,14 +212,14 @@ def ccd_section(section, defaults=(None, None, 1, None, None, 1)):
         return defaults
 
     if section[0] != '[' or section[-1] != ']':
-        raise Exception(f"Error in 2D image section specification {section}")
+        raise ValueError(f"Error in 2D image section specification {section}")
 
     osection = section
     # remove the brackets
     section = section[1:-1]
     dims = section.split(',')
     if len(dims) != 2:
-        raise Exception(f"Error in 2D image section specification {osection}")
+        raise ValueError(f"Error in 2D image section specification {osection}")
 
     ret = []
     defs = [defaults[:3], defaults[3:]]
@@ -254,7 +254,7 @@ def ccd_section(section, defaults=(None, None, 1, None, None, 1)):
                 if len(split[2].strip()) > 0:
                     step = int(split[2])
         else:
-            raise Exception(
+            raise ValueError(
                 f"Error in 2D image section specification {osection}")
         ret.append(start)
         ret.append(end)
@@ -303,7 +303,7 @@ def ccdnscan(hdulist, instrument, ccdtype, scantype, nscan,
                 else:
                     retscan = 1
             else:
-                raise Exception(f"Unrecognized scantype: '{scantype}'")
+                raise ValueError(f"Unrecognized scantype: '{scantype}'")
     return retscan
 
 

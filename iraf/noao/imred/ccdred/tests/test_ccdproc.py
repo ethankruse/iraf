@@ -60,11 +60,11 @@ def test_ccd_section():
             ys == 3)
 
     # test bad braces
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         ccdr.ccd_section('[:,:')
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         ccdr.ccd_section(':,:]')
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         ccdr.ccd_section('1:2,5:34')
 
     # test non integer input
@@ -83,17 +83,17 @@ def test_ccd_section():
         ccdr.ccd_section('[1:3:2.,:]')
 
     # test wrong dimensions
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         ccdr.ccd_section('[1:5]')
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         ccdr.ccd_section('[1:5, 1:5, 1:5]')
 
     # test bad inputs in a dimension
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         ccdr.ccd_section('[1:3:4:5, :]')
 
     # test bad size of defaults
-    with pytest.raises(Exception):
+    with pytest.raises(IndexError):
         ccdr.ccd_section('[:,:]', defaults=[1, 2, 3])
 
 
@@ -131,7 +131,7 @@ def test_ccdnscan(tmpdir, listtype):
 
     # check failures
     if listtype not in ['zero', 'dark', 'flat', 'illum', 'fringe']:
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             ccdr.ccdnscan(hdu, inst, listtype, 'noscan', 3, True)
 
     # test the 4 combos of scantype and scancor
@@ -189,7 +189,7 @@ def test_cal_list(tmpdir, listtype):
 
     # test files not found
     foo = os.path.join(basedir, 'foo.fits')
-    with pytest.raises(Exception):
+    with pytest.raises(OSError):
         ccdr.cal_list([foo], listtype, inst, calimages, nscans, caltypes,
                       subsets, scantype, nscan, scancor)
 
@@ -423,8 +423,7 @@ def test_logstring(tmpdir, capsys):
 
     # check log files and verbose output
     log = os.path.join(basedir, f'log.txt')
-    with open(log, 'w') as ff:
-        retstr = ccdr.logstring(instr, inopen, True, ff)
+    retstr = ccdr.logstring(instr, inopen, True, log)
     now = datetime.datetime.now()
 
     # make sure we haven't changed the return string while printing stuff

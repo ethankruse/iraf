@@ -38,7 +38,7 @@ def ccdtypes(hdulist, instrument):
     "|object|zero|dark|flat|illum|fringe|other|comp|none|unknown|"
     """
     if not isinstance(instrument, _Instrument):
-        raise Exception('ccdtypes not given an Instrument object.')
+        raise TypeError('ccdtypes not given an Instrument object.')
 
     typ = get_header_value(hdulist, instrument, 'imagetyp')
     return instrument.get_image_type(typ)
@@ -169,7 +169,7 @@ def ccdsubset(hdulist, instrument):
     """
 
     if not isinstance(instrument, _Instrument):
-        raise Exception('ccdsubset not given an Instrument object.')
+        raise TypeError('ccdsubset not given an Instrument object.')
 
     subsetstr = get_header_value(hdulist, instrument, 'subset')
 
@@ -280,7 +280,7 @@ def file_new_copy(outpath, in_header, mode='NEW_COPY', overwrite=True,
         Translations for the header values added as part of the copy.
     """
     if mode != 'NEW_COPY':
-        raise Exception(f'Mode "{mode}" of file_new_copy not supported.')
+        raise ValueError(f'Mode "{mode}" of file_new_copy not supported.')
 
     outpath = _os.path.expanduser(outpath)
     # NOTE: IRAF appears to put these three header values (origin, date,
@@ -306,8 +306,8 @@ def file_new_copy(outpath, in_header, mode='NEW_COPY', overwrite=True,
         set_header_value(hdulist, instrument, 'iraf-tlm', dtval, lmcomm)
         hdulist.close()
     else:
-        raise Exception(f'file_new_copy of file type {ftype} not yet '
-                        f'implemented.')
+        raise NotImplementedError(f'file_new_copy of file type {ftype} not yet '
+                                  f'implemented.')
     return
 
 
@@ -332,7 +332,7 @@ def type_max(type1, type2):
 
     Raises
     ------
-    Exception
+    TypeError
         When the two inputs cannot be understood or safely converted in either
         direction.
     """
@@ -361,4 +361,4 @@ def type_max(type1, type2):
                 return np.dtype(iint)
     """
     errstr = "Unrecognized dtype or cannot safely cast between {0} and {1}."
-    raise Exception(errstr.format(type1, type2))
+    raise TypeError(errstr.format(type1, type2))

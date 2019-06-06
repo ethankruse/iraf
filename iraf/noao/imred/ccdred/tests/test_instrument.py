@@ -84,29 +84,29 @@ def test_instrument_translation_file(tmpdir):
     # break it with wrong numbers of values per row
     with open(tfile, 'w') as ff:
         ff.write('subset \n')
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         iraf.ccdred.Instrument(tfile)
     with open(tfile, 'w') as ff:
         ff.write('subset filter default bogus\n')
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         iraf.ccdred.Instrument(tfile)
 
     # invalid parameter name
     with open(tfile, 'w') as ff:
         ff.write('subsets filter \n')
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         iraf.ccdred.Instrument(tfile)
 
     # nonsense in both/3 values
     with open(tfile, 'w') as ff:
         ff.write('foo filter default \n')
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         iraf.ccdred.Instrument(tfile)
 
     # try to add a custom image type with a 'default value'
     with open(tfile, 'w') as ff:
         ff.write('foo dark default \n')
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         iraf.ccdred.Instrument(tfile)
 
     # check comments at end of line
@@ -167,7 +167,7 @@ def test_instrument_get_image_type_ccdtypes(tmpdir):
     hdu.header['itypo'] = 'foo'
     hdu.writeto(fname, overwrite=True)
 
-    with pytest.raises(Exception):
+    with pytest.raises(TypeError):
         with iraf.sys.image_open(fname) as ff:
             iraf.ccdred.utils.ccdtypes(ff, 'notinstrument')
 

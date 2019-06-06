@@ -52,7 +52,7 @@ class Instrument(object):
 
     Raises
     ------
-    Exception
+    ValueError
         When a line in the translation file cannot be interpreted.
 
     """
@@ -108,9 +108,9 @@ class Instrument(object):
                     # translations can only be 2 columns or 3 with a default
                     # value
                     if len(row) < 2 or len(row) > 3:
-                        raise Exception(f"Row '{row}' in instrument "
-                                        f"translation file {translation_file} "
-                                        f"does not have 2 or 3 values.")
+                        raise ValueError(f"Row '{row}' in instrument "
+                                         f"translation file {translation_file} "
+                                         f"does not have 2 or 3 values.")
                     # change the value of this parameter and its defaults
                     # if present
                     if row[0] in self.parameters:
@@ -123,9 +123,9 @@ class Instrument(object):
                         self.image_types[row[0]] = row[1]
                     # not sure what to do with this row
                     else:
-                        raise Exception(f"Unrecognized row in translation file "
-                                        f"{translation_file}.\nNot sure what "
-                                        f"to do with '{row}'.")
+                        raise ValueError(f"Unrecognized row in translation file"
+                                         f" {translation_file}.\nNot sure what "
+                                         f"to do with '{row}'.")
 
     def translate(self, key):
         """

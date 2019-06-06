@@ -166,7 +166,7 @@ def test_ccdsubset(tmpdir):
     hdu.header['filter'] = 'blue filter! @#%_.asdf'
     hdu.writeto(fname, overwrite=True)
 
-    with pytest.raises(Exception):
+    with pytest.raises(TypeError):
         with iraf.sys.image_open(fname, mode='update') as ff:
             iraf.ccdred.utils.ccdsubset(ff, 'notinstrument')
 
@@ -206,11 +206,11 @@ def test_file_new_copy(tmpdir):
 
     # test failures
     with iraf.sys.image_open(fname, mode='update') as ff:
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             iraf.ccdred.utils.file_new_copy(outf, ff, mode='readonly',
                                             instrument=inst, overwrite=False)
         ff.__filetype__ = 'txt'
-        with pytest.raises(Exception):
+        with pytest.raises(NotImplementedError):
             iraf.ccdred.utils.file_new_copy(outf, ff, mode='NEW_COPY',
                                             instrument=inst, overwrite=False)
 
@@ -277,5 +277,5 @@ def test_type_max():
     assert iraf.ccdred.utils.type_max(np.uint16, np.int32) == np.int32
     assert iraf.ccdred.utils.type_max(np.float32, np.complex64) == np.complex64
 
-    with pytest.raises(Exception):
+    with pytest.raises(TypeError):
         assert iraf.ccdred.utils.type_max(np.uint32, np.int32) == np.int32
