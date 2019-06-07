@@ -11,8 +11,12 @@ from datetime import datetime as _datetime
 from iraf.sys import image_open as _image_open
 from . import Instrument as _Instrument
 
-__all__ = ['ccdtypes', 'set_header_value', 'get_header_value',
+__all__ = ['ccdtypes', 'set_header_value', 'get_header_value', 'CCDProcError',
            'delete_header_value', 'ccdsubset', 'file_new_copy', 'type_max']
+
+
+class CCDProcError(Exception):
+    pass
 
 
 def ccdtypes(hdulist, instrument):

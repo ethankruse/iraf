@@ -158,7 +158,7 @@ def test_reject_minmax(tmpdir):
                 assert np.allclose(outim[0].data, imean)
                 outim.close()
             else:
-                with pytest.raises(Exception):
+                with pytest.raises(ValueError):
                     iraf.ccdred.combine(iraflist, outfile, **myargs)
 
 

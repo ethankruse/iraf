@@ -7,6 +7,7 @@ import time
 import datetime
 import iraf
 from .. import ccdproc_routines as ccdr
+from ..utils import CCDProcError
 
 
 def test_ccd_section():
@@ -290,7 +291,7 @@ def test_cal_image(tmpdir, imtype):
 
     # non calibration images fail no matter what
     if imtype not in ['zero', 'dark', 'flat', 'illum', 'fringe']:
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             ccdr.cal_image(inopen, inst, imtype, 1, cals, True)
         return
     else:
@@ -309,7 +310,7 @@ def test_cal_image(tmpdir, imtype):
             subsets.append('')
     cals = (calimages, nscans, caltypes, subsets)
 
-    with pytest.raises(Exception):
+    with pytest.raises(CCDProcError):
         ccdr.cal_image(inopen, inst, imtype, 1, cals, True)
     # add the image in and make sure we get the expected result
     calim = os.path.join(basedir, f'testcal.{imtype}.fits')
@@ -323,18 +324,18 @@ def test_cal_image(tmpdir, imtype):
     # check selected image doesn't equal input image
     calimages, nscans, caltypes, subsets = [inim], [1], [imtype], ['']
     cals = (calimages, nscans, caltypes, subsets)
-    with pytest.raises(Exception):
+    with pytest.raises(CCDProcError):
         ccdr.cal_image(inopen, inst, imtype, 1, cals, True)
 
     # fail to reach cal_scan
     calim = os.path.join(basedir, f'testcal.{imtype}.fits')
 
     cals = ([calim], [6], [imtype], [''])
-    with pytest.raises(Exception):
+    with pytest.raises(CCDProcError):
         ccdr.cal_image(inopen, inst, imtype, 1, cals, True)
 
     cals = ([calim], [5], [imtype], [''])
-    with pytest.raises(Exception):
+    with pytest.raises(CCDProcError):
         ccdr.cal_image(inopen, inst, imtype, 6, cals, True)
 
     # make sure cal_scan is working
@@ -354,7 +355,7 @@ def test_cal_image(tmpdir, imtype):
 
     # for all, check error with 2+ images of the same image type and nscan
     cals = ([calim+'1', calim+'2'], [5, 5], [imtype, imtype], ['', ''])
-    with pytest.raises(Exception):
+    with pytest.raises(CCDProcError):
         ccdr.cal_image(inopen, inst, imtype, 1, cals, True)
 
     # pick the right nscan
@@ -380,7 +381,7 @@ def test_cal_image(tmpdir, imtype):
         cor = calim + '2'
         assert ccdr.cal_image(inopen, inst, imtype, 1, cals, False) == cor
     else:
-        with pytest.raises(Exception):
+        with pytest.raises(CCDProcError):
             ccdr.cal_image(inopen, inst, imtype, 1, cals, False)
 
     inopen.close()
@@ -685,16 +686,16 @@ def test_basics(tmpdir):
 
     # garbage scantype value
     myargs['scantype'] = 'foo'
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         iraf.ccdred.ccdproc(inputs, **myargs)
     myargs['scantype'] = 'shortscan'
 
     # test bad output sizes
     myargs['output'] = outlists*2
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         iraf.ccdred.ccdproc(inputs, **myargs)
     myargs['output'] = outlists[0]
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         iraf.ccdred.ccdproc(inputs, **myargs)
     # make sure the output files don't exist
     for ifile in outlists:
@@ -709,7 +710,7 @@ def test_basics(tmpdir):
 
     # test if one of the input files doesn't exist
     os.remove(inputs[1])
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         iraf.ccdred.ccdproc(inlist, **myargs)
 
 

@@ -1,5 +1,5 @@
 from iraf.utils import file_handler
-from .utils import ccdtypes, ccdsubset, get_header_value, type_max
+from .utils import ccdtypes, ccdsubset, get_header_value, type_max, CCDProcError
 from .utils import file_new_copy, set_header_value, delete_header_value
 from . import Instrument
 from ..ccdred import _imagetypes
@@ -398,7 +398,7 @@ def cal_image(hdulist, instrument, ccdtype, nscan, calibs, scancor):
     Find the appropriate calibration image in our list of calibration files.
     Compare the input image's subset and requested calibration image type to
     the images in the calibration list and pick out the one that matches.
-    Raises an Exception if it can't find exactly one appropriate calibration
+    Raises an error if it can't find exactly one appropriate calibration
     image to use.
 
     Parameters
@@ -438,12 +438,12 @@ def cal_image(hdulist, instrument, ccdtype, nscan, calibs, scancor):
                     # the additional calibraiton images and uses the first.
                     estr = f"Multiple calibration images of type '{ccdtype}'" \
                            f" found:\n{calimages[useind]}\n{calimages[ii]}"
-                    raise Exception(estr)
+                    raise CCDProcError(estr)
                 elif nscans[useind] != nscan and (nscans[ii] == nscan or
                                                   nscans[ii] == 1):
                     useind = ii
     else:
-        raise Exception(f"Image type '{ccdtype}' is not a calibration type.")
+        raise ValueError(f"Image type '{ccdtype}' is not a calibration type.")
 
     # If no calibration image is found then it is an error.
     if useind is None:
@@ -454,7 +454,7 @@ def cal_image(hdulist, instrument, ccdtype, nscan, calibs, scancor):
         else:
             usub = ccdsubset(hdulist, instrument)
             estr = f"No {ccdtype} calibration image of subset '{usub}' found"
-        raise Exception(estr)
+        raise CCDProcError(estr)
 
     useim = calimages[useind]
     if nscan != nscans[useind]:
@@ -462,13 +462,13 @@ def cal_image(hdulist, instrument, ccdtype, nscan, calibs, scancor):
             useim = cal_scan(useim, nscan, scancor)
         else:
             estr = f"Cannot find or create calibration with nscan of {nscan}"
-            raise Exception(estr)
+            raise CCDProcError(estr)
 
     # Check that the input image is not the same as the calibration image.
     try:
         if os.path.samefile(useim, hdulist.filename()):
             estr = f"Calibration image {useim} is the same as the input image"
-            raise Exception(estr)
+            raise CCDProcError(estr)
     # if the second file doesn't exist, that can be ok (e.g. if cal_scan says
     # that we have to create the scan corrected file later.)
     except FileNotFoundError:
@@ -627,7 +627,7 @@ def process(ccd):
     # it uses maskfp to identify bad pixels and then linearly interpolates
     # over them to "fix" them. Comes from fixpix
     if ccd.maskfp is not None:
-        raise Exception('maskfp and fixpix not yet implemented')
+        raise NotImplementedError('maskfp and fixpix not yet implemented')
 
     # grab the bit we want to correct
     outarr = fulloutarr[ccd.outl1-1:ccd.outl2, ccd.outc1-1:ccd.outc2]
@@ -821,7 +821,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
     # if the output isn't empty but doesn't match the input length
     if 0 < len(outputs) != len(inputs):
-        raise Exception("Input and output lists do not match")
+        raise ValueError("Input and output lists do not match")
 
     # was given a string or something else, so set up the instrument object
     if not isinstance(instrument, Instrument):
@@ -839,7 +839,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     subsets = []
     scantype = scantype.strip().lower()
     if scantype not in ['shortscan', 'longscan']:
-        raise Exception(f"Unrecognized scantype: '{scantype}'")
+        raise ValueError(f"Unrecognized scantype: '{scantype}'")
 
     if ccdtype != 'zero' and zerocor:
         list1 = file_handler(zero)
@@ -881,7 +881,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         # size, but an image in the input list doesn't exist, the i+1 input
         # image will then get processed to the i output image name because
         # the output list does not advance to match the step of the input list.
-        # For us, we'll give the exception that input and output
+        # For us, we'll give the error that input and output
         # lists don't match, since the input list is created using exists=True.
         # We therefore can't process any images if any one in the list doesn't
         # exist or can't be opened. IRAF will process all but that one, but the
@@ -920,7 +920,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             if otyp in otypes:
                 outtype = ndtypes[otypes.index(otyp)]
             else:
-                raise Exception(f'Unknown pixeltype: {otyp}')
+                raise ValueError(f'Unknown pixeltype: {otyp}')
             # make sure the output type will work given the input
             outtype = type_max(imin[0].data.dtype, outtype)
         else:
@@ -937,7 +937,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         if readaxis in ['line', 'column']:
             ccd.readaxis = readaxis
         else:
-            raise Exception(f'Invalid readaxis parameter {readaxis}')
+            raise ValueError(f'Invalid readaxis parameter {readaxis}')
         ccd.minreplace = minreplace
 
         # begin set_sections
@@ -964,7 +964,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         c1, c2, cs, l1, l2, ls = ccd_section(datasec, defaults=(1, nc, 1,
                                                                 1, nl, 1))
         if c1 < 1 or c2 > nc or cs != 1 or l1 < 1 or l2 > nl or ls != 1:
-            raise Exception(f"Error in datasec parameter: {datasec}")
+            raise CCDProcError(f"Error in datasec parameter: {datasec}")
 
         ccd.inc1 = c1
         ccd.inc2 = c2
@@ -979,7 +979,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         c1, c2, cs, l1, l2, ls = ccd_section(ts, defaults=(c1, c2, 1,
                                                            l1, l2, 1))
         if cs != 1 or ls != 1:
-            raise Exception(f"Error in trimsec parameter: {ts}")
+            raise CCDProcError(f"Error in trimsec parameter: {ts}")
 
         ccd.trimc1 = c1
         ccd.trimc2 = c2
@@ -992,7 +992,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             bs = get_header_value(ccd.inim, instrument, 'biassec')
         c1, c2, cs, l1, l2, ls = ccd_section(bs, defaults=(1, nc, 1, 1, nl, 1))
         if cs != 1 or ls != 1:
-            raise Exception(f"Error in biassec parameter: {bs}")
+            raise CCDProcError(f"Error in biassec parameter: {bs}")
 
         ccd.biasc1 = c1
         ccd.biasc2 = c2
@@ -1006,7 +1006,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         c1, c2, cs, l1, l2, ls = ccd_section(ccs, defaults=(1, c2, 1, 1, l2, 1))
 
         if cs != 1 or ls != 1:
-            raise Exception(f"Error in ccdsec parameter: {ccs}")
+            raise CCDProcError(f"Error in ccdsec parameter: {ccs}")
 
         ccd.ccdc1 = c1
         ccd.ccdc2 = c2
@@ -1015,7 +1015,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
         if (ccd.inc2 - ccd.inc1 != ccd.ccdc2 - ccd.ccdc1 or
                 ccd.inl2 - ccd.inl1 != ccd.ccdl2 - ccd.ccdl1):
-            raise Exception("Size of DATASEC and CCDSEC do not agree")
+            raise CCDProcError("Size of DATASEC and CCDSEC do not agree")
 
         # The default output data section is the input data section.
         ccd.outc1 = ccd.inc1
@@ -1039,7 +1039,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                 estr = f"Error in trim section: image={ccd.inim.filename()}" \
                         f"[{nc},{nl}], trimsec=[{ccd.trimc1}:{ccd.trimc2}," \
                         f"{ccd.triml1}:{ccd.triml2}]"
-                raise Exception(estr)
+                raise CCDProcError(estr)
             # If no processing is desired print trim section and return.
             if noproc:
                 ostr = f"  [TO BE DONE] Trim section is [{ccd.trimc1}:" \
@@ -1118,7 +1118,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                 logstr = logstring(ostr, ccd.inim, verbose, logfile)
                 set_header_value(ccd.outim, instrument, 'fixpix', logstr)
             """
-            raise Exception("fixpix not yet implemented.")
+            raise NotImplementedError("fixpix not yet implemented.")
         # end set_fixpix
 
         # begin set_overscan
@@ -1129,11 +1129,11 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                 estr = f"Error in bias section: image={ccd.inim.filename()}" \
                        f"[{nc},{nl}], biassec=[{ccd.biasc1}:{ccd.biasc2}," \
                        f"{ccd.biasl1}:{ccd.biasl2}]"
-                raise Exception(estr)
+                raise CCDProcError(estr)
             if (ccd.biasc1 == 1 and ccd.biasc2 == nc and ccd.biasl1 == 1 and
                     ccd.biasl2 == nl):
                 estr = "Bias section not specified or given as full image"
-                raise Exception(estr)
+                raise CCDProcError(estr)
 
             # If no processing is desired then print overscan strip and return.
             if noproc:
@@ -1145,8 +1145,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                            "legendre", "spline3", "spline1"]
                 overscan_function = overscan_function.strip().lower()
                 if overscan_function not in ostypes:
-                    raise Exception(f'Could not recognize overscan function '
-                                    f'{overscan_function}')
+                    raise CCDProcError(f'Could not recognize overscan function '
+                                       f'{overscan_function}')
                 # Determine the overscan section parameters. The readout axis
                 # determines the type of overscan.  The step sizes are ignored.
                 # The limits in the long dimension are replaced by the trim
@@ -1156,7 +1156,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     if ccd.readaxis == 'column':
                         estr = f"Overscan function type {overscan_function}" \
                                " not allowed with readaxis of column"
-                        raise Exception(estr)
+                        raise ValueError(estr)
                 else:
                     if ccd.readaxis == 'line':
                         first = ccd.biasc1
@@ -1225,7 +1225,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # from the unscanned zero.
                     try:
                         zeroim = image_open(cal)
-                    except Exception:
+                    except OSError:
                         scancal = cal_image(ccd.inim, instrument, 'zero', 1,
                                             calibs, scancor)
                         scanim = image_open(scancal)
@@ -1261,7 +1261,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                             zl2 > znl or zls != 1):
                         estr = f"Data section error: image={cal}[{znc},{znl}]" \
                                f", datasec=[{zc1}:{zc2},{zl1}:{zl2}]"
-                        raise Exception(estr)
+                        raise CCDProcError(estr)
                     # save the datasec starting points
                     datac1 = zc1
                     datal1 = zl1
@@ -1286,7 +1286,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                         estr = f'CCD section error: input=[{ccd.ccdc1}:' \
                                f'{ccd.ccdc2},{ccd.ccdl1}:{ccd.ccdl2}], ' \
                                f'{cal}=[{zc1}:{zc2},{zl1}:{zl2}]'
-                        raise Exception(estr)
+                        raise CCDProcError(estr)
 
                     # make sure this and ccd* are starting at the same physical
                     # pixel on the detector. ensures we're lining up the same
@@ -1331,7 +1331,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # from the unscanned dark.
                     try:
                         darkim = image_open(cal)
-                    except Exception:
+                    except OSError:
                         scancal = cal_image(ccd.inim, instrument, 'dark', 1,
                                             calibs, scancor)
                         scanim = image_open(scancal)
@@ -1367,7 +1367,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                             dl2 > dnl or dls != 1):
                         estr = f"Data section error: image={cal}[{dnc},{dnl}]" \
                                f", datasec=[{dc1}:{dc2},{dl1}:{dl2}]"
-                        raise Exception(estr)
+                        raise CCDProcError(estr)
 
                     datac1 = dc1
                     datal1 = dl1
@@ -1390,7 +1390,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                         estr = f'CCD section error: input=[{ccd.ccdc1}:' \
                                f'{ccd.ccdc2},{ccd.ccdl1}:{ccd.ccdl2}], ' \
                                f'{cal}=[{dc1}:{dc2},{dl1}:{dl2}]'
-                        raise Exception(estr)
+                        raise CCDProcError(estr)
 
                     # make sure this and ccd* are starting at the same physical
                     # pixel on the detector. ensures we're lining up the same
@@ -1410,7 +1410,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     if dt2 is None:
                         dt2 = get_header_value(darkim, instrument, 'exptime')
                     if dt2 is None or dt2 <= 0.:
-                        raise Exception(f"Dark time is zero for {cal}")
+                        raise ValueError(f"Dark time is zero for {cal}")
 
                     ccd.darkscale = dt1 / dt2
                     ccd.cors['darkcor'] = True
@@ -1453,7 +1453,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # so create it from the unscanned flat field.
                     try:
                         flatim = image_open(cal)
-                    except Exception:
+                    except OSError:
                         scancal = cal_image(ccd.inim, instrument, 'flat', 1,
                                             calibs, scancor)
                         scanim = image_open(scancal)
@@ -1489,7 +1489,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                             fl2 > fnl or fls != 1):
                         estr = f"Data section error: image={cal}[{fnc},{fnl}]" \
                                f", datasec=[{fc1}:{fc2},{fl1}:{fl2}]"
-                        raise Exception(estr)
+                        raise CCDProcError(estr)
 
                     datac1 = fc1
                     datal1 = fl1
@@ -1513,7 +1513,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                         estr = f'CCD section error: input=[{ccd.ccdc1}:' \
                                f'{ccd.ccdc2},{ccd.ccdl1}:{ccd.ccdl2}], ' \
                                f'{cal}=[{fc1}:{fc2},{fl1}:{fl2}]'
-                        raise Exception(estr)
+                        raise CCDProcError(estr)
 
                     # make sure this and ccd* are starting at the same physical
                     # pixel on the detector. ensures we're lining up the same
@@ -1558,7 +1558,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     illumim = image_open(cal)
                     if not already_processed(illumim, instrument, 'mkillum'):
                         estr = "MKILLUM flag missing from illumination image"
-                        raise Exception(estr)
+                        raise CCDProcError(estr)
 
                     # If no mean value for the scale factor compute it.
                     iscale = get_header_value(illumim, instrument, 'ccdmean')
@@ -1611,7 +1611,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                             il2 > inl or ils != 1):
                         estr = f"Data section error: image={cal}[{inc},{inl}]" \
                                f", datasec=[{ic1}:{ic2},{il1}:{il2}]"
-                        raise Exception(estr)
+                        raise CCDProcError(estr)
 
                     datac1 = ic1
                     datal1 = il1
@@ -1629,7 +1629,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                         estr = f'CCD section error: input=[{ccd.ccdc1}:' \
                                f'{ccd.ccdc2},{ccd.ccdl1}:{ccd.ccdl2}], ' \
                                f'{cal}=[{ic1}:{ic2},{il1}:{il2}]'
-                        raise Exception(estr)
+                        raise CCDProcError(estr)
 
                     # make sure this and ccd* are starting at the same physical
                     # pixel on the detector. ensures we're lining up the same
@@ -1667,7 +1667,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     fringeim = image_open(cal)
                     if not already_processed(fringeim, instrument, 'mkfringe'):
                         estr = "MKFRINGE flag missing from fringe image"
-                        raise Exception(estr)
+                        raise CCDProcError(estr)
 
                     # Set the processing parameters in the CCD structure.
                     fnc = fringeim[0].data.shape[1]
@@ -1681,7 +1681,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                             fl2 > fnl or fls != 1):
                         estr = f"Data section error: image={cal}[{fnc},{fnl}]" \
                                f", datasec=[{fc1}:{fc2},{fl1}:{fl2}]"
-                        raise Exception(estr)
+                        raise CCDProcError(estr)
 
                     datac1 = fc1
                     datal1 = fl1
@@ -1699,7 +1699,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                         estr = f'CCD section error: input=[{ccd.ccdc1}:' \
                                f'{ccd.ccdc2},{ccd.ccdl1}:{ccd.ccdl2}], ' \
                                f'{cal}=[{fc1}:{fc2},{fl1}:{fl2}]'
-                        raise Exception(estr)
+                        raise CCDProcError(estr)
 
                     # Get the scaling factors.
                     # If no fringe scale factor assume 1.
@@ -1827,7 +1827,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
                     if (inc1 < 1 or inc2 > nc or inl1 < 1 or inl2 > nl or
                             incs != 1 or inl2 != 1):
-                        raise Exception('Error in DATASEC parameter')
+                        raise CCDProcError('Error in DATASEC parameter')
 
                     # The default ccd section is the data section.
                     rccdsec = get_header_value(rim, instrument, 'ccdsec')
@@ -1836,11 +1836,11 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     ccdc1, ccdc2, ccdcs, ccdl1, ccdl2, ccdls = rr
 
                     if ccdcs != 1 or ccdls != 1:
-                        raise Exception('Error in CCDSEC parameter')
+                        raise CCDProcError('Error in CCDSEC parameter')
                     if (inc2 - inc1 != ccdc2 - ccdc1 or
                             inl2 - inl1 != ccdl2 - ccdl1):
-                        raise Exception('Size of DATASEC and CCDSEC do not '
-                                        'agree')
+                        raise CCDProcError('Size of DATASEC and CCDSEC do not '
+                                           'agree')
 
                     # XXX: make sure the output file deals with the
                     # 'pixeltype' correctly as in set_output though

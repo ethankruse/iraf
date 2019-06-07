@@ -2,7 +2,7 @@ from iraf.utils import file_handler
 import numpy as np
 import os
 from iraf.sys import image_open
-from .utils import get_header_value, ccdtypes, ccdsubset
+from .utils import get_header_value, ccdtypes, ccdsubset, CCDProcError
 from .utils import file_new_copy, set_header_value, type_max
 from . import Instrument
 
@@ -34,7 +34,7 @@ def ic_setout(inputs, output, nimages, project, offsets):
     else:
         for im in inputs:
             if len(im[0].data.shape) != outdim:
-                raise Exception("Input image dimensions are not the same")
+                raise CCDProcError("Input image dimensions are not the same")
 
     # Parse the user offset string.  If "none" then there are no offsets.
     # If "wcs" then set the offsets based on the image WCS.
@@ -45,11 +45,11 @@ def ic_setout(inputs, output, nimages, project, offsets):
         reloff = True
     # XXX: implement these
     elif offsets.lower() == 'wcs':
-        raise Exception('WCS offsets not implemented yet.')
+        raise NotImplementedError('WCS offsets not implemented yet.')
     elif offsets.lower() == 'grid':
-        raise Exception('grid offsets not implemented yet.')
+        raise NotImplementedError('grid offsets not implemented yet.')
     else:
-        raise Exception('Manual file offsets not implemented yet.')
+        raise NotImplementedError('Manual file offsets not implemented yet.')
 
     aligned = True
 
@@ -74,7 +74,8 @@ def ic_setout(inputs, output, nimages, project, offsets):
     # Update the WCS.
     # XXX: do this
     if project or not aligned or not reloff:
-        raise Exception("WCS updates to output files not implemented yet!")
+        raise NotImplementedError("WCS updates to output files not "
+                                  "implemented yet!")
 
     return aligned, offsetsarr
 
@@ -97,7 +98,7 @@ def ic_mopen(in_images, mtype, mvalue, instrument):
     mtype = mtype.strip().lower()
 
     if mtype not in ['none', 'goodvalue', 'badvalue', 'goodbits', 'badbits']:
-        raise Exception(f'masktype {mtype} not recognized.')
+        raise ValueError(f'masktype {mtype} not recognized.')
 
     # Check for special cases.  The BOOLEAN type is used when only
     # zero and nonzero are significant; i.e. the actual mask values are
@@ -251,12 +252,12 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
     # basic error checking before we start manipulating files
     method = method.strip().lower()
     if method not in ['average', 'median']:
-        raise Exception(f'Combine method not recognized: {method}')
+        raise ValueError(f'Combine method not recognized: {method}')
 
     reject = reject.lower().strip()
     rejectopts = "none|ccdclip|crreject|minmax|pclip|sigclip|avsigclip"
     if reject not in rejectopts.split('|'):
-        raise Exception(f'Could not recognize reject parameter {reject}')
+        raise ValueError(f'Could not recognize reject parameter {reject}')
 
     # was given a string or something else, so set up the instrument object
     if not isinstance(instrument, Instrument):
@@ -410,7 +411,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
         if reject == 'pclip':
             if pclip == 0.:
                 estr = "pclip parameter can not be zero when reject=='pclip'"
-                raise Exception(estr)
+                raise ValueError(estr)
 
             ii = nimages // 2
             if np.abs(pclip) < 1.:
@@ -432,8 +433,8 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             if ii + jj == 0:
                 reject = 'none'
             elif ii + jj >= nimages:
-                raise Exception(f"Bad minmax rejection parameters: {nlow:.2f}"
-                                f" + {nhigh:.2f} > 1")
+                raise ValueError(f"Bad minmax rejection parameters: {nlow:.2f}"
+                                 f" + {nhigh:.2f} > 1")
 
         imin = []
         # Map the input image(s).
@@ -467,7 +468,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             if oouttype in otypes:
                 oouttype = ndtypes[otypes.index(oouttype)]
             else:
-                raise Exception(f'Unrecognized outtype: {oouttype}')
+                raise ValueError(f'Unrecognized outtype: {oouttype}')
         # make sure the output type will work given the input
         oouttype = type_max(intype, oouttype)
 
@@ -799,7 +800,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                 logtxt += f'  statsec = {statsec}\n'
 
             if masktype != 'none':
-                raise Exception('Mask types not yet supported')
+                raise NotImplementedError('Mask types not yet supported')
 
             dop = {'ncombine': False, 'exptime': False, 'mode': False,
                    'median': False, 'mean': False, 'mask': False, 'rdn': False,
@@ -816,7 +817,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                 if means[ii] != means[0]:
                     dop['mean'] = True
                 if masktype != 'none':
-                    raise Exception('Mask types not yet supported')
+                    raise NotImplementedError('Mask types not yet supported')
             if reject == 'ccdclip' or reject == 'crreject':
                 if isinstance(rdnoise, str):
                     dop['rdn'] = True
@@ -903,7 +904,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                         for istr in strs:
                             ostr += istr
                 if dop['mask']:
-                    raise Exception('Mask types not yet supported')
+                    raise NotImplementedError('Mask types not yet supported')
                 ostr += '\n'
                 logtxt += ostr
 
@@ -973,11 +974,11 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
             for ii in np.arange(nimages):
                 data[..., ii] = imin[ii][0].data
         else:
-            raise Exception('need to handle offsets in combine')
+            raise NotImplementedError('need to handle offsets in combine')
 
         # remove the data points with bad mask values (set to nan)
         if masktype != 'none':
-            raise Exception('need to implement mask types')
+            raise NotImplementedError('need to implement mask types')
 
         # Apply threshold if needed
         if dothresh:
@@ -1289,7 +1290,7 @@ def combine(images, output, *, plfile=None, sigmafile=None, ccdtype=None,
                     nrem -= len(torem)
 
         if grow > 0.:
-            raise Exception('grow needs to be implemented')
+            raise NotImplementedError('grow needs to be implemented')
             # grow is only 1-D in IRAF. along the first? dimension?
             # badpts = np.isnan(data)
 
@@ -1394,7 +1395,7 @@ def ic_stat(imin, section, offarr, project, nim, masktype,
     # vb = shape (length) of reference image, and dv = 1.
     # call ic_section (section, Memi[va], Memi[vb], Memi[dv], ndim)
     if len(section) > 0:
-        raise Exception('statsec: overlap not yet implemented.')
+        raise NotImplementedError('statsec: overlap not yet implemented.')
 
     oends = ends * 1
     # adjust based on the offsets, but be wary of the bounds
@@ -1412,7 +1413,8 @@ def ic_stat(imin, section, offarr, project, nim, masktype,
         # need to carry in the pixel masks to this function,
         # then check that pixels aren't included in the masks before
         # adding them to the stats
-        raise Exception('need to implement bad pixel masks in ic_stat')
+        raise NotImplementedError(
+            "need to implement bad pixel masks in ic_stat")
 
     # NOTE: this may not work if project is True
     # get the subgrid of points we want
@@ -1431,7 +1433,8 @@ def ic_stat(imin, section, offarr, project, nim, masktype,
 
     if data.size < 1:
         # this is going to break for things other than fits files
-        raise Exception(f'Image section contains no pixels: {imin.filename()}')
+        raise CCDProcError(
+            f"Image section contains no pixels: {imin.filename()}")
 
     mean = data.mean()
     median = np.median(data)
@@ -1518,9 +1521,9 @@ def ic_gscale(param, dic, inp, exptime, values, nimages, instrument, project):
         stype = 'file'
         tmp = np.loadtxt(param[1:])
         if len(tmp.shape) != 1:
-            raise Exception(f"Could not understand values in {param[1:]}")
+            raise ValueError(f"Could not understand values in {param[1:]}")
         if tmp.size < nimages:
-            raise Exception(f"Insufficient values in {param[1:]}")
+            raise ValueError(f"Insufficient values in {param[1:]}")
         if tmp.size > nimages:
             print(f"Warning: Ignoring additional values in {param[1:]}")
         values[:] = tmp[:nimages]
@@ -1541,5 +1544,5 @@ def ic_gscale(param, dic, inp, exptime, values, nimages, instrument, project):
                 tmp = np.where(exptime < 0.001)[0]
                 values[tmp] = 0.001
         else:
-            raise Exception(f"Unknown scale, zero, or weight type: {param}")
+            raise ValueError(f"Unknown scale, zero, or weight type: {param}")
     return stype
