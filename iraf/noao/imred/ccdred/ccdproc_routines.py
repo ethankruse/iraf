@@ -163,10 +163,10 @@ def ccd_section(section, defaults=(None, None, 1, None, None, 1)):
     (3, 10, 1, 5, 50, 1). The 1s indicate a step size of 1 in each dimension.
 
     The first nonwhitespace character must be '['. The last
-    character must be ']'. A None or empty string section is ok and will
+    character must be ']'. A None or empty-string section is ok and will
     return the defaults.
 
-    The required format is [x1:x2:xstep, y1:y2:ystep].
+    The required section format is [x1:x2:xstep, y1:y2:ystep].
     If they are not explicitly given, default start and end values are None,
     default step size is 1. The second : in either dimension can be ignored
     if not giving a step size. Custom defaults can be passed as an argument.
@@ -268,7 +268,7 @@ def ccdnscan(hdulist, instrument, ccdtype, scantype, nscan,
     Return the number of CCD scan rows.
 
     If not found in the header ('nscanrow' or instrument equivalent),
-    return the "nscan" parameter for objects and 1 for calibration images
+    return the "nscan" parameter for objects or 1 for calibration images
     (calibration defined as zero, dark, flat, illum, or fringe image types).
 
     If scantype is longscan, do not return "nscan"; instead return None if
@@ -736,6 +736,7 @@ def process(ccd):
 
     if ccd.cors['findmean']:
         ccd.mean = outarr.mean()
+        print(ccd.mean)
     print(ccd.darkscale, ccd.flatscale, ccd.illumscale, ccd.fringescale)
     # XXX: is this needed or is fulloutarr updated as a view of outarr?
     fulloutarr[ccd.outl1-1:ccd.outl2, ccd.outc1-1:ccd.outc2] = outarr * 1
@@ -813,13 +814,15 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
     """
     # XXX: at the end, comment this and make sure all inputs are being used
+    # save all the inputs for recursive ccdproc calls
     flags = locals()
 
     inputs = file_handler(images)
     # can't assume the output files exist
     outputs = file_handler(output, exists=False)
 
-    # if the output isn't empty but doesn't match the input length
+    # if the output isn't empty but doesn't match the input length, we have
+    # a problem
     if 0 < len(outputs) != len(inputs):
         raise ValueError("Input and output lists do not match")
 
@@ -1578,6 +1581,12 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # I saw somewhere it was adding 4 seconds to times, so maybe
                     # it's 4*3 seconds ahead then an hour behind for some
                     # reason?
+                    # The creation date and IRAF-TLM in the header are also
+                    # an hour behind what I'm writing in the header, and what
+                    # the current UTC time is, so something is wrong there.
+                    # the IRAF-TLM is 4 seconds ahead of creation though, so
+                    # that part is true. It appears to be a known IRAF issue
+                    # dealing with DST.
                     itime = get_header_value(illumim, instrument, 'ccdmeant')
                     if itime is None:
                         itime = modtime

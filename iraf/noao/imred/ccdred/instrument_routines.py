@@ -24,10 +24,12 @@ class Instrument(object):
     Parameters
     ----------
     translation_file : str, optional
-        File with two or three whitespace separated values. For parameter names,
-        the first value is the IRAF standard parameter name, the second value
-        is the custom instrument specific header key, and the optional third
-        value is a default value if the parameter is not found in the header.
+        File with two or three whitespace separated values.
+
+        For parameter names, the first value is the IRAF standard parameter
+        name, the second value is the custom instrument specific header key,
+        and the optional third value is a default value if the parameter is
+        not found in the header.
         Ex:
         exptime customexp
         biassec  custombias    [411:431,2:573]

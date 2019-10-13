@@ -9,6 +9,21 @@ import iraf
 from .. import ccdproc_routines as ccdr
 from ..utils import CCDProcError
 
+# explicitly call ccdproc with every parameter set to what we want
+defaultargs = {'output': None, 'ccdtype': 'object', 'noproc': False,
+               'fixpix': False, 'overscan': False, 'trim': False,
+               'zerocor': False,
+               'darkcor': False, 'flatcor': False, 'illumcor': False,
+               'fringecor': False, 'readcor': False, 'scancor': False,
+               'readaxis': 'line', 'fixfile': None, 'biassec': None,
+               'trimsec': None, 'zero': None, 'dark': None, 'flat': None,
+               'illum': None, 'fringe': None, 'minreplace': 1.,
+               'scantype': 'shortscan', 'nscan': 1, 'interactive': False,
+               'overscan_function': 'legendre', 'order': 1, 'sample': '*',
+               'naverage': 1, 'niterate': 1, 'low_reject': 3.,
+               'high_reject': 3., 'grow': 0., 'instrument': None,
+               'pixeltype': "real", 'logfile': None, 'verbose': False}
+
 
 def test_ccd_section():
     defaults = [5, 6, 7, 8, 9, 10]
@@ -489,22 +504,6 @@ def test_already_processed(tmpdir):
     inopen.close()
 
 
-# explicitly call ccdproc with every parameter set to what we want
-defaultargs = {'output': None, 'ccdtype': 'object', 'noproc': False,
-               'fixpix': False, 'overscan': False, 'trim': False,
-               'zerocor': False,
-               'darkcor': False, 'flatcor': False, 'illumcor': False,
-               'fringecor': False, 'readcor': False, 'scancor': False,
-               'readaxis': 'line', 'fixfile': None, 'biassec': None,
-               'trimsec': None, 'zero': None, 'dark': None, 'flat': None,
-               'illum': None, 'fringe': None, 'minreplace': 1.,
-               'scantype': 'shortscan', 'nscan': 1, 'interactive': False,
-               'overscan_function': 'legendre', 'order': 1, 'sample': '*',
-               'naverage': 1, 'niterate': 1, 'low_reject': 3.,
-               'high_reject': 3., 'grow': 0., 'instrument': None,
-               'pixeltype': "real", 'logfile': None, 'verbose': False}
-
-
 @pytest.mark.parametrize("imtype", iraf.ccdred._imagetypes)
 def test_ccdcheck(tmpdir, imtype):
     basedir = str(tmpdir)
@@ -724,6 +723,9 @@ def test_cal_open():
     # into the right lists as well
 
     # check subsets are handled appropriately
+
+    # try feeding the same image as multiple types of cals
+
     pass
 
 

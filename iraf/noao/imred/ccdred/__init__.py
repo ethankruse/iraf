@@ -2,7 +2,7 @@
 Implementation of the IRAF ccdred package and routines.
 """
 _imagetypes = "object|zero|dark|flat|illum|fringe|other|" \
-             "comp|none|unknown".split('|')
+              "comp|none|unknown".split('|')
 
 from .instrument_routines import *
 from . import utils
