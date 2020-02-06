@@ -4,18 +4,25 @@ used directly by the user.
 """
 
 # keep the namespace clean
-import re as _re
 import os as _os
-import numpy as _np
+import re as _re
 from datetime import datetime as _datetime
+
+import numpy as _np
+
 from iraf.sys import image_open as _image_open
 from . import Instrument as _Instrument
 
-__all__ = ['ccdtypes', 'set_header_value', 'get_header_value', 'CCDProcError',
-           'delete_header_value', 'ccdsubset', 'file_new_copy', 'type_max']
+__all__ = ['CCDProcError', 'CCDProcWarning', 'ccdtypes', 'set_header_value',
+           'get_header_value',  'delete_header_value', 'ccdsubset',
+           'file_new_copy', 'type_max']
 
 
 class CCDProcError(Exception):
+    pass
+
+
+class CCDProcWarning(UserWarning):
     pass
 
 

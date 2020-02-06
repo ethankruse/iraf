@@ -1,15 +1,19 @@
-from iraf.utils import file_handler
-from .utils import ccdtypes, ccdsubset, get_header_value, type_max, CCDProcError
-from .utils import file_new_copy, set_header_value, delete_header_value
-from . import Instrument
-from ..ccdred import _imagetypes
-import numpy as np
-import os
-from iraf.sys import image_open
-import tempfile
-from datetime import datetime
-import time
 import copy
+import os
+import tempfile
+import time
+import warnings
+from datetime import datetime
+
+import numpy as np
+
+from iraf.sys import image_open
+from iraf.utils import file_handler
+from . import Instrument
+from .utils import CCDProcWarning, CCDProcError
+from .utils import ccdtypes, ccdsubset, file_new_copy, type_max
+from .utils import get_header_value, set_header_value, delete_header_value
+from ..ccdred import _imagetypes
 
 __all__ = ['ccdproc']
 
@@ -623,7 +627,7 @@ def process(ccd):
         fulloutarr = fulloutarr[ccd.triml1-1:ccd.triml2,
                                 ccd.trimc1-1:ccd.trimc2]
 
-    # need to deal with xt_fpsr.
+    # XXX: need to deal with xt_fpsr.
     # it uses maskfp to identify bad pixels and then linearly interpolates
     # over them to "fix" them. Comes from fixpix
     if ccd.maskfp is not None:
@@ -810,7 +814,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
     Differences from IRAF
     ---------------------
-
+    Input/output lists of different sizes
 
     """
     # XXX: at the end, comment this and make sure all inputs are being used
@@ -835,6 +839,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         ccdtype = 'none'
     elif ccdtype.strip().lower() not in _imagetypes:
         ccdtype = 'unknown'
+    ccdtype = ccdtype.strip().lower()
 
     calimages = []
     nscans = []
@@ -865,11 +870,15 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         cal_list(list1, 'fringe', instrument, calimages, nscans,
                  caltypes, subsets, scantype, nscan, scancor)
 
+    # XXX: do we want to explicitly require calibration images be fed
+    # via their appropriate argument rather than allowing everything to be
+    # sent in as a single input list and relying on ccdproc to be "smart"
+    # and sort out calibration files? If we want to be pythonic and
+    # explicit, I think we need to remove this line.
     cal_list(inputs, 'unknown', instrument, calimages, nscans,
              caltypes, subsets, scantype, nscan, scancor)
 
     calibs = (calimages, nscans, caltypes, subsets)
-
     # end of cal_open
 
     origccdtype = ccdtype
@@ -890,6 +899,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         # exist or can't be opened. IRAF will process all but that one, but the
         # output files will not be matched up in names as expected.
         if imin is None:
+            warnings.warn(f"Could not open image {image}; skipping to next.",
+                          category=CCDProcWarning)
             continue
 
         ccdtype = ccdtypes(imin, instrument)
