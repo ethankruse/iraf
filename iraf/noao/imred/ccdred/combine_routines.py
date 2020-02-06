@@ -5,8 +5,8 @@ import numpy as np
 from iraf.sys import image_open
 from iraf.utils import file_handler
 from . import Instrument
-from .utils import file_new_copy, set_header_value, type_max
-from .utils import get_header_value, ccdtypes, ccdsubset, CCDProcError
+from .utils import CCDProcError, ccdsubset, ccdtypes, file_new_copy
+from .utils import get_header_value, set_header_value, type_max
 
 __all__ = ['combine']
 

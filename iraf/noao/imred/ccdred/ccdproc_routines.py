@@ -10,9 +10,9 @@ import numpy as np
 from iraf.sys import image_open
 from iraf.utils import file_handler
 from . import Instrument
-from .utils import CCDProcWarning, CCDProcError
-from .utils import ccdtypes, ccdsubset, file_new_copy, type_max
-from .utils import get_header_value, set_header_value, delete_header_value
+from .utils import CCDProcError, CCDProcWarning, ccdsubset, ccdtypes, \
+    delete_header_value, file_new_copy, get_header_value, set_header_value, \
+    type_max
 from ..ccdred import _imagetypes
 
 __all__ = ['ccdproc']
