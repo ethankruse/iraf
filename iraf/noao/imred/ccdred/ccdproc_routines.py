@@ -351,23 +351,36 @@ def cal_list(inlist, listtype, instrument, calimages, nscans, caltypes, subsets,
         # Open the image.  Unlike IRAF, always an error if it can't be found
         # or opened. In IRAF it's an error unless listtype='unknown'. See note
         # in main ccdproc about this difference.
-        with image_open(image) as hdulist:
+        # XXX: if we remove the cal_list(inputs, 'unknown'...) from the main
+        # ccd_proc, then we can have this always raise the error and use
+        # the comment above
 
-            # Override image header CCD type if a list type is given.
+        # because we want to gracefully skip over bad input images rather than
+        # halting everything completely, allow us to pass by images we can't
+        # open if the image type is "unknown", i.e. coming from the input image
+        # list.
+        try:
+            with image_open(image) as hdulist:
+                # Override image header CCD type if a list type is given.
+                if listtype == 'unknown':
+                    ccdtype = ccdtypes(hdulist, instrument)
+                else:
+                    ccdtype = listtype
+
+                # only add calibration images to our calibration lists
+                if ccdtype in ['zero', 'dark', 'flat', 'illum', 'fringe']:
+                    if image not in calimages:
+                        caltypes.append(ccdtype)
+                        nsc = ccdnscan(hdulist, instrument, ccdtype, scantype,
+                                       nscan, scancor)
+                        nscans.append(nsc)
+                        subsets.append(ccdsubset(hdulist, instrument))
+                        calimages.append(image)
+        except OSError:
             if listtype == 'unknown':
-                ccdtype = ccdtypes(hdulist, instrument)
+                continue
             else:
-                ccdtype = listtype
-
-            # only add calibration images to our calibration lists
-            if ccdtype in ['zero', 'dark', 'flat', 'illum', 'fringe']:
-                if image not in calimages:
-                    caltypes.append(ccdtype)
-                    nsc = ccdnscan(hdulist, instrument, ccdtype, scantype,
-                                   nscan, scancor)
-                    nscans.append(nsc)
-                    subsets.append(ccdsubset(hdulist, instrument))
-                    calimages.append(image)
+                raise
 
 
 def cal_scan(image, nscan, scancor):
@@ -888,7 +901,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         if noproc:
             print(f'{image}:\n')
 
-        imin = image_open(image)
         # NOTE: Bug in IRAF here (?). If input and output lists are the same
         # size, but an image in the input list doesn't exist, the i+1 input
         # image will then get processed to the i output image name because
@@ -898,7 +910,9 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         # We therefore can't process any images if any one in the list doesn't
         # exist or can't be opened. IRAF will process all but that one, but the
         # output files will not be matched up in names as expected.
-        if imin is None:
+        try:
+            imin = image_open(image)
+        except OSError:
             warnings.warn(f"Could not open image {image}; skipping to next.",
                           category=CCDProcWarning)
             continue
@@ -906,6 +920,9 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         ccdtype = ccdtypes(imin, instrument)
         if ccdtype != origccdtype:
             imin.close()
+            warnings.warn(f'Image {image} has type "{ccdtype}" instead of '
+                          f'"{origccdtype}"; skipping to next.',
+                          category=CCDProcWarning)
             continue
 
         # Set output image.

@@ -9,7 +9,7 @@ from astropy.io import fits
 
 import iraf
 from .. import ccdproc_routines as ccdr
-from ..utils import CCDProcError
+from ..utils import CCDProcError, CCDProcWarning
 
 # explicitly call ccdproc with every parameter set to what we want
 defaultargs = {'output': None, 'ccdtype': 'object', 'noproc': False,
@@ -207,9 +207,15 @@ def test_cal_list(tmpdir, listtype):
 
     # test files not found
     foo = os.path.join(basedir, 'foo.fits')
-    with pytest.raises(OSError):
+
+    if listtype != 'unknown':
+        with pytest.raises(OSError):
+            ccdr.cal_list([foo], listtype, inst, calimages, nscans, caltypes,
+                          subsets, scantype, nscan, scancor)
+    else:
         ccdr.cal_list([foo], listtype, inst, calimages, nscans, caltypes,
                       subsets, scantype, nscan, scancor)
+        assert len(calimages) == 0
 
     lt = len(iraf.ccdred._imagetypes)
     # test both 'imagetyp' and custom instrument value
@@ -708,11 +714,53 @@ def test_basics(tmpdir):
     for ifile in outlists:
         with fits.open(ifile) as hdr:
             assert len(hdr[0].header['zerocor']) > 0
+        # remove the file to test the same one again later
+        os.remove(ifile)
 
     # test if one of the input files doesn't exist
     os.remove(inputs[1])
     with pytest.raises(ValueError):
         iraf.ccdred.ccdproc(inlist, **myargs)
+
+    # what if that input file is corrupted?
+    with open(inputs[1], 'w') as ff:
+        ff.write('foo')
+
+    with pytest.warns(CCDProcWarning):
+        iraf.ccdred.ccdproc(inlist, **myargs)
+
+    for ii, ifile in enumerate(outlists):
+        if ii != 1:
+            with fits.open(ifile) as hdr:
+                assert len(hdr[0].header['zerocor']) > 0
+                # remove the file to test the same one again later
+                os.remove(ifile)
+        else:
+            assert not os.path.exists(ifile)
+
+    # reset the input files
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=float) * baseval
+        hdu = fits.PrimaryHDU(arr)
+        if jj == 1:
+            hdu.header['imagetyp'] = 'none'
+        else:
+            hdu.header['imagetyp'] = 'object'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+
+    # what if the image types don't match?
+    with pytest.warns(CCDProcWarning):
+        iraf.ccdred.ccdproc(inlist, **myargs)
+
+    for ii, ifile in enumerate(outlists):
+        if ii != 1:
+            with fits.open(ifile) as hdr:
+                assert len(hdr[0].header['zerocor']) > 0
+                # remove the file to test the same one again later
+                os.remove(ifile)
+        else:
+            assert not os.path.exists(ifile)
 
 
 def test_cal_open():
