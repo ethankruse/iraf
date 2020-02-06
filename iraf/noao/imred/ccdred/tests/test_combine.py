@@ -1,9 +1,11 @@
-import numpy as np
-from astropy.io import fits
-import iraf
-import os
 import copy
+import os
+
+import numpy as np
 import pytest
+from astropy.io import fits
+
+import iraf
 
 # explicitly call combine with every parameter set to what we want
 defaultargs = {'plfile': None, 'sigmafile': None, 'ccdtype': None,

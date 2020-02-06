@@ -2,8 +2,8 @@
 Implementation of some utility functions.
 """
 
-import os
 import csv
+import os
 from glob import glob
 
 __all__ = ['is_iterable', 'file_handler']

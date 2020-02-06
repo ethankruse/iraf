@@ -1,9 +1,11 @@
 import os
-import iraf
+from datetime import datetime
+
+import numpy as np
 import pytest
 from astropy.io import fits
-from datetime import datetime
-import numpy as np
+
+import iraf
 
 
 def test_set_get_delete_header_value(tmpdir):

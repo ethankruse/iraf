@@ -1,10 +1,12 @@
-import pytest
-import os
-import numpy as np
-from astropy.io import fits
 import copy
-import time
 import datetime
+import os
+import time
+
+import numpy as np
+import pytest
+from astropy.io import fits
+
 import iraf
 from .. import ccdproc_routines as ccdr
 from ..utils import CCDProcError

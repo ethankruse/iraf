@@ -1,8 +1,8 @@
-from iraf.utils import file_handler
 import numpy as np
 import scipy.stats
-from iraf.sys import image_open
 
+from iraf.sys import image_open
+from iraf.utils import file_handler
 
 __all__ = ['imstatistics']
 

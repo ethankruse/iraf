@@ -1,7 +1,9 @@
 import os
-import iraf
+
 import pytest
 from astropy.io import fits
+
+import iraf
 
 parameters = {'BPM': None, 'biassec': None, 'ccdmean': None,
               'ccdmeant': None, 'ccdproc': None, 'ccdsec': None,

@@ -1,6 +1,7 @@
-import iraf
 import os
 from pathlib import Path
+
+import iraf
 
 
 def test_is_iterable():

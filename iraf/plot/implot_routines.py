@@ -1,10 +1,12 @@
-from iraf.utils import file_handler
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.widgets import CheckButtons, Slider
 import copy
 import functools
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.widgets import CheckButtons, Slider
+
 from iraf.sys import image_open
+from iraf.utils import file_handler
 
 __all__ = ['implot']
 

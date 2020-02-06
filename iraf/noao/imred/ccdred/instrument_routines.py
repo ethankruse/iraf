@@ -1,6 +1,7 @@
 import copy
-import shlex
 import os
+import shlex
+
 from ..ccdred import _imagetypes
 
 __all__ = ['Instrument']

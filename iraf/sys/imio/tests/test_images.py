@@ -1,8 +1,10 @@
 import os
+
 import numpy as np
-from astropy.io import fits
-import iraf
 import pytest
+from astropy.io import fits
+
+import iraf
 
 
 def test_image_open_close_fits(tmpdir):
