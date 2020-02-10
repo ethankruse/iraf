@@ -776,6 +776,21 @@ def test_cal_open():
 
     # try feeding the same image as multiple types of cals
 
+    # every ccdtype for cal_open. Do this by giving all 5 types of files
+    # and trying to process all 5 types at once for each ccdtype.
+    pass
+
+
+def test_noproc():
+    # make sure everything is printed
+
+    # make sure no output file is created and the input file isn't changed
+
+    pass
+
+
+def test_pixeltype():
+    # give no pixel type
     pass
 
 
@@ -934,10 +949,11 @@ def test_zerocor(tmpdir):
         hdr.close()
 
 
+
+
 # things to test:
 
-# every ccdtype for cal_open. Do this by giving all 5 types of files
-# and trying to process all 5 types at once for each ccdtype.
+
 
 # test having the calibration images in the input list.
 

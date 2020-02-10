@@ -142,6 +142,7 @@ class CCD(object):
 
         self.readaxis = 'line'  # Read out axis
         self.calctype = np.double  # Calculation data type
+        self.outtype = None  # Data type of the output image
         self.overscantype = 0  # Overscan type
         self.overscanvec = None  # Pointer to overscan vector
         self.darkscale = 0  # Dark count scale factor
@@ -353,7 +354,8 @@ def cal_list(inlist, listtype, instrument, calimages, nscans, caltypes, subsets,
         # in main ccdproc about this difference.
         # XXX: if we remove the cal_list(inputs, 'unknown'...) from the main
         # ccd_proc, then we can have this always raise the error and use
-        # the comment above
+        # the comment above (because then cal_list should never be called with
+        # "unknown" listtype in this package)
 
         # because we want to gracefully skip over bad input images rather than
         # halting everything completely, allow us to pass by images we can't
@@ -636,6 +638,8 @@ def process(ccd):
     # translate into numpy coords. that means instead of [c, l] you do [l, c]
     # and also that you're 0-indexed and not inclusive of the end anymore.
     fulloutarr = ccd.inim[0].data * 1
+    fulloutarr = fulloutarr.astype(ccd.calctype)
+
     if ccd.cors['trim']:
         fulloutarr = fulloutarr[ccd.triml1-1:ccd.triml2,
                                 ccd.trimc1-1:ccd.trimc2]
@@ -753,11 +757,9 @@ def process(ccd):
 
     if ccd.cors['findmean']:
         ccd.mean = outarr.mean()
-        print(ccd.mean)
-    print(ccd.darkscale, ccd.flatscale, ccd.illumscale, ccd.fringescale)
     # XXX: is this needed or is fulloutarr updated as a view of outarr?
     fulloutarr[ccd.outl1-1:ccd.outl2, ccd.outc1-1:ccd.outc2] = outarr * 1
-    ccd.outim[0].data = fulloutarr * 1
+    ccd.outim[0].data = fulloutarr.astype(ccd.outtype)
 
 
 def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
@@ -768,7 +770,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             minreplace=1., scantype='shortscan', nscan=1, interactive=False,
             overscan_function='legendre', order=1, sample='*', naverage=1,
             niterate=1, low_reject=3., high_reject=3., grow=0., instrument=None,
-            pixeltype="real", logfile=None, verbose=False):
+            pixeltype=None, logfile=None, verbose=False):
     """
 
     Parameters
@@ -828,6 +830,10 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     Differences from IRAF
     ---------------------
     Input/output lists of different sizes
+
+    bug in setoutput.x: if pixeltype is short, will only be allowed if the image
+    has type ushort, and if pixeltype is ushort, will only be allowed if image
+    has type short. Should clearly be reversed.
 
     """
     # XXX: at the end, comment this and make sure all inputs are being used
@@ -926,27 +932,28 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             continue
 
         # Set output image.
-        if len(outputs) > 0:
-            outtmp = False
-            outim = outputs[imct]
+        if not noproc:
+            if len(outputs) > 0:
+                outtmp = False
+                outim = outputs[imct]
+            else:
+                outtmp = True
+                outims = tempfile.NamedTemporaryFile(delete=False)
+                outims.close()
+                outim = outims.name
+            file_new_copy(outim, imin, mode='NEW_COPY', overwrite=True,
+                          instrument=instrument)
+            out = image_open(outim, mode='update')
         else:
-            outtmp = True
-            outims = tempfile.NamedTemporaryFile(delete=False)
-            outims.close()
-            outim = outims.name
-
-        # XXX: if noproc = True, IRAF still creates & overwrites an output file?
-        # Then deletes it at the end? Is this true? Should I make the temp file
-        # if noproc somehow?
-        file_new_copy(outim, imin, mode='NEW_COPY', overwrite=True,
-                      instrument=instrument)
-        out = image_open(outim, mode='update')
+            outtmp = False
+            outim = None
+            out = None
 
         if pixeltype is not None and len(pixeltype) > 0:
             otyp = pixeltype.strip().split()[0]
 
             otypes = "short|ushort|integer|long|real|double".split('|')
-            ndtypes = [np.short, np.ushort, np.int_, np.int_,
+            ndtypes = [np.short, np.ushort, np.int32, np.int32,
                        np.single, np.double]
             if otyp in otypes:
                 outtype = ndtypes[otypes.index(otyp)]
@@ -956,13 +963,15 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             outtype = type_max(imin[0].data.dtype, outtype)
         else:
             outtype = imin[0].data.dtype
-
+            # make sure we don't rescale the data and keep whatever scaling
+            # is in the input file
+            otyp = 'ushort'
         # Set processing parameters applicable to all images.
-
         # Create the ccd structure.
         ccd = CCD()
         ccd.inim = imin
         ccd.outim = out
+        ccd.outtype = outtype
         readaxis = readaxis.strip().lower()
         # in IRAF readaxis line == 1, readaxis column == 2
         if readaxis in ['line', 'column']:
@@ -1818,7 +1827,14 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             # end set_header
 
         imin.close()
+        # there was a complex problem when input was ushort and output
+        # was anything else where the bzero from the input file was being
+        # applied to the output and adding 2^15 to all results. This appears
+        # to fix it.
+        if otyp != 'ushort':
+            out[0].scale(bscale=1, bzero=0)
         out.close()
+
         if outtmp:
             if ccd.cor:
                 # Replace the input image by the corrected image.
