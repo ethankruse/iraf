@@ -60,6 +60,7 @@ class CCD(object):
     set the zero* value to ccd* - ccdsec1 + datasec1
 
     """
+
     def __init__(self):
         # NOTE: IRAF treats 2D arrays as [column, line], but in Python/numpy
         # this translates to array[line, column]
@@ -641,8 +642,8 @@ def process(ccd):
     fulloutarr = fulloutarr.astype(ccd.calctype)
 
     if ccd.cors['trim']:
-        fulloutarr = fulloutarr[ccd.triml1-1:ccd.triml2,
-                                ccd.trimc1-1:ccd.trimc2]
+        fulloutarr = fulloutarr[ccd.triml1 - 1:ccd.triml2,
+                                ccd.trimc1 - 1:ccd.trimc2]
 
     # XXX: need to deal with xt_fpsr.
     # it uses maskfp to identify bad pixels and then linearly interpolates
@@ -651,7 +652,7 @@ def process(ccd):
         raise NotImplementedError('maskfp and fixpix not yet implemented')
 
     # grab the bit we want to correct
-    outarr = fulloutarr[ccd.outl1-1:ccd.outl2, ccd.outc1-1:ccd.outc2]
+    outarr = fulloutarr[ccd.outl1 - 1:ccd.outl2, ccd.outc1 - 1:ccd.outc2]
 
     # make the overscan correction
     if ccd.cors['overscan']:
@@ -659,7 +660,7 @@ def process(ccd):
             if ccd.overscantype in ['mean', 'median', 'minmax']:
                 overscanc1 = ccd.biasc1 - 1
                 noverscan = ccd.biasc2 - overscanc1
-                oscanreg = outarr[:, overscanc1:overscanc1+noverscan]
+                oscanreg = outarr[:, overscanc1:overscanc1 + noverscan]
                 # begin the find_overscanr function
                 if ccd.overscantype == 'minmax':
                     # average with min and max removed.
@@ -699,8 +700,8 @@ def process(ccd):
             else:
                 zerobuf = ccd.zeroim[0].data[ccd.zerol1:ccd.zerol2]
         else:
-            zerobuf = ccd.zeroim[0].data[ccd.zerol1-1:ccd.zerol2,
-                                         ccd.zeroc1-1:ccd.zeroc2]
+            zerobuf = ccd.zeroim[0].data[ccd.zerol1 - 1:ccd.zerol2,
+                                         ccd.zeroc1 - 1:ccd.zeroc2]
         outarr -= zerobuf
 
     # make the dark correction
@@ -719,8 +720,8 @@ def process(ccd):
             else:
                 darkscale = ccd.darkscale
         else:
-            darkbuf = ccd.darkim[0].data[ccd.darkl1-1:ccd.darkl2,
-                                         ccd.darkc1-1:ccd.darkc2]
+            darkbuf = ccd.darkim[0].data[ccd.darkl1 - 1:ccd.darkl2,
+                                         ccd.darkc1 - 1:ccd.darkc2]
             darkscale = ccd.darkscale
         outarr -= darkbuf * darkscale
 
@@ -735,20 +736,20 @@ def process(ccd):
             else:
                 flatbuf = ccd.flatim[0].data[ccd.flatl1:ccd.flatl2]
         else:
-            flatbuf = ccd.flatim[0].data[ccd.flatl1-1:ccd.flatl2,
-                                         ccd.flatc1-1:ccd.flatc2]
+            flatbuf = ccd.flatim[0].data[ccd.flatl1 - 1:ccd.flatl2,
+                                         ccd.flatc1 - 1:ccd.flatc2]
         outarr *= ccd.flatscale / flatbuf
 
     # do the illumination correction
     if ccd.cors['illumcor']:
-        illumbuf = ccd.illumim[0].data[ccd.illuml1-1:ccd.illuml2,
-                                       ccd.illumc1-1:ccd.illumc2]
+        illumbuf = ccd.illumim[0].data[ccd.illuml1 - 1:ccd.illuml2,
+                                       ccd.illumc1 - 1:ccd.illumc2]
         outarr *= ccd.illumscale / illumbuf
 
     # do the fringe correction
     if ccd.cors['fringecor']:
-        fringebuf = ccd.fringeim[0].data[ccd.fringel1-1:ccd.fringel2,
-                                         ccd.fringec1-1:ccd.fringec2]
+        fringebuf = ccd.fringeim[0].data[ccd.fringel1 - 1:ccd.fringel2,
+                                         ccd.fringec1 - 1:ccd.fringec2]
         outarr -= ccd.fringescale * fringebuf
 
     if ccd.cors['minrep']:
@@ -758,7 +759,7 @@ def process(ccd):
     if ccd.cors['findmean']:
         ccd.mean = outarr.mean()
     # XXX: is this needed or is fulloutarr updated as a view of outarr?
-    fulloutarr[ccd.outl1-1:ccd.outl2, ccd.outc1-1:ccd.outc2] = outarr * 1
+    fulloutarr[ccd.outl1 - 1:ccd.outl2, ccd.outc1 - 1:ccd.outc2] = outarr * 1
     ccd.outim[0].data = fulloutarr.astype(ccd.outtype)
 
 
@@ -770,7 +771,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             minreplace=1., scantype='shortscan', nscan=1, interactive=False,
             overscan_function='legendre', order=1, sample='*', naverage=1,
             niterate=1, low_reject=3., high_reject=3., grow=0., instrument=None,
-            pixeltype=None, logfile=None, verbose=False):
+            pixeltype='real', logfile=None, verbose=False):
     """
 
     Parameters
@@ -818,7 +819,10 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     pixeltype is supposed to be a string of 2 words:
     Output and calculation pixel datatypes, e.g. 'real real'. But for ccdproc
     the only calculation dataypes are real or short, and we are just doing
-    everything in real, so ignore the second part.
+    everything in real, so ignore the second part. Note that we removed the type
+    "long" that is present in iraf since on modern systems that means int64
+    which isn't allowed by IRAF since it hasn't updated to the newest FITS
+    standard.
 
     Returns
     -------
@@ -831,9 +835,12 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     ---------------------
     Input/output lists of different sizes
 
-    bug in setoutput.x: if pixeltype is short, will only be allowed if the image
-    has type ushort, and if pixeltype is ushort, will only be allowed if image
-    has type short. Should clearly be reversed.
+    bug in setoutput.x: if pixeltype is short, it will allow input ushort to be
+    cast to short, and if pixeltype is ushort it will allow a short image to be
+    cast to ushort. This can be dangerous.
+    In IRAF, an int that is supposed to be negative gets set to 0 as a ushort
+    rather than wrapping around positive, and same for a ushort int that gets
+    cast to an int is clipped at 32767 rather than wrapping negative.
 
     """
     # XXX: at the end, comment this and make sure all inputs are being used
@@ -952,20 +959,26 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         if pixeltype is not None and len(pixeltype) > 0:
             otyp = pixeltype.strip().split()[0]
 
-            otypes = "short|ushort|integer|long|real|double".split('|')
-            ndtypes = [np.short, np.ushort, np.int32, np.int32,
-                       np.single, np.double]
+            otypes = "short|ushort|integer|real|double".split('|')
+            ndtypes = [np.short, np.ushort, np.int32, np.single, np.double]
             if otyp in otypes:
                 outtype = ndtypes[otypes.index(otyp)]
             else:
                 raise ValueError(f'Unknown pixeltype: {otyp}')
             # make sure the output type will work given the input
-            outtype = type_max(imin[0].data.dtype, outtype)
+            try:
+                outtype = type_max(imin[0].data.dtype, outtype)
+            except TypeError:
+                # trying to cast a ushort to short or vice versa, which
+                # is dangerous and shouldn't be allowed. Or else
+                # int to real, which is also dangerous
+                outtype = imin[0].data.dtype
+                warnings.warn(f"Cannot cast input array of type {outtype} to "
+                              f"requested pixeltype '{otyp}'. Output will "
+                              f"remain {outtype}.", category=CCDProcWarning)
         else:
-            outtype = imin[0].data.dtype
-            # make sure we don't rescale the data and keep whatever scaling
-            # is in the input file
-            otyp = 'ushort'
+            raise ValueError(f'Unknown pixeltype: {pixeltype}')
+
         # Set processing parameters applicable to all images.
         # Create the ccd structure.
         ccd = CCD()
@@ -1077,8 +1090,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             if (ccd.trimc1 < 1 or ccd.trimc2 > nc or ccd.triml1 < 1 or
                     ccd.triml2 > nl):
                 estr = f"Error in trim section: image={ccd.inim.filename()}" \
-                        f"[{nc},{nl}], trimsec=[{ccd.trimc1}:{ccd.trimc2}," \
-                        f"{ccd.triml1}:{ccd.triml2}]"
+                       f"[{nc},{nl}], trimsec=[{ccd.trimc1}:{ccd.trimc2}," \
+                       f"{ccd.triml1}:{ccd.triml2}]"
                 raise CCDProcError(estr)
             # If no processing is desired print trim section and return.
             if noproc:
@@ -1807,7 +1820,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                 ccd.biasl2 = min(nl, ccd.biasl2 - ccd.triml1 + 1)
                 if ccd.biasc1 <= ccd.biasc2 and ccd.biasl1 <= ccd.biasl2:
                     hstr = f'[{ccd.biasc1}:{ccd.biasc2},' \
-                        f'{ccd.biasl1}:{ccd.biasl2}]'
+                           f'{ccd.biasl1}:{ccd.biasl2}]'
                     set_header_value(ccd.outim, instrument, 'biassec', hstr)
                 else:
                     delete_header_value(ccd.outim, instrument, 'biassec')
@@ -1826,14 +1839,15 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             set_header_value(ccd.outim, instrument, 'ccdproc', ostr)
             # end set_header
 
-        imin.close()
         # there was a complex problem when input was ushort and output
         # was anything else where the bzero from the input file was being
         # applied to the output and adding 2^15 to all results. This appears
         # to fix it.
-        if otyp != 'ushort':
+        if (np.issubdtype(imin[0].data.dtype, np.unsignedinteger) and
+                not np.issubdtype(out[0].data.dtype, np.unsignedinteger)):
             out[0].scale(bscale=1, bzero=0)
         out.close()
+        imin.close()
 
         if outtmp:
             if ccd.cor:
@@ -1908,7 +1922,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     # Average across the readout axis.
 
                     # zero out the parts not in the data section
-                    outdata[:, inc1-1] = 0.
+                    outdata[:, inc1 - 1] = 0.
                     outdata[:inl1 - 1:, ] = 0.
                     outdata[:, inc2:] = 0.
                     outdata[inl2:, :] = 0.

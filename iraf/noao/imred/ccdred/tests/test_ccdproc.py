@@ -24,7 +24,7 @@ defaultargs = {'output': None, 'ccdtype': 'object', 'noproc': False,
                'overscan_function': 'legendre', 'order': 1, 'sample': '*',
                'naverage': 1, 'niterate': 1, 'low_reject': 3.,
                'high_reject': 3., 'grow': 0., 'instrument': None,
-               'pixeltype': "real", 'logfile': None, 'verbose': False}
+               'pixeltype': 'real', 'logfile': None, 'verbose': False}
 
 
 def test_ccd_section():
@@ -377,13 +377,13 @@ def test_cal_image(tmpdir, imtype):
     assert ccdr.cal_image(inopen, inst, imtype, 6, cals, True) == retval
 
     # for all, check error with 2+ images of the same image type and nscan
-    cals = ([calim+'1', calim+'2'], [5, 5], [imtype, imtype], ['', ''])
+    cals = ([calim + '1', calim + '2'], [5, 5], [imtype, imtype], ['', ''])
     with pytest.raises(CCDProcError):
         ccdr.cal_image(inopen, inst, imtype, 1, cals, True)
 
     # pick the right nscan
-    cals = ([calim+'1', calim+'2'], [3, 2], [imtype, imtype], ['', ''])
-    assert ccdr.cal_image(inopen, inst, imtype, 2, cals, True) == calim+'2'
+    cals = ([calim + '1', calim + '2'], [3, 2], [imtype, imtype], ['', ''])
+    assert ccdr.cal_image(inopen, inst, imtype, 2, cals, True) == calim + '2'
 
     cals = ([calim + '1', calim + '2'], [3, 1], [imtype, imtype], ['', ''])
     assert ccdr.cal_image(inopen, inst, imtype, 2, cals, False) == calim + '2'
@@ -399,7 +399,8 @@ def test_cal_image(tmpdir, imtype):
     inopen = iraf.sys.image_open(inim)
 
     # only check for correct subset for flat, fringe, illum
-    cals = ([calim+'1', calim+'2'], [1, 1], [imtype, imtype], ['blue', 'red'])
+    cals = ([calim + '1', calim + '2'], [1, 1], [imtype, imtype],
+            ['blue', 'red'])
     if imtype in ['flat', 'illum', 'fringe']:
         cor = calim + '2'
         assert ccdr.cal_image(inopen, inst, imtype, 1, cals, False) == cor
@@ -443,7 +444,7 @@ def test_logstring(tmpdir, capsys):
     assert len(retstr) == (len(nowstr) + len(instr) + 1)
 
     # we got our input string back
-    assert retstr[len(nowstr)+1:] == instr
+    assert retstr[len(nowstr) + 1:] == instr
 
     # check log files and verbose output
     log = os.path.join(basedir, f'log.txt')
@@ -466,9 +467,9 @@ def test_logstring(tmpdir, capsys):
 
     assert out[:len(inim)] == inim
     # account for the newline at the end, but otherwise keep the input string
-    assert out[-len(instr)-1:-1] == instr
+    assert out[-len(instr) - 1:-1] == instr
 
-    cutstr = out[len(inim)+2:len(inim)+2+len(nowstr)]
+    cutstr = out[len(inim) + 2:len(inim) + 2 + len(nowstr)]
     filetime = datetime.datetime.strptime(cutstr, dfmt)
     assert np.abs((now - filetime).total_seconds()) <= 2
 
@@ -698,7 +699,7 @@ def test_basics(tmpdir):
     myargs['scantype'] = 'shortscan'
 
     # test bad output sizes
-    myargs['output'] = outlists*2
+    myargs['output'] = outlists * 2
     with pytest.raises(ValueError):
         iraf.ccdred.ccdproc(inputs, **myargs)
     myargs['output'] = outlists[0]
@@ -764,6 +765,7 @@ def test_basics(tmpdir):
 
 
 def test_cal_open():
+    # XXX: finish
     # go through all ccdtypes.
 
     # make sure if an object is passed in as a list of a specific type it is
@@ -782,6 +784,7 @@ def test_cal_open():
 
 
 def test_noproc():
+    # XXX: finish
     # make sure everything is printed
 
     # make sure no output file is created and the input file isn't changed
@@ -789,9 +792,127 @@ def test_noproc():
     pass
 
 
-def test_pixeltype():
-    # give no pixel type
-    pass
+pixeltypes = ['short', 'ushort', 'integer', 'real', 'double', None, 'foo']
+realpixtypes = ['short', 'ushort', 'integer', 'real', 'double']
+
+
+@pytest.mark.parametrize("intype", realpixtypes)
+@pytest.mark.parametrize("outtype", pixeltypes)
+def test_pixeltype(tmpdir, intype, outtype):
+    # make sure rounding works right
+    # what does IRAF really do if input is int, zero is float?
+    basedir = str(tmpdir)
+
+    # create some simple files for testing
+    nx = 50
+    ny = 90
+    nimg = 3
+    baseval = 100
+
+    dd = {'short': np.short, 'ushort': np.ushort, 'integer': np.int32,
+          'real': np.single, 'double': np.double}
+    ind = dd[intype]
+
+    # create input files
+    inputs = []
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=ind) * baseval
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['imagetyp'] = 'object'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+
+    # make the input list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    inlist = '@' + inlist
+
+    # make the output list
+    outlists = []
+    for ifile in inputs:
+        of = ifile[:-5] + '.out.fits'
+        outlists.append(of)
+
+    # make a zero image with a float so that the output should be
+    # 89.7, so we can test int rounding
+    zeroval = 10.3
+    zerofile = os.path.join(basedir, 'testzero.fits')
+
+    arr = np.ones((nx, ny), dtype=float) * zeroval
+
+    hdu = fits.PrimaryHDU(arr)
+    hdu.header['imagetyp'] = 'zero'
+    hdu.writeto(zerofile, overwrite=True)
+
+    # do my processing
+    myargs = copy.deepcopy(defaultargs)
+    myargs['output'] = outlists
+
+    # which parts we want to do
+    myargs['zerocor'] = True
+    myargs['zero'] = zerofile
+    myargs['pixeltype'] = outtype
+
+    # test all the warnings and errors of trying to convert to requested
+    # output pixel types
+    if outtype is None or outtype == 'foo':
+        with pytest.raises(ValueError):
+            iraf.ccdred.ccdproc(inlist, **myargs)
+        return
+    elif ((outtype == 'short' and intype == 'ushort') or
+          (outtype == 'ushort' and intype == 'short') or
+          (outtype == 'real' and intype == 'integer') or
+          (outtype == 'integer' and intype == 'real')):
+        with pytest.warns(CCDProcWarning):
+            iraf.ccdred.ccdproc(inlist, **myargs)
+    else:
+        iraf.ccdred.ccdproc(inlist, **myargs)
+
+    # make sure all the outputs are giving the correct answer in the
+    # correct type
+    for ifile in outlists:
+        with fits.open(ifile) as hdr:
+            if outtype == 'short' or outtype == 'ushort':
+                # nothing can get downscaled to these, so intype == outtype
+                assert np.can_cast(hdr[0].data.dtype, dd[intype],
+                                   casting='equiv')
+                assert np.allclose(hdr[0].data, dd[intype](baseval - zeroval))
+            elif outtype == 'integer':
+                # all input integers varieties should be upscaled to "integer"
+                if intype in ['short', 'ushort', 'integer']:
+                    assert np.can_cast(hdr[0].data.dtype, dd['integer'],
+                                       casting='equiv')
+                    assert np.allclose(hdr[0].data,
+                                       dd['integer'](baseval - zeroval))
+                else:
+                    # floats can't get downscaled to these, so intype == outtype
+                    assert np.can_cast(hdr[0].data.dtype, dd[intype],
+                                       casting='equiv')
+                    assert np.allclose(hdr[0].data,
+                                       dd[intype](baseval - zeroval))
+            elif outtype == 'real':
+                # all short integers varieties should be upscaled to "real"
+                if intype in ['short', 'ushort', 'real']:
+                    assert np.can_cast(hdr[0].data.dtype, dd['real'],
+                                       casting='equiv')
+                    assert np.allclose(hdr[0].data,
+                                       dd['real'](baseval - zeroval))
+                else:
+                    # int and double can't get safely converted to real,
+                    # so intype == outtype
+                    assert np.can_cast(hdr[0].data.dtype, dd[intype],
+                                       casting='equiv')
+                    assert np.allclose(hdr[0].data,
+                                       dd[intype](baseval - zeroval))
+            else:
+                # everything should be upscaled to "double"
+                assert np.can_cast(hdr[0].data.dtype, dd['double'],
+                                   casting='equiv')
+                assert np.allclose(hdr[0].data,
+                                   dd['double'](baseval - zeroval))
 
 
 def test_zerocor(tmpdir):
@@ -948,17 +1069,13 @@ def test_zerocor(tmpdir):
         assert hdr[0].header['ccdsec'] == ccdsec
         hdr.close()
 
-
-
-
 # things to test:
 
-
-
 # test having the calibration images in the input list.
-
 
 # some tests to think about:
 # 1D and 3D images
 # 1 vs 0 indexing
+# what about multiple FITS extensions, do we always require data to be in the
+# first one?
 # print notes/logs when doing recursive ccdproc?
