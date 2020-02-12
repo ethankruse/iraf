@@ -841,6 +841,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     In IRAF, an int that is supposed to be negative gets set to 0 as a ushort
     rather than wrapping around positive, and same for a ushort int that gets
     cast to an int is clipped at 32767 rather than wrapping negative.
+    Similarly, IRAF allows integer to be converted unsafely to real, when
+    it should only allow upscaling to double safely.
 
     """
     # XXX: at the end, comment this and make sure all inputs are being used
@@ -994,7 +996,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         ccd.minreplace = minreplace
 
         # begin set_sections
-
         """
         How do I want to handle IRAF/FITS vs numpy axis order? What if we
         want to extend to hdf5 or other formats? C-order vs F-order arrays
@@ -1003,7 +1004,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         adjust to 0-indexing, but what about in the future when I want to save
         as hdf5 and its datasec parameter is already 0-indexed?
         
-        For now we're just assuming only working with FITS files, but will
+        For now we're just assuming we're only working with FITS files, but will
         need to be very careful in the future and revisit this and probably 
         rewrite chunks to make less assumptions.
         """

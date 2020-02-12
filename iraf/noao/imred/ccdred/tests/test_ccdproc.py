@@ -620,7 +620,7 @@ def test_ccdcheck(tmpdir, imtype):
     inopen.close()
 
 
-def test_basics(tmpdir):
+def test_ccdproc_basics(tmpdir):
     basedir = str(tmpdir)
     # create some simple files for testing
     nx = 50
@@ -698,6 +698,14 @@ def test_basics(tmpdir):
         iraf.ccdred.ccdproc(inputs, **myargs)
     myargs['scantype'] = 'shortscan'
 
+    # garbage readaxis value
+    myargs['readaxis'] = 'foo'
+    with pytest.raises(ValueError):
+        iraf.ccdred.ccdproc(inputs, **myargs)
+    myargs['readaxis'] = 'line'
+    # remove the file to test the same one again later
+    os.remove(outlists[0])
+
     # test bad output sizes
     myargs['output'] = outlists * 2
     with pytest.raises(ValueError):
@@ -764,7 +772,7 @@ def test_basics(tmpdir):
             assert not os.path.exists(ifile)
 
 
-def test_cal_open():
+def test_ccdproc_cal_open():
     # XXX: finish
     # go through all ccdtypes.
 
@@ -783,7 +791,7 @@ def test_cal_open():
     pass
 
 
-def test_noproc():
+def test_ccdproc_noproc():
     # XXX: finish
     # make sure everything is printed
 
@@ -798,7 +806,7 @@ realpixtypes = ['short', 'ushort', 'integer', 'real', 'double']
 
 @pytest.mark.parametrize("intype", realpixtypes)
 @pytest.mark.parametrize("outtype", pixeltypes)
-def test_pixeltype(tmpdir, intype, outtype):
+def test_ccdproc_pixeltype(tmpdir, intype, outtype):
     # make sure rounding works right
     # what does IRAF really do if input is int, zero is float?
     basedir = str(tmpdir)
@@ -915,7 +923,11 @@ def test_pixeltype(tmpdir, intype, outtype):
                                    dd['double'](baseval - zeroval))
 
 
-def test_zerocor(tmpdir):
+def test_ccdproc_set_sections(tmpdir):
+    pass
+
+
+def test_ccdproc_zerocor(tmpdir):
     basedir = str(tmpdir)
 
     # create some simple files for testing
