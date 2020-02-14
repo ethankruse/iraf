@@ -17,8 +17,8 @@ defaultargs = {'output': None, 'ccdtype': 'object', 'noproc': False,
                'zerocor': False,
                'darkcor': False, 'flatcor': False, 'illumcor': False,
                'fringecor': False, 'readcor': False, 'scancor': False,
-               'readaxis': 'line', 'fixfile': None, 'biassec': None,
-               'trimsec': None, 'zero': None, 'dark': None, 'flat': None,
+               'readaxis': 'line', 'fixfile': None, 'biassec': 'image',
+               'trimsec': 'image', 'zero': None, 'dark': None, 'flat': None,
                'illum': None, 'fringe': None, 'minreplace': 1.,
                'scantype': 'shortscan', 'nscan': 1, 'interactive': False,
                'overscan_function': 'legendre', 'order': 1, 'sample': '*',
@@ -924,7 +924,176 @@ def test_ccdproc_pixeltype(tmpdir, intype, outtype):
 
 
 def test_ccdproc_set_sections(tmpdir):
+    # XXX: do this
+    # some of this might get handled/tested when doing all the other stuff,
+    # (e.g. trim is probably tested in test_trim?). so maybe don't need to do
+    # everything here.
     pass
+
+
+def test_ccdproc_wcs():
+    # XXX: do this at the bottom of setsections.x
+    # set it to fail if the WCS stuff is already in the header?
+    # test what it does?
+    # otherwise, looks like I just need to put some stuff into
+    # the output file header, can play around with what that looks like.
+    # need to test it with different dimensions, etc
+
+    # try making a full WCS header in astropy and feeding it through
+    # while doing all processing and make sure none of the WCS things
+    # change except for the lines added to the header.
+    pass
+
+
+def test_ccdproc_set_trim(tmpdir):
+    basedir = str(tmpdir)
+
+    # create some simple files for testing
+    nx = 50
+    ny = 90
+    nimg = 3
+    baseval = 100
+
+    # create input files
+    inputs = []
+    arr = np.arange(nx * ny, dtype=float).reshape((nx, ny)) + baseval
+    for jj in np.arange(nimg):
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['imagetyp'] = 'object'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+
+    # make the input list
+    inlist = os.path.join(basedir, 'infiles.txt')
+    with open(inlist, 'w') as ff:
+        for ifile in inputs:
+            ff.write(ifile + '\n')
+    inlist = '@' + inlist
+
+    # make the output list
+    outlists = []
+    for ifile in inputs:
+        of = ifile[:-5] + '.out.fits'
+        outlists.append(of)
+
+    # do my processing
+    myargs = copy.deepcopy(defaultargs)
+    myargs['output'] = outlists
+
+    # which parts we want to do
+    myargs['trim'] = True
+    myargs['trimsec'] = None
+
+    iraf.ccdred.ccdproc(inlist, **myargs)
+
+    # trim still happens even if it doesn't actually do anything
+    for ifile in outlists:
+        with fits.open(ifile) as ff:
+            assert 'trim' in ff[0].header
+            assert ff[0].data.shape == arr.shape
+            assert np.allclose(ff[0].data, arr)
+
+    # add in the data section
+    for jj in np.arange(nimg):
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['imagetyp'] = 'object'
+        hdu.header['datasec'] = '[1:60,1:30]'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+
+    iraf.ccdred.ccdproc(inlist, **myargs)
+
+    # trim defaults to the data section
+    for ifile in outlists:
+        with fits.open(ifile) as ff:
+            assert 'trim' in ff[0].header
+            assert ff[0].data.shape == arr[:30, :60].shape
+            assert np.allclose(ff[0].data, arr[:30, :60])
+
+    # test passing in trimsec as an argument
+    for jj in np.arange(nimg):
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['imagetyp'] = 'object'
+        hdu.header['datasec'] = '[10:60,10:30]'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+
+    # get a failure
+    myargs['trimsec'] = '[5:65:2, 5:35:2]'
+    with pytest.raises(CCDProcError):
+        iraf.ccdred.ccdproc(inlist, **myargs)
+
+    myargs['trimsec'] = '[5:650, 5:35]'
+    with pytest.raises(CCDProcError):
+        iraf.ccdred.ccdproc(inlist, **myargs)
+
+    myargs['trimsec'] = '[5:65, 5:35]'
+    iraf.ccdred.ccdproc(inlist, **myargs)
+
+    # make sure we're using the input trim limits
+    for ifile in outlists:
+        with fits.open(ifile) as ff:
+            assert 'trim' in ff[0].header
+            assert ff[0].data.shape == arr[4:35, 4:65].shape
+            assert np.allclose(ff[0].data, arr[4:35, 4:65])
+
+    # return to the default trim, which should be "image"
+    myargs = copy.deepcopy(defaultargs)
+    myargs['output'] = outlists
+    myargs['trim'] = True
+
+    # test trimsec in header
+    for jj in np.arange(nimg):
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['imagetyp'] = 'object'
+        hdu.header['datasec'] = '[10:60,10:30]'
+        hdu.header['trimsec'] = '[4:64, 4:34]'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+
+    iraf.ccdred.ccdproc(inlist, **myargs)
+
+    # make sure we're using the input trim limits
+    for ifile in outlists:
+        with fits.open(ifile) as ff:
+            assert 'trim' in ff[0].header
+            assert ff[0].data.shape == arr[3:34, 3:64].shape
+            assert np.allclose(ff[0].data, arr[3:34, 3:64])
+
+    # repeat just in case we change the trimsec default argument
+    myargs['trimsec'] = 'image'
+    iraf.ccdred.ccdproc(inlist, **myargs)
+
+    # make sure we're using the input trim limits
+    for ifile in outlists:
+        with fits.open(ifile) as ff:
+            assert 'trim' in ff[0].header
+            assert ff[0].data.shape == arr[3:34, 3:64].shape
+            assert np.allclose(ff[0].data, arr[3:34, 3:64])
+
+    # test custom instruments
+    for jj in np.arange(nimg):
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['imagetyp'] = 'object'
+        hdu.header['mydata'] = '[10:60,10:30]'
+        hdu.header['mytrim'] = '[6:64, 6:34]'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+
+    inst = iraf.ccdred.Instrument()
+    inst.parameters['trimsec'] = 'mytrim'
+    inst.parameters['datasec'] = 'mydata'
+    myargs['instrument'] = inst
+
+    iraf.ccdred.ccdproc(inlist, **myargs)
+
+    # make sure we're using the custom values
+    for ifile in outlists:
+        with fits.open(ifile) as ff:
+            assert 'trim' in ff[0].header
+            assert ff[0].data.shape == arr[5:34, 5:64].shape
+            assert np.allclose(ff[0].data, arr[5:34, 5:64])
 
 
 def test_ccdproc_zerocor(tmpdir):
@@ -1091,3 +1260,5 @@ def test_ccdproc_zerocor(tmpdir):
 # what about multiple FITS extensions, do we always require data to be in the
 # first one?
 # print notes/logs when doing recursive ccdproc?
+# go through all arguments and make sure we have tests for all of them
+# (e.g. verbose and logfile)

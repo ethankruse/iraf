@@ -1083,9 +1083,6 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         # end set_sections
 
         # begin set_trim
-
-        # also, this all just deals with the ccd object, could pull this out
-        # into its own function.
         if trim and not already_processed(ccd.inim, instrument, 'trim'):
             # Check trim section.
             if (ccd.trimc1 < 1 or ccd.trimc2 > nc or ccd.triml1 < 1 or
@@ -1100,10 +1097,10 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                        f"{ccd.trimc2},{ccd.triml1}:{ccd.triml2}]."
                 print(ostr)
             else:
-                # if trim limits are inside inc1, clip inc1 to the trim limits,
-                # otherwise leave inc1 alone if trim is wider on either side.
-                # then make sure ccdc1 is adjusted the same so they remain the
-                # same size
+                # if trim limits are inside inc1 (datasec), clip inc1 to the
+                # trim limits, otherwise leave inc1 alone if trim is wider on
+                # either side. Then make sure ccdc1 is adjusted the same so
+                # they remain the same size
                 xt1 = max(0, ccd.trimc1 - ccd.inc1)
                 xt2 = min(0, ccd.trimc2 - ccd.inc2)
                 yt1 = max(0, ccd.triml1 - ccd.inl1)
