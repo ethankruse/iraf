@@ -771,7 +771,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             minreplace=1., scantype='shortscan', nscan=1, interactive=False,
             overscan_function='legendre', order=1, sample='*', naverage=1,
             niterate=1, low_reject=3., high_reject=3., grow=0., instrument=None,
-            pixeltype='real', logfile=None, verbose=False):
+            pixeltype='real', logfile=None, verbose=False, overwrite=True):
     """
 
     Parameters
@@ -815,6 +815,7 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
     pixeltype
     logfile
     verbose
+    overwrite
 
     pixeltype is supposed to be a string of 2 words:
     Output and calculation pixel datatypes, e.g. 'real real'. But for ccdproc
@@ -944,20 +945,22 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         # Set output image.
         if not noproc:
             if len(outputs) > 0:
-                outtmp = False
-                outim = outputs[imct]
+                replace_input = False
+                outreal = outputs[imct]
             else:
-                outtmp = True
-                outims = tempfile.NamedTemporaryFile(delete=False)
-                outims.close()
-                outim = outims.name
-            file_new_copy(outim, imin, mode='NEW_COPY', overwrite=True,
+                outreal = image
+                replace_input = True
+            outims = tempfile.NamedTemporaryFile(delete=False)
+            outims.close()
+            outim = outims.name
+            file_new_copy(outim, imin, mode='NEW_COPY', overwrite=overwrite,
                           instrument=instrument)
             out = image_open(outim, mode='update')
         else:
-            outtmp = False
+            replace_input = False
             outim = None
             out = None
+            outreal = None
 
         if pixeltype is not None and len(pixeltype) > 0:
             otyp = pixeltype.strip().split()[0]
@@ -1848,12 +1851,19 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
         out.close()
         imin.close()
 
-        if outtmp:
-            if ccd.cor:
-                # Replace the input image by the corrected image.
+        if not noproc:
+            if not ccd.cor:
+                os.remove(outim)
+            elif replace_input:
                 os.replace(outim, image)
             else:
-                os.remove(outim)
+                out_exists = os.path.exists(outreal)
+                if out_exists and not overwrite:
+                    os.remove(outim)
+                    raise OSError(f'File {outreal} already exists and overwrite'
+                                  f'=False, so it cannot be overwritten.')
+                else:
+                    os.replace(outim, outreal)
 
         if ccd.maskim is not None:
             ccd.maskim.close()
@@ -1870,10 +1880,10 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
         # Do special processing on certain image types.
         if ccdtype == 'zero' and readcor:
-            if outtmp:
+            if replace_input:
                 readim = image
             else:
-                readim = outim
+                readim = outreal
             # begin readcor
             rim = image_open(readim)
             if not already_processed(rim, instrument, 'readcor'):
@@ -1915,7 +1925,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                     rtmp = tempfile.NamedTemporaryFile(delete=False)
                     rtmp.close()
                     newout = rtmp.name
-                    file_new_copy(newout, rim, instrument=instrument)
+                    file_new_copy(newout, rim, instrument=instrument,
+                                  overwrite=overwrite)
                     newhdr = image_open(newout, mode='update')
                     rim.close()
                     # Average across the readout axis.
@@ -1957,10 +1968,10 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
             # end readcor
 
         if ccdtype == 'flat':
-            if outtmp:
+            if replace_input:
                 readim = image
             else:
-                readim = outim
+                readim = outreal
             # begin ccdmean
 
             # Check if this operation has been done.

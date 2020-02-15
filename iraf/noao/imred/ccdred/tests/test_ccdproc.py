@@ -24,7 +24,8 @@ defaultargs = {'output': None, 'ccdtype': 'object', 'noproc': False,
                'overscan_function': 'legendre', 'order': 1, 'sample': '*',
                'naverage': 1, 'niterate': 1, 'low_reject': 3.,
                'high_reject': 3., 'grow': 0., 'instrument': None,
-               'pixeltype': 'real', 'logfile': None, 'verbose': False}
+               'pixeltype': 'real', 'logfile': None, 'verbose': False,
+               'overwrite': True}
 
 
 def test_ccd_section():
@@ -683,13 +684,54 @@ def test_ccdproc_basics(tmpdir):
         inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
         hdu.writeto(inim, overwrite=True)
 
-    # test output gets created
-    myargs['output'] = outlists
+    # test no outputs works even with overwrite off
+    myargs['overwrite'] = False
     iraf.ccdred.ccdproc(inputs, **myargs)
+    for ifile in inputs:
+        with fits.open(ifile) as hdr:
+            assert len(hdr[0].header['zerocor']) > 0
+    myargs['overwrite'] = True
+
+    # reset the input files
+    for jj in np.arange(nimg):
+        arr = np.ones((nx, ny), dtype=float) * baseval
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['imagetyp'] = 'object'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+
+    # test output files
+    myargs['output'] = outlist
+    myargs['zerocor'] = False
+
+    # test no output files if nothing is requested to be done
+    iraf.ccdred.ccdproc(inputs, **myargs)
+    for ifile in outlists:
+        assert not os.path.exists(ifile)
+
+    myargs['zerocor'] = True
+
+    iraf.ccdred.ccdproc(inputs, **myargs)
+    mtimes = []
     for ifile in outlists:
         with fits.open(ifile) as hdr:
             assert len(hdr[0].header['zerocor']) > 0
-        # remove the file to test the same one again later
+        mtimes.append(os.path.getmtime(ifile))
+
+    # test overwrite flag works
+    myargs['overwrite'] = False
+    with pytest.raises(OSError):
+        iraf.ccdred.ccdproc(inputs, **myargs)
+    for ii in np.arange(len(outlists)):
+        assert os.path.getmtime(outlists[ii]) == mtimes[ii]
+
+    myargs['overwrite'] = True
+    iraf.ccdred.ccdproc(inputs, **myargs)
+    for ii in np.arange(len(outlists)):
+        assert os.path.getmtime(outlists[ii]) != mtimes[ii]
+
+    # remove the files to test the same one again later
+    for ifile in outlists:
         os.remove(ifile)
 
     # garbage scantype value
@@ -703,8 +745,10 @@ def test_ccdproc_basics(tmpdir):
     with pytest.raises(ValueError):
         iraf.ccdred.ccdproc(inputs, **myargs)
     myargs['readaxis'] = 'line'
-    # remove the file to test the same one again later
-    os.remove(outlists[0])
+
+    # no files got created
+    for ifile in outlists:
+        assert not os.path.exists(ifile)
 
     # test bad output sizes
     myargs['output'] = outlists * 2
@@ -1122,7 +1166,17 @@ def test_ccdproc_verbose_logfile():
     pass
 
 
-def test_ccdproc_zerocor(tmpdir):
+def test_ccdproc_set_fixpix():
+    # XXX: do this
+    pass
+
+
+def test_ccdproc_set_overscan():
+    # XXX: do this
+    pass
+
+
+def test_ccdproc_set_zero(tmpdir):
     basedir = str(tmpdir)
 
     # create some simple files for testing
@@ -1134,7 +1188,7 @@ def test_ccdproc_zerocor(tmpdir):
     # create input files
     inputs = []
     for jj in np.arange(nimg):
-        arr = np.ones((nx, ny), dtype=float) * baseval
+        arr = np.arange(nx * ny, dtype=float).reshape((nx, ny)) + baseval
         hdu = fits.PrimaryHDU(arr)
         hdu.header['imagetyp'] = 'object'
         inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
@@ -1158,7 +1212,7 @@ def test_ccdproc_zerocor(tmpdir):
     zeroval = 10
     zerofile = os.path.join(basedir, 'testzero.fits')
 
-    arr = np.ones((nx, ny), dtype=float) * zeroval
+    arr = np.arange(nx * ny, dtype=float).reshape((nx, ny)) + zeroval
 
     hdu = fits.PrimaryHDU(arr)
     hdu.header['imagetyp'] = 'zero'
