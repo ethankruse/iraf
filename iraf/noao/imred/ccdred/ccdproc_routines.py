@@ -833,7 +833,8 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
     Differences from IRAF
     ---------------------
-    Input/output lists of different sizes
+    Input/output lists of different sizes. Or if an input file is corrupted or
+    has a different data type, the outputs don't match up
 
     bug in setoutput.x: if pixeltype is short, it will allow input ushort to be
     cast to short, and if pixeltype is ushort it will allow a short image to be

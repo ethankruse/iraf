@@ -1095,6 +1095,32 @@ def test_ccdproc_set_trim(tmpdir):
             assert ff[0].data.shape == arr[5:34, 5:64].shape
             assert np.allclose(ff[0].data, arr[5:34, 5:64])
 
+    # test trimsec inside of datasec
+    for jj in np.arange(nimg):
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['imagetyp'] = 'object'
+        hdu.header['datasec'] = '[4:64, 4:34]'
+        hdu.header['trimsec'] = '[10:60,10:30]'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+
+    myargs = copy.deepcopy(defaultargs)
+    myargs['output'] = outlists
+    myargs['trim'] = True
+    iraf.ccdred.ccdproc(inlist, **myargs)
+
+    # make sure we're using the input trim limits
+    for ifile in outlists:
+        with fits.open(ifile) as ff:
+            assert 'trim' in ff[0].header
+            assert ff[0].data.shape == arr[9:30, 9:60].shape
+            assert np.allclose(ff[0].data, arr[9:30, 9:60])
+
+
+def test_ccdproc_verbose_logfile():
+    # XXX: do this
+    pass
+
 
 def test_ccdproc_zerocor(tmpdir):
     basedir = str(tmpdir)
@@ -1249,6 +1275,9 @@ def test_ccdproc_zerocor(tmpdir):
         assert hdr[0].header['datasec'] == dsec
         assert hdr[0].header['ccdsec'] == ccdsec
         hdr.close()
+
+    # XXX: need to test trim limits and making sure all ccd/data/trim sections
+    # match up
 
 # things to test:
 
