@@ -696,9 +696,9 @@ def process(ccd):
         # that's the main difference between line and column readaxis
         if len(ccd.zeroim[0].data.shape) == 1:
             if ccd.readaxis == 'line':
-                zerobuf = ccd.zeroim[0].data[ccd.zeroc1:ccd.zeroc2]
+                zerobuf = ccd.zeroim[0].data[ccd.zeroc1 - 1:ccd.zeroc2]
             else:
-                zerobuf = ccd.zeroim[0].data[ccd.zerol1:ccd.zerol2]
+                zerobuf = ccd.zeroim[0].data[ccd.zerol1 - 1:ccd.zerol2]
         else:
             zerobuf = ccd.zeroim[0].data[ccd.zerol1 - 1:ccd.zerol2,
                                          ccd.zeroc1 - 1:ccd.zeroc2]
@@ -758,8 +758,6 @@ def process(ccd):
 
     if ccd.cors['findmean']:
         ccd.mean = outarr.mean()
-    # XXX: is this needed or is fulloutarr updated as a view of outarr?
-    fulloutarr[ccd.outl1 - 1:ccd.outl2, ccd.outc1 - 1:ccd.outc2] = outarr * 1
     ccd.outim[0].data = fulloutarr.astype(ccd.outtype)
 
 
@@ -1310,21 +1308,25 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
 
                     zdatasec = get_header_value(zeroim, instrument, 'datasec')
                     rr = ccd_section(zdatasec, defaults=(1, znc, 1, 1, znl, 1))
-                    zc1, zc2, zcs, zl1, zl2, zls = rr
+                    zc1a, zc2a, zcsa, zl1a, zl2a, zlsa = rr
 
-                    if (zc1 < 1 or zc2 > znc or zcs != 1 or zl1 < 1 or
-                            zl2 > znl or zls != 1):
+                    if (zc1a < 1 or zc2a > znc or zcsa != 1 or zl1a < 1 or
+                            zl2a > znl or zlsa != 1):
                         estr = f"Data section error: image={cal}[{znc},{znl}]" \
-                               f", datasec=[{zc1}:{zc2},{zl1}:{zl2}]"
+                               f", datasec=[{zc1a}:{zc2a},{zl1a}:{zl2a}]"
                         raise CCDProcError(estr)
                     # save the datasec starting points
-                    datac1 = zc1
-                    datal1 = zl1
+                    datac1 = zc1a
+                    datal1 = zl1a
 
                     zcsec = get_header_value(zeroim, instrument, 'ccdsec')
-                    rr = ccd_section(zcsec, defaults=(zc1, zc2, zcs,
-                                                      zl1, zl2, zls))
+                    rr = ccd_section(zcsec, defaults=(zc1a, zc2a, zcsa,
+                                                      zl1a, zl2a, zlsa))
                     zc1, zc2, zcs, zl1, zl2, zls = rr
+
+                    if zc2a - zc1a != zc2 - zc1 or zl2a - zl1a != zl2 - zl1:
+                        raise CCDProcError(f"Size of DATASEC and CCDSEC do not"
+                                           f" agree in zero image {cal}")
 
                     if znc == 1:
                         zc1 = ccd.ccdc1

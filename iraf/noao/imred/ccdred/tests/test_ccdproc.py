@@ -1,7 +1,6 @@
 import copy
 import datetime
 import os
-import time
 
 import numpy as np
 import pytest
@@ -510,6 +509,9 @@ def test_already_processed(tmpdir):
     # default matches what's found in file
     inst.defaults['trim'] = 'bar'
     assert not ccdr.already_processed(inopen, inst, 'trim')
+
+    # if it's not in the header
+    assert not ccdr.already_processed(inopen, inst, 'zerocor')
 
     inopen.close()
 
@@ -1212,9 +1214,9 @@ def test_ccdproc_set_zero(tmpdir):
     zeroval = 10
     zerofile = os.path.join(basedir, 'testzero.fits')
 
-    arr = np.arange(nx * ny, dtype=float).reshape((nx, ny)) + zeroval
+    zarr = np.arange(nx * ny, dtype=float).reshape((nx, ny)) + zeroval
 
-    hdu = fits.PrimaryHDU(arr)
+    hdu = fits.PrimaryHDU(zarr)
     hdu.header['imagetyp'] = 'zero'
     hdu.writeto(zerofile, overwrite=True)
 
@@ -1223,47 +1225,60 @@ def test_ccdproc_set_zero(tmpdir):
     myargs['output'] = outlists
 
     # which parts we want to do
+    myargs['zerocor'] = False
+    myargs['zero'] = zerofile
+
+    iraf.ccdred.ccdproc(inlist, **myargs)
+
+    # if no processing is desired, no file should be created.
+    for ifile in outlists:
+        assert not os.path.exists(ifile)
+
+    # add zerocor to the header
+    inputs = []
+    for jj in np.arange(nimg):
+        arr = np.arange(nx * ny, dtype=float).reshape((nx, ny)) + baseval
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['imagetyp'] = 'object'
+        hdu.header['zerocor'] = 'foo'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+
+    # which parts we want to do
     myargs['zerocor'] = True
     myargs['zero'] = zerofile
 
     iraf.ccdred.ccdproc(inlist, **myargs)
 
+    # if zerocor is in the header, no processing should be done
+    for ifile in outlists:
+        assert not os.path.exists(ifile)
+
+    inputs = []
+    arr = np.arange(nx * ny, dtype=float).reshape((nx, ny)) + baseval
+    for jj in np.arange(nimg):
+        hdu = fits.PrimaryHDU(arr)
+        hdu.header['imagetyp'] = 'object'
+        inim = os.path.join(basedir, f'testimg{jj:02d}.fits')
+        hdu.writeto(inim, overwrite=True)
+        inputs.append(inim)
+
+    iraf.ccdred.ccdproc(inlist, **myargs)
+
     for ifile in outlists:
         hdr = fits.open(ifile)
-        assert np.allclose(hdr[0].data, baseval - zeroval)
+        assert np.allclose(hdr[0].data, arr - zarr)
         assert len(hdr[0].header['zerocor']) > 0
         assert len(hdr[0].header['ccdproc']) > 0
         assert hdr[0].header['ccdsec'] == f'[1:{ny:d},1:{nx:d}]'
         hdr.close()
 
-    # test no outputs and replacing the input
-    myargs['output'] = None
-    iraf.ccdred.ccdproc(inlist, **myargs)
-
-    oldtimes = []
-    for ifile in inputs:
-        hdr = fits.open(ifile)
-        assert hdr[0].header['ccdsec'] == f'[1:{ny:d},1:{nx:d}]'
-        assert len(hdr[0].header['zerocor']) > 0
-        oldtimes.append(hdr[0].header['zerocor'])
-        hdr.close()
-
-    # wait a second and do it again
-    time.sleep(2)
-    iraf.ccdred.ccdproc(inlist, **myargs)
-    # make sure nothing has happened since inputs are already processed
-    for ii, ifile in enumerate(inputs):
-        hdr = fits.open(ifile)
-        assert hdr[0].header['zerocor'] == oldtimes[ii]
-        hdr.close()
-
     # test datasec of input image as just a subset of the image
-
-    # add the datasec parameter
-    dsec = '[5:30,10:40]'
+    dsec = '[5:80,10:40]'
     inputs = []
     for jj in np.arange(nimg):
-        arr = np.ones((nx, ny), dtype=float) * baseval
+        arr = np.arange(nx * ny, dtype=float).reshape((nx, ny)) + baseval
         hdu = fits.PrimaryHDU(arr)
         hdu.header['imagetyp'] = 'object'
         hdu.header['datasec'] = dsec
@@ -1271,28 +1286,29 @@ def test_ccdproc_set_zero(tmpdir):
         hdu.writeto(inim, overwrite=True)
         inputs.append(inim)
 
-    myargs['output'] = outlists
     iraf.ccdred.ccdproc(inlist, **myargs)
 
+    # image data sec [5:80, 10:40], CCD sec defaults to [1:76,1:31].
+    # zero image data sec is whole image, [1:90,1:50]. zero ccd sec is same.
     for ifile in outlists:
         hdr = fits.open(ifile)
-        assert np.allclose(hdr[0].data[9:40, 4:30], baseval - zeroval)
+        assert np.allclose(hdr[0].data[9:40, 4:80],
+                           arr[9:40, 4:80] - zarr[:31, :76])
         data = hdr[0].data * 1
-        data[9:40, 4:30] += zeroval
-        assert np.allclose(data, baseval)
+        data[9:40, 4:80] += zarr[:31, :76]
+        assert np.allclose(data, arr)
         assert hdr[0].header['datasec'] == dsec
+        assert len(hdr[0].header['zerocor']) > 0
+        assert len(hdr[0].header['ccdproc']) > 0
+        assert hdr[0].header['ccdsec'] == '[1:76,1:31]'
         hdr.close()
 
-    # test datasec/ccdsec matches of input and zero image
-
     # add the datasec/ccdsec parameter
-    dsec = '[5:30,10:40]'
-    ccdsec = '[50:75,100:130]'
-    baseoff = np.arange(ny) + 46  # ccdsec1 - dsec1 + 1
+    dsec = '[5:80,10:40]'
+    ccdsec = '[4:79,11:41]'
     inputs = []
     for jj in np.arange(nimg):
-        arr = np.ones((nx, ny), dtype=float) * baseval
-        arr += baseoff
+        arr = np.arange(nx * ny, dtype=float).reshape((nx, ny)) + baseval
         hdu = fits.PrimaryHDU(arr)
         hdu.header['imagetyp'] = 'object'
         hdu.header['datasec'] = dsec
@@ -1301,16 +1317,67 @@ def test_ccdproc_set_zero(tmpdir):
         hdu.writeto(inim, overwrite=True)
         inputs.append(inim)
 
-    # make a zero image
-    zeroval = 10
-    zerofile = os.path.join(basedir, 'testzero.fits')
-    # nx, ny = 50, 90
-    zdsec = '[30:90, 5:45]'
-    zccdsec = '[20:80, 95:135]'
+    iraf.ccdred.ccdproc(inlist, **myargs)
 
-    zarr = np.ones((nx, ny), dtype=float) * zeroval
-    zbaseoff = np.arange(ny) - 9  # ccdsec1 - dsec1 + 1
-    zarr += zbaseoff
+    # image data sec [5:80, 10:40], CCD sec now [4:79,11:41].
+    # zero image data sec is whole image, [1:90,1:50]. zero ccd sec is same.
+    for ifile in outlists:
+        hdr = fits.open(ifile)
+        assert np.allclose(hdr[0].data[9:40, 4:80],
+                           arr[9:40, 4:80] - zarr[10:41, 3:79])
+        data = hdr[0].data * 1
+        data[9:40, 4:80] += zarr[10:41, 3:79]
+        assert np.allclose(data, arr)
+        assert hdr[0].header['datasec'] == dsec
+        assert len(hdr[0].header['zerocor']) > 0
+        assert len(hdr[0].header['ccdproc']) > 0
+        assert hdr[0].header['ccdsec'] == ccdsec
+        hdr.close()
+
+    # test zero image section failures
+    zerofile = os.path.join(basedir, 'testzero.fits')
+    zdsec = '[30:900, 5:45]'
+    zccdsec = '[4:79,11:41]'
+
+    hdu = fits.PrimaryHDU(zarr)
+    hdu.header['imagetyp'] = 'zero'
+    hdu.header['datasec'] = zdsec
+    hdu.header['ccdsec'] = zccdsec
+    hdu.writeto(zerofile, overwrite=True)
+    # bad data section
+    with pytest.raises(CCDProcError):
+        iraf.ccdred.ccdproc(inlist, **myargs)
+
+    zerofile = os.path.join(basedir, 'testzero.fits')
+    zdsec = '[5:80,10:40]'
+    zccdsec = '[4:79,11:42]'
+
+    hdu = fits.PrimaryHDU(zarr)
+    hdu.header['imagetyp'] = 'zero'
+    hdu.header['datasec'] = zdsec
+    hdu.header['ccdsec'] = zccdsec
+    hdu.writeto(zerofile, overwrite=True)
+    # ccd sec and data sec sizes don't agree
+    with pytest.raises(CCDProcError):
+        iraf.ccdred.ccdproc(inlist, **myargs)
+
+    zerofile = os.path.join(basedir, 'testzero.fits')
+    zdsec = '[5:80,10:40]'
+    zccdsec = '[4:79,12:42]'
+
+    hdu = fits.PrimaryHDU(zarr)
+    hdu.header['imagetyp'] = 'zero'
+    hdu.header['datasec'] = zdsec
+    hdu.header['ccdsec'] = zccdsec
+    hdu.writeto(zerofile, overwrite=True)
+    # ccd sec of zero image doesn't cover that of input images
+    with pytest.raises(CCDProcError):
+        iraf.ccdred.ccdproc(inlist, **myargs)
+
+    # test datasec/ccdsec matches of input and zero image
+    zerofile = os.path.join(basedir, 'testzero.fits')
+    zdsec = '[2:82,3:43]'
+    zccdsec = '[3:83,10:50]'
 
     hdu = fits.PrimaryHDU(zarr)
     hdu.header['imagetyp'] = 'zero'
@@ -1320,16 +1387,24 @@ def test_ccdproc_set_zero(tmpdir):
 
     iraf.ccdred.ccdproc(inlist, **myargs)
 
+    # image data sec [5:80, 10:40], CCD sec now [4:79,11:41].
+    # zero image data sec is [2:82,3:43]. zero ccd sec is [3:80,10:70].
     for ifile in outlists:
         hdr = fits.open(ifile)
-        assert np.allclose(hdr[0].data[9:40, 4:30], baseval - zeroval)
+        assert np.allclose(hdr[0].data[9:40, 4:80],
+                           arr[9:40, 4:80] - zarr[3:34, 2:78])
         data = hdr[0].data * 1
-        data[9:40, 4:30] += zeroval + baseoff[4:30]
+        data[9:40, 4:80] += zarr[3:34, 2:78]
         assert np.allclose(data, arr)
         assert hdr[0].header['datasec'] == dsec
+        assert len(hdr[0].header['zerocor']) > 0
+        assert len(hdr[0].header['ccdproc']) > 0
         assert hdr[0].header['ccdsec'] == ccdsec
         hdr.close()
 
+    # XXX: can I get failures because of not testing zero image ccd/data secs?
+    # XXX: can ccd sections be negative? what about data sections? in the zero
+    #  image only?
     # XXX: need to test trim limits and making sure all ccd/data/trim sections
     # match up
 
