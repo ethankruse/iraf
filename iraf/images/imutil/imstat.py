@@ -1,3 +1,5 @@
+from typing import List, Optional, Union
+
 import numpy as np
 import scipy.stats
 
@@ -7,9 +9,11 @@ from iraf.utils import file_handler
 __all__ = ['imstatistics']
 
 
-def imstatistics(images, *, fields="image,npix,mean,stddev,min,max",
-                 lower=None, upper=None, nclip=0, lsigma=3.0, usigma=3.0,
-                 print_format=True):
+def imstatistics(images: Union[List[str], str], *,
+                 fields: str = "image,npix,mean,stddev,min,max",
+                 lower: Optional[float] = None, upper: Optional[float] = None,
+                 nclip: int = 0, lsigma: float = 3.0, usigma: float = 3.0,
+                 print_format: bool = True):
     """
     Get general statistics about the data in a file's (or list of files')
     primary FITS HDU.

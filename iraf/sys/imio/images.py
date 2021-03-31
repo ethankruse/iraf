@@ -3,7 +3,7 @@ from astropy.io import fits
 __all__ = ['image_open']
 
 
-def image_open(image, mode='readonly'):
+def image_open(image: str, mode: str = 'readonly') -> fits.HDUList:
     """
     Open an image and return an AIRAF image object.
 

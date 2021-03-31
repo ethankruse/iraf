@@ -162,7 +162,7 @@ class CCD(object):
 
 def ccd_section(section, defaults=(None, None, 1, None, None, 1)):
     """
-    Parse a 2D image section string into its elements.
+    Parse a 1D or 2D image section string into its elements.
 
     Convert section information in data headers into useful bounds. For
     example, convert the header 'biassec' = '[3:10,5:50]' into the bounds
@@ -172,7 +172,8 @@ def ccd_section(section, defaults=(None, None, 1, None, None, 1)):
     character must be ']'. A None or empty-string section is ok and will
     return the defaults.
 
-    The required section format is [x1:x2:xstep, y1:y2:ystep].
+    The required section format is [x1:x2:xstep, y1:y2:ystep] or just
+    [x1:x2:xstep] for 1D images.
     If they are not explicitly given, default start and end values are None,
     default step size is 1. The second : in either dimension can be ignored
     if not giving a step size. Custom defaults can be passed as an argument.
@@ -185,6 +186,9 @@ def ccd_section(section, defaults=(None, None, 1, None, None, 1)):
     widely in use, this functionality can be added back in. The original
     also flipped the step to be negative if start > stop. We don't do that
     because of Python's use of negative indices to indicate the end of a list.
+
+    XXX: we should look into tightening the requirements here based on how it
+      is actually used in ccdproc. and see if it's used anywhere else?
 
     Parameters
     ----------
@@ -218,14 +222,14 @@ def ccd_section(section, defaults=(None, None, 1, None, None, 1)):
         return defaults
 
     if section[0] != '[' or section[-1] != ']':
-        raise ValueError(f"Error in 2D image section specification {section}")
+        raise ValueError(f"Error in image section specification {section}")
 
     osection = section
     # remove the brackets
     section = section[1:-1]
     dims = section.split(',')
-    if len(dims) != 2:
-        raise ValueError(f"Error in 2D image section specification {osection}")
+    if len(dims) < 1 or len(dims) > 2:
+        raise ValueError(f"Error in image section specification {osection}")
 
     ret = []
     defs = [defaults[:3], defaults[3:]]
@@ -261,10 +265,15 @@ def ccd_section(section, defaults=(None, None, 1, None, None, 1)):
                     step = int(split[2])
         else:
             raise ValueError(
-                f"Error in 2D image section specification {osection}")
+                f"Error in image section specification {osection}")
         ret.append(start)
         ret.append(end)
         ret.append(step)
+    if len(dims) == 1:
+        ret.append(defaults[-3])
+        ret.append(defaults[-2])
+        ret.append(defaults[-1])
+
     return ret
 
 
@@ -1303,8 +1312,12 @@ def ccdproc(images, *, output=None, ccdtype='object', noproc=False, fixpix=True,
                         zeroim = image_open(cal)
 
                     # Set the processing parameters in the CCD structure.
-                    znc = zeroim[0].data.shape[1]
-                    znl = zeroim[0].data.shape[0]
+                    if len(zeroim[0].data.shape) == 1:
+                        znc = zeroim[0].data.shape[0]
+                        znl = 1
+                    else:
+                        znc = zeroim[0].data.shape[1]
+                        znl = zeroim[0].data.shape[0]
 
                     zdatasec = get_header_value(zeroim, instrument, 'datasec')
                     rr = ccd_section(zdatasec, defaults=(1, znc, 1, 1, znl, 1))

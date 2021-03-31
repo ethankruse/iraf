@@ -77,6 +77,11 @@ def test_ccd_section():
     assert (x0 == d1 and x1 == d2 and xs == d3 and y0 == d4 and y1 == 2 and
             ys == 3)
 
+    # test one dimension
+    x0, x1, xs, y0, y1, ys = ccdr.ccd_section('[1:5:2]', defaults=defaults)
+    assert (x0 == 1 and x1 == 5 and xs == 2 and y0 == d4 and y1 == d5 and
+            ys == d6)
+
     # test bad braces
     with pytest.raises(ValueError):
         ccdr.ccd_section('[:,:')
@@ -101,8 +106,6 @@ def test_ccd_section():
         ccdr.ccd_section('[1:3:2.,:]')
 
     # test wrong dimensions
-    with pytest.raises(ValueError):
-        ccdr.ccd_section('[1:5]')
     with pytest.raises(ValueError):
         ccdr.ccd_section('[1:5, 1:5, 1:5]')
 
@@ -1402,7 +1405,38 @@ def test_ccdproc_set_zero(tmpdir):
         assert hdr[0].header['ccdsec'] == ccdsec
         hdr.close()
 
-    # XXX: can I get failures because of not testing zero image ccd/data secs?
+    # XXX: make the images closer to square to test the 1-D directions
+    # check a 1-D zero image
+    zarr = np.arange(ny, dtype=float) + zeroval
+    zdsec = '[10:90]'
+    zccdsec = '[1:81]'
+
+    hdu = fits.PrimaryHDU(zarr)
+    hdu.header['imagetyp'] = 'zero'
+    hdu.header['datasec'] = zdsec
+    hdu.header['ccdsec'] = zccdsec
+    hdu.writeto(zerofile, overwrite=True)
+
+    iraf.ccdred.ccdproc(inlist, **myargs)
+
+    # image data sec [5:80, 10:40], CCD sec now [4:79,11:41].
+    # zero image data sec is [10:90]. zero ccd sec is [1:81].
+    for ifile in outlists:
+        hdr = fits.open(ifile)
+        assert np.allclose(hdr[0].data[9:40, 4:80],
+                           arr[9:40, 4:80] - zarr[12:88])
+        data = hdr[0].data * 1
+        data[9:40, 4:80] += zarr[12:88]
+        assert np.allclose(data, arr)
+        assert hdr[0].header['datasec'] == dsec
+        assert len(hdr[0].header['zerocor']) > 0
+        assert len(hdr[0].header['ccdproc']) > 0
+        assert hdr[0].header['ccdsec'] == ccdsec
+        hdr.close()
+
+
+
+
     # XXX: can ccd sections be negative? what about data sections? in the zero
     #  image only?
     # XXX: need to test trim limits and making sure all ccd/data/trim sections

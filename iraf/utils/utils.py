@@ -5,6 +5,7 @@ Implementation of some utility functions.
 import csv
 import os
 from glob import glob
+from typing import List, Union
 
 __all__ = ['is_iterable', 'file_handler']
 
@@ -18,7 +19,8 @@ def is_iterable(obj):
     return not isinstance(obj, str) and isinstance(obj, Iterable)
 
 
-def file_handler(filelist, exists=True, recursive=False):
+def file_handler(filelist: Union[List[str], str], exists: bool = True,
+                 recursive: bool = False) -> List[str]:
     """
     Convert an input string or list to a Python list of filenames.
 
@@ -69,6 +71,7 @@ def file_handler(filelist, exists=True, recursive=False):
     outlist = []
     # go through every input and add to the output list of files
     for istr in filelist:
+        # skip blank lines
         istr = istr.strip()
         if len(istr) == 0:
             continue
